@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Bluetooth 测 BLE 吞吐时会卡在默认 MTU - CacheRivulet小记</title>
+  <meta name="description" content="浏览器Web BLE默认MTU 20影响传输速度">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="Web Bluetooth">
+  <meta property="article:tag" content="连接参数">
+  <meta property="article:tag" content="MTU">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="Web Bluetooth 测 BLE 吞吐时会卡在默认 MTU">
+  <meta property="og:description" content="浏览器Web BLE默认MTU 20影响传输速度">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ble-throughput-conn-interval-mtu/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ble-throughput-conn-interval-mtu/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Web Bluetooth 测 BLE 吞吐时会卡在默认 MTU",
+  "description": "浏览器Web BLE默认MTU 20影响传输速度",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ble-throughput-conn-interval-mtu/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ble-throughput-conn-interval-mtu/"
+  },
+  "keywords": "BLE, Web Bluetooth, 连接参数, MTU"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Web Bluetooth 测 BLE 吞吐时会卡在默认 MTU</h1>
+  <article class="article-body">
+<h1>Web Bluetooth 测 BLE 吞吐时会卡在默认 MTU</h1>
+<p>一次性电池供电的 BLE 监测设备只在同步数据时短暂连接手机。连接时间越短，蓝牙打开时间越短，平均功耗越低。因此在浏览器调试工具里做了 BLE 吞吐测试，分别测浏览器到 MCU 的上传速度，以及 MCU 通过 Notify 发给浏览器的下载速度。</p>
+<p><img src="/posts/ble-throughput-conn-interval-mtu/img/webui%E8%B0%83%E8%AF%95%E7%95%8C%E9%9D%A2_%E5%B8%A6%E6%97%A5%E5%BF%97.webp" alt="Web Bluetooth 调试界面和测速日志"></p>
+<p>最开始的结果很低：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>上传速率：4096 B / 5350.5 ms = 765.5 B/s</span></span>
+<span class="line"><span>下载速率：4096 B / 6998.7 ms = 585.3 B/s</span></span></code></pre><p>这个速度容易让人怀疑 MCU 忙、协议封包慢、串口日志太多，或者浏览器 JavaScript 处理不过来。后面的排查证明，真正踩到的是 Web Bluetooth 调试环境的边界：浏览器侧没有标准接口显式请求大 MTU，Windows 和 Chrome 没主动协商时，连接会停在默认 MTU 23。</p>
+<h2>现象是 MTU 一直只有 23</h2>
+<p>设备端打开 Notify 后读取到的 MTU 是 23。ATT Notify 的有效载荷需要扣掉 3 字节 ATT 头，因此每个 Notify 只能放 20 字节数据。</p>
+<p>尝试在 MCU 侧主动发起 MTU Exchange，请求 247 字节，结果返回 <code>0x02</code>。在 WCH 的状态码里，<code>0x02</code> 表示 <code>INVALIDPARAMETER</code>。结合 WCH 库说明可以确认：<code>GATT_ExchangeMTU()</code> 是 GATT client 用来发起 MTU Exchange 的接口。当前设备是 peripheral/server，主动调用这条路不成立。</p>
+<p>Web Bluetooth 也没有给网页暴露类似 Android <code>requestMtu()</code> 的接口。网页可以连接设备、读写特征、订阅 Notify，但不能直接设置 ATT MTU。浏览器是否请求大 MTU，取决于系统蓝牙栈和浏览器实现。这个项目在 Windows Chrome 下没有协商到大 MTU，所以设备侧只能按 20 字节分包。</p>
+<h2>应用任务影响很小</h2>
+<p>设备端同时运行 ADC 采样、心率计算、BLE 协议处理和串口日志。为了确认是否有 CPU 干扰，临时关闭心率计算任务，只保留 BLE 主循环。</p>
+<p>关闭后速度只提升了约 100 B/s。这个结果说明心率计算对这次低速影响很小，也避免继续在算法任务和主循环调度上排查。</p>
+<h2>连接间隔决定 20B 小包的包率</h2>
+<p>MTU 无法放大后，剩下能调的主要变量是连接间隔。连接日志显示初始 <code>connInterval</code> 是 20。BLE 连接间隔单位是 1.25ms，因此实际间隔是 25ms。</p>
+<p>下载 4096 字节需要 205 个 20 字节 Notify。实际耗时接近 7 秒，折算每秒约 29 个 Notify。这个包率符合 25ms 连接间隔下每次连接事件只发出少量包的表现。</p>
+<p>后续把数据同步阶段的连接间隔请求改成 6，也就是 7.5ms，并在连接建立后尽早发起参数更新。再次测速后结果明显改善：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>上传速率：4096 B / 810.0 ms = 5056.8 B/s</span></span>
+<span class="line"><span>下载速率：4096 B / 1544.3 ms = 2652.3 B/s</span></span></code></pre><p><img src="/posts/ble-throughput-conn-interval-mtu/img/webui%E6%B5%8B%E9%80%9F%E7%BB%93%E6%9E%9C%E6%88%AA%E5%9B%BE.webp" alt="Web Bluetooth 测速结果"></p>
+<p>这里没有解决 MTU，解决的是默认 MTU 下的小包发送频率。</p>
+<h2>下载已经接近当前理论上限</h2>
+<p>调参后的下载速度是 2652.3 B/s。这个数值已经接近当前条件下的理论上限。</p>
+<p>当前 Web Bluetooth 调试环境里，MTU 仍是 23，Notify 有效载荷是 20 字节。连接间隔调到 6 后，每次连接事件间隔是 7.5ms。如果每个连接事件稳定发出一个 20 字节 Notify，理论吞吐大约是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>20 B / 0.0075 s = 2666.7 B/s</span></span></code></pre><p>实测 <code>2652.3 B/s</code> 和这个值非常接近。这个结果说明下载路径已经基本吃满了“默认 MTU + 7.5ms 连接间隔 + 每连接事件一包”的边界。</p>
+<p>继续提升下载速度，需要改变底层条件：手机侧协商更大的 MTU，或者同一个连接事件里发出更多 Notify。继续只改应用层封包，收益会很有限。</p>
+<h2>这个坑的误导性</h2>
+<p>Web Bluetooth 调试 BLE 吞吐时，低速现象会把排查方向带偏：</p>
+<ol>
+<li>看起来像浏览器 JavaScript 慢。</li>
+<li>看起来像 MCU 心率算法抢 CPU。</li>
+<li>看起来像 TinyFrame 或自定义协议开销太大。</li>
+<li>看起来像 Notify 发送函数写得不够快。</li>
+</ol>
+<p>实际证据集中在三个量上：</p>
+<ol>
+<li><code>ATT_GetMTU()</code> 一直是 23。</li>
+<li>MCU 作为 peripheral 不能主动完成 MTU Exchange。</li>
+<li>连接间隔从 25ms 改到 7.5ms 后，下载速度接近 20B 小包理论上限。</li>
+</ol>
+<p>因此，浏览器调试工具测出来的速度不能直接代表正式手机 App 的上限。它更适合验证协议、状态机和基础链路，不适合判断原生 App 能达到的最高吞吐。</p>
+<h2>仍然没有解决的遗憾</h2>
+<p>这次解决了默认 MTU 下的低包率，没有解决 Web Bluetooth 无法显式请求大 MTU的问题。</p>
+<p>正式产品如果使用 Android 或 iOS 原生 App，应在手机侧主动请求更大的 MTU。大 MTU 能减少分包次数，降低协议开销和连接时长。浏览器调试工具做不到这一点，因此它需要按 20 字节包设计，并把测速结果理解为 Web Bluetooth 调试环境的结果。</p>
+<p>产品实现上可以采用分阶段策略：</p>
+<ol>
+<li>平时断开蓝牙或使用低功耗连接参数。</li>
+<li>数据同步开始后请求短连接间隔。</li>
+<li>浏览器调试阶段按 20 字节分包，确认状态机和数据可靠性。</li>
+<li>正式 App 阶段请求大 MTU，再重新评估吞吐和功耗。</li>
+<li>数据同步结束后恢复低功耗状态，或者直接断开并进入休眠。</li>
+</ol>
+<h2>结论</h2>
+<p>Web Bluetooth 测 BLE 吞吐时，浏览器侧不能显式请求大 MTU 是一个重要限制。Windows Chrome 没主动协商时，设备会停在 MTU 23，每个 Notify 只有 20 字节有效载荷。</p>
+<p>在这个限制下，短连接间隔可以把 20 字节小包的发送频率拉起来。本次下载测速从约 0.6 KB/s 提升到 2.59 KB/s，并且已经接近当前 20 字节包和 7.5ms 连接间隔下的理论上限。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ble-throughput-conn-interval-mtu');
+  }
+  </script>
+</body>
+</html>

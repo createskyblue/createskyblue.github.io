@@ -1,0 +1,828 @@
+{
+  "id": "default",
+  "name": "默认分类",
+  "nodes": [
+    {
+      "id": "工程笔记",
+      "name": "工程笔记",
+      "parentId": null,
+      "order": 0,
+      "desc": "正向的设计与实现记录：我怎么做出来一个东西。按技术领域分了子类，未归类的零散记录留在本页",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 109,
+      "x": 234,
+      "y": 541
+    },
+    {
+      "id": "其他",
+      "name": "说说",
+      "parentId": null,
+      "order": 2,
+      "desc": "生活随笔与零散杂谈",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 3,
+      "x": 814,
+      "y": 393
+    },
+    {
+      "id": "学习笔记",
+      "name": "学习笔记",
+      "parentId": "工程笔记",
+      "order": 5,
+      "desc": "理解既有知识与原理：协议、算法、系统机制是怎么工作的",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 12,
+      "x": 945,
+      "y": 727
+    },
+    {
+      "id": "aa979cb5-3e22-422a-b98d-58f59e81547b",
+      "name": "疑难杂症",
+      "parentId": null,
+      "order": 5,
+      "desc": "有明确症状的逆向排障记录：现象 → 定位 → 根因 → 解法",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 16,
+      "x": 7,
+      "y": 542
+    },
+    {
+      "id": "97e53f10-4334-4ec2-8724-e1a163f51b62",
+      "name": "作品集",
+      "parentId": null,
+      "order": 6,
+      "desc": "完整做过的项目，含需求、方案与落地结果。想看这人做成过什么，点这里",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 7,
+      "x": -202,
+      "y": 540
+    },
+    {
+      "id": "1a812e88-82c1-4b12-822d-d05ccd82ff9a",
+      "name": "开源库与工具",
+      "parentId": "980bfa11-0894-4330-84cb-4e8a38bc09c8",
+      "order": 7,
+      "desc": "可直接拿去用的独立工具与代码库，附用法与实现说明",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 9,
+      "x": 1424,
+      "y": 679
+    },
+    {
+      "id": "8ab293fd-256e-4016-afbb-9e02141168ea",
+      "name": "模板与示例",
+      "parentId": "980bfa11-0894-4330-84cb-4e8a38bc09c8",
+      "order": 8,
+      "desc": "工程骨架与最小可运行示例——起点代码，抄走就能改",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 7,
+      "x": 1657,
+      "y": 680
+    },
+    {
+      "id": "9dbe5048-be16-4639-b0c9-ca5142519d37",
+      "name": "MCU与驱动",
+      "parentId": "工程笔记",
+      "order": 0,
+      "desc": "芯片外设、低功耗时序、GPIO 与驱动解耦，以及电机/PWM 等实时控制",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 16,
+      "x": -254,
+      "y": 721
+    },
+    {
+      "id": "db0b3105-e975-464c-ab9d-8cb237713d11",
+      "name": "存储与固件",
+      "parentId": "工程笔记",
+      "order": 1,
+      "desc": "FlashDB、AB 分区、Bootloader 与构建缓存——掉电不丢数据、升级不变砖",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 6,
+      "x": -54,
+      "y": 721
+    },
+    {
+      "id": "fcfe62ee-08ff-4d9a-8273-f185c27d2361",
+      "name": "通信与协议",
+      "parentId": "工程笔记",
+      "order": 2,
+      "desc": "BLE / NFC / 4G / MQTT / Modbus 与各类串口帧协议，以及数据怎么可靠送达",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 18,
+      "x": 146,
+      "y": 721
+    },
+    {
+      "id": "20f1c1fc-569c-4ca5-841a-0bc935732004",
+      "name": "算法与信号处理",
+      "parentId": "工程笔记",
+      "order": 3,
+      "desc": "滤波、变换、量化、TinyML 与空间索引——把噪声变成结论",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 16,
+      "x": 346,
+      "y": 721
+    },
+    {
+      "id": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5",
+      "name": "前端与可视化",
+      "parentId": "工程笔记",
+      "order": 4,
+      "desc": "Canvas、移动端 UI 与交互、嵌入式 GUI，以及博客前端本身",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 15,
+      "x": 546,
+      "y": 721
+    },
+    {
+      "id": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0",
+      "name": "工具链与调试",
+      "parentId": "工程笔记",
+      "order": 5,
+      "desc": "环境搭建、故障定位、性能剖析与日常效率工具",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 15,
+      "x": 746,
+      "y": 721
+    },
+    {
+      "id": "980bfa11-0894-4330-84cb-4e8a38bc09c8",
+      "name": "开源项目",
+      "parentId": null,
+      "order": 13,
+      "desc": "",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 16,
+      "x": 1421,
+      "y": 538
+    },
+    {
+      "id": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026",
+      "name": "低功耗",
+      "parentId": "工程笔记",
+      "order": 8,
+      "desc": "",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 16,
+      "x": -460,
+      "y": 735
+    }
+  ],
+  "placements": [
+    {
+      "articleSlug": "卡扣设计",
+      "nodeId": "工程笔记"
+    },
+    {
+      "articleSlug": "长序列音频分类任务思路",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "adc-key-low-power-wakeup",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "af-alg-crypto-api",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "article-modal-subpixel-frame-debugging",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "astar-grid-path-planning-svg",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "batch-ack-fifo-cache",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "ble-adc-waveform-tinyframe",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "ble-low-power-data-upload",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "ble-mesh-overview-ch585",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "ble-rtc-offset-note",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "ble-throughput-conn-interval-mtu",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "build-cache-design",
+      "nodeId": "db0b3105-e975-464c-ab9d-8cb237713d11"
+    },
+    {
+      "articleSlug": "ch58x-nfc-p2p-data-exchange",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "ch58x-sleep-gpio-remap",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "chroma-vector-database-demo",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "claude-code-esp-idf-build",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "claude-code-sound-hook",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "cmbacktrace-cortexm-fault-debug",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "dali-manchester-codec",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "dc-motor-p-pi-controller",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "dirty-region-lvgl-arm2d",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "esp-idf-offline-install",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "esp-idf-vscode-openocd-second-board",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "esp32-dns-hijack-captive-portal",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "esp32s3-esp-nn-sin-demo",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "fdm-cooling-shrinkage-groove",
+      "nodeId": "工程笔记"
+    },
+    {
+      "articleSlug": "fft-vs-wavelet",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "flashdb-kv-vs-struct-config",
+      "nodeId": "db0b3105-e975-464c-ab9d-8cb237713d11"
+    },
+    {
+      "articleSlug": "flashdb-porting-guide",
+      "nodeId": "db0b3105-e975-464c-ab9d-8cb237713d11"
+    },
+    {
+      "articleSlug": "flashdb-tinyframe-ble-debugger",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "gaussian-distribution",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "git-bash-cmd-utf8-shim",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "hampel-filter-algorithm",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "heart-rate-migration-debugging",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "heart-rate-minmax-canvas-envelope",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "html-canvas-waveform-chart",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "i2c-slave",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "key-debounce-shift-register",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "LLM调用原理",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "masonry-waterfall-layout",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "mcu-gas-sensor-nanoedgeai",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "mcu-low-power-io-interrupt-timing",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "mcu-timer-pulse-width-capture",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "mobile-backspace-sentinel",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "mobile-chart-ui-design",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "nanoModbus",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "observability-before-control",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "power-voltage-low-power-sampling",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "py32-sop8-swd-remap",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "quadtree-spatial-index",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "rtthread-ble-ch585",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "software-dual-edge-pulse-filter",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "stm32-bootloader-exflash",
+      "nodeId": "db0b3105-e975-464c-ab9d-8cb237713d11"
+    },
+    {
+      "articleSlug": "stm32l4-hezhou-4g-telemetry-crc32-spike",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "sync-request-response-fifo-exchange",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "tflite-int8-quantization-tf221",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "tiny-ml-vibration-tflm",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "tinyframe-footprint-py32f002a",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "tinyframe-protocol-frame",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "waveform-minmax-downsampling",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "web-audio-success-sound",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "windows-display-idle-input",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "about",
+      "nodeId": "其他"
+    },
+    {
+      "articleSlug": "audio-triangulation-tdoa",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "ch58x-ble-pairing-flow",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "eflesh-magnetic-touch-sensing",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "flashdb-littlefs-storage-principles",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "noeticmaze-stm32-lidar-slam-navigation",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "stm32-edge-ai-scenarios",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "franklin-oscillator-lc-meter",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "patent-disclosure-skill-review",
+      "nodeId": "工程笔记"
+    },
+    {
+      "articleSlug": "stm32-exti-two-gates",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "pyocd-preserve-mcu-fault-site",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "pyocd-cortex-debug-late-attach",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "windows-copy-full-path-context-menu",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "ab-partition-flash-store",
+      "nodeId": "db0b3105-e975-464c-ab9d-8cb237713d11"
+    },
+    {
+      "articleSlug": "ab-partition-vs-flashdb",
+      "nodeId": "db0b3105-e975-464c-ab9d-8cb237713d11"
+    },
+    {
+      "articleSlug": "esp32s3-sensor-driver-decoupling",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "streaming-frame-parser",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "py32f030-vrefint-gpio-overvoltage",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "blog-json-to-html-seo-upgrade",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "encrypted-blog-posts",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "51-mcu-engineering-margin",
+      "nodeId": "其他"
+    },
+    {
+      "articleSlug": "ai-code-human-value",
+      "nodeId": "其他"
+    },
+    {
+      "articleSlug": "eink-caster-high-refresh",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "kcp-protocol",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "pipe-ipc-stream",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "splice-zero-copy",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "pwm-carrier-frequency-power",
+      "nodeId": "9dbe5048-be16-4639-b0c9-ca5142519d37"
+    },
+    {
+      "articleSlug": "iotspool-mqtt-spool",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "flashdb-mqtt-outbox",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "esp-idf-task-iterator-stuck",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "hall-power-cycle-counting-limit",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "ble-provisioning-wifi-conflict",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "cortex-debug-pyocd-startup-timeout-regex",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "vscode-cppdbg-pyocd-main-breakpoint",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "wch-ch58x-stm32-gpio-low-power",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "uart-dma-idle-fifo",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "使用VNA进行阻抗匹配",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "memory-dump-context-debugging",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "stm32-uart-ore-long-run",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "esp32s3-web-upload-sd-psram-buffer",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "stack-watermark-and-struct-guards",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "NanoVNA2_维修",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "hall-pulse-width-validation",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "lvgl-web-screenshot",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "dual-clock-rtc-fusion",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "old-phone-cross-compile-sandbox",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "iot-go-backend",
+      "nodeId": "fcfe62ee-08ff-4d9a-8273-f185c27d2361"
+    },
+    {
+      "articleSlug": "perf-flamegraph-basics",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "memory-leak-tool-analysis",
+      "nodeId": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0"
+    },
+    {
+      "articleSlug": "esp32s3-imu-gesture-recognition",
+      "nodeId": "97e53f10-4334-4ec2-8724-e1a163f51b62"
+    },
+    {
+      "articleSlug": "air001-light-sensing-mutation-switch-433rf",
+      "nodeId": "97e53f10-4334-4ec2-8724-e1a163f51b62"
+    },
+    {
+      "articleSlug": "antenna-control-terminal",
+      "nodeId": "97e53f10-4334-4ec2-8724-e1a163f51b62"
+    },
+    {
+      "articleSlug": "vibration-monitor-system-architecture",
+      "nodeId": "97e53f10-4334-4ec2-8724-e1a163f51b62"
+    },
+    {
+      "articleSlug": "n320a-modbus-gateway",
+      "nodeId": "97e53f10-4334-4ec2-8724-e1a163f51b62"
+    },
+    {
+      "articleSlug": "low-power-gps-tracker",
+      "nodeId": "97e53f10-4334-4ec2-8724-e1a163f51b62"
+    },
+    {
+      "articleSlug": "emk850-mcp-server",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "epaper-sensor-trend",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "web-serial-monitor",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "flashstore-ab-partition",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "air001-chacha20-flashstore",
+      "nodeId": "8ab293fd-256e-4016-afbb-9e02141168ea"
+    },
+    {
+      "articleSlug": "stm32-hal-spi-ws2812",
+      "nodeId": "8ab293fd-256e-4016-afbb-9e02141168ea"
+    },
+    {
+      "articleSlug": "esp32s3-idf-template",
+      "nodeId": "8ab293fd-256e-4016-afbb-9e02141168ea"
+    },
+    {
+      "articleSlug": "tflite-mcu-gcc-port",
+      "nodeId": "8ab293fd-256e-4016-afbb-9e02141168ea"
+    },
+    {
+      "articleSlug": "signal-analysis-lab",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "nonlinear-image-distortion-tool",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "remote-input-board",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "zephyr-stm32l496-rtos-skeleton",
+      "nodeId": "8ab293fd-256e-4016-afbb-9e02141168ea"
+    },
+    {
+      "articleSlug": "csv-time-series-annotator",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "embedded-battery-lifetime-calculator",
+      "nodeId": "1a812e88-82c1-4b12-822d-d05ccd82ff9a"
+    },
+    {
+      "articleSlug": "par20-4h-ina228-wireless-sampler",
+      "nodeId": "97e53f10-4334-4ec2-8724-e1a163f51b62"
+    },
+    {
+      "articleSlug": "downsampling-demo",
+      "nodeId": "8ab293fd-256e-4016-afbb-9e02141168ea"
+    },
+    {
+      "articleSlug": "ch585m-tflite-micro-sin-demo",
+      "nodeId": "8ab293fd-256e-4016-afbb-9e02141168ea"
+    },
+    {
+      "articleSlug": "skeuomorphic-instrument-panel",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "rtthread-uart-dma-buffer-philosophy",
+      "nodeId": "学习笔记"
+    },
+    {
+      "articleSlug": "dot-matrix-watchface-expression",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "dot-matrix-watchface-three-row",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "u8g2-horizontal-line-cache",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "nh50bat-bq40z50-unseal-debug",
+      "nodeId": "aa979cb5-3e22-422a-b98d-58f59e81547b"
+    },
+    {
+      "articleSlug": "sine-wavetable-bitmask",
+      "nodeId": "20f1c1fc-569c-4ca5-841a-0bc935732004"
+    },
+    {
+      "articleSlug": "sine-wavetable-bitmask",
+      "nodeId": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5"
+    },
+    {
+      "articleSlug": "esp32s3-fastcharger-repair",
+      "nodeId": "工程笔记"
+    },
+    {
+      "articleSlug": "hall-power-cycle-counting-limit",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "gear-switch-transient",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "emk850-mcp-server",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "pwm-carrier-frequency-power",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "stm32-exti-two-gates",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "air001-light-sensing-mutation-switch-433rf",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "wch-ch58x-stm32-gpio-low-power",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "ch58x-sleep-gpio-remap",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "memory-dump-context-debugging",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "stm32-uart-ore-long-run",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "low-power-gps-tracker",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "adc-key-low-power-wakeup",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "mcu-low-power-io-interrupt-timing",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "power-voltage-low-power-sampling",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "ble-low-power-data-upload",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    },
+    {
+      "articleSlug": "ble-rtc-offset-note",
+      "nodeId": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026"
+    }
+  ]
+}

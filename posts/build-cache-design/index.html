@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>内容指纹 + 输出复用：博客增量构建缓存的设计 - CacheRivulet小记</title>
+  <meta name="description" content="解决博客重复构建文章的问题">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="构建系统">
+  <meta property="article:tag" content="缓存">
+  <meta property="article:tag" content="增量编译">
+  <meta property="article:published_time" content="2026-06-19">
+  <meta property="og:title" content="内容指纹 + 输出复用：博客增量构建缓存的设计">
+  <meta property="og:description" content="解决博客重复构建文章的问题">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/build-cache-design/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/build-cache-design/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "内容指纹 + 输出复用：博客增量构建缓存的设计",
+  "description": "解决博客重复构建文章的问题",
+  "datePublished": "2026-06-19",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/build-cache-design/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/build-cache-design/"
+  },
+  "keywords": "构建系统, 缓存, 增量编译"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">内容指纹 + 输出复用：博客增量构建缓存的设计</h1>
+  <article class="article-body">
+<h1>内容指纹 + 输出复用：博客增量构建缓存的设计</h1>
+<p>博客有 67 篇文章，每篇要经过 Markdown 渲染、代码高亮、公式转换、图片 WebP 转码等步骤。每次全量构建即使只改了一篇文章，也要把所有步骤重跑一遍。</p>
+<p>核心思路：<strong>如果源文件没变、输出已存在，就跳过</strong>。</p>
+<h2>三层缓存判定</h2>
+<h3>第一层：版本号</h3>
+<p>缓存文件 <code>.blog-cache.json</code> 里带一个 <code>version</code> 字段。构建脚本版本升级时，意味内部逻辑可能变化（比如新增了 WebP 转换、路径重写规则调整），此时旧缓存全部作废，触发全量重建。</p>
+<h3>第二层：目录指纹</h3>
+<p>每篇文章是一个目录，包含 <code>index.md</code> 和图片等资源。计算指纹时，遍历目录下所有文件，取出文件名、字节大小、最后修改时间的毫秒值，拼成一个字符串再 SHA-256 截取 16 位：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>文件名:大小:修改时间ms | 文件名:大小:修改时间ms | ...</span></span>
+<span class="line"><span>        ↓ SHA-256 → 16 hex</span></span></code></pre><p>文件增删、内容变化、重命名都会改变指纹。指纹相同意味着整篇文章的源输入与上一次构建完全一致。</p>
+<h3>第三层：输出存在性</h3>
+<p>即使指纹命中，还要确认 <code>public/posts/{文章}/index.html</code> 真实存在。防止因手动清理输出目录或部分构建失败导致的虚假命中。</p>
+<p>同时，扫描完所有文章后，反向检查输出目录——如果某个输出目录找不到对应的源文章，说明文章已被删除，自动清理。</p>
+<h2>什么被缓存</h2>
+<p>指纹命中时，整条渲染链路全部跳过：</p>
+<ul>
+<li>Markdown 解析与 Shiki 代码高亮</li>
+<li>KaTeX 公式渲染</li>
+<li>sharp 图片 WebP 转码</li>
+<li>封面压缩</li>
+<li>HTML 页面生成</li>
+<li>文件复制</li>
+</ul>
+<p>直接将缓存的文章元数据（标题、描述、标签、分类等）推入 <code>posts.json</code> 的构建列表。</p>
+<h2>命中效果</h2>
+<p>实测：67 篇文章首次全量构建后，第二次构建 67/68 命中缓存。修改一篇文章再构建，只有被改的文章触发重建，其余 66 篇全部跳过。构建时间从秒级降到毫秒级。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-19 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=build-cache-design');
+  }
+  </script>
+</body>
+</html>

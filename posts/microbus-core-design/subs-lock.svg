@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+  <rect x="0" y="0" width="760" height="300" fill="#ffffff"/>
+
+  <!-- subscription table -->
+  <rect x="30" y="50" width="300" height="200" rx="8" fill="#eff6ff" stroke="#3b82f6"/>
+  <text x="180" y="74" font-size="14" font-weight="bold" fill="#0f172a" text-anchor="middle">订阅表 subs[16]（mbus_t 内）</text>
+  <rect x="45" y="88" width="270" height="36" rx="4" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="55" y="112" font-size="12" fill="#0f172a">[0] topic=0x10 on_sensor</text>
+  <rect x="45" y="130" width="270" height="36" rx="4" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="55" y="154" font-size="12" fill="#0f172a">[1] topic=ANY  on_any</text>
+  <rect x="45" y="172" width="270" height="36" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="55" y="196" font-size="12" fill="#64748b">[2] 空闲槽位</text>
+
+  <!-- lock shield -->
+  <rect x="420" y="80" width="290" height="140" rx="8" fill="#fef2f2" stroke="#ef4444"/>
+  <text x="565" y="110" font-size="14" font-weight="bold" fill="#0f172a" text-anchor="middle">分发进行中</text>
+  <text x="565" y="134" font-size="12" fill="#334155" text-anchor="middle">delivery_depth &gt; 0</text>
+  <text x="565" y="158" font-size="12" fill="#334155" text-anchor="middle">遍历按下标 0 → 15 升序</text>
+  <text x="565" y="182" font-size="12" fill="#334155" text-anchor="middle">期间订阅表内容不可变</text>
+
+  <!-- subscribe blocked -->
+  <rect x="420" y="240" width="290" height="36" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="565" y="263" font-size="12" fill="#ef4444" text-anchor="middle">mbus_subscribe / unsubscribe → MBUS_ERR_BUSY</text>
+  <line x1="330" y1="200" x2="420" y2="150" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="565" y1="220" x2="565" y2="240" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <text x="180" y="272" font-size="11" fill="#475569" text-anchor="middle">升序遍历 + 话题匹配（含 ANY 通配）</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CH58X BLE 配对流程详解 - CacheRivulet小记</title>
+  <meta name="description" content="CH58X BLE 外设配对流程：从广播到加密">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="CH58x">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:published_time" content="2026-07-11">
+  <meta property="og:title" content="CH58X BLE 配对流程详解">
+  <meta property="og:description" content="CH58X BLE 外设配对流程：从广播到加密">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ch58x-ble-pairing-flow/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ch58x-ble-pairing-flow/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "CH58X BLE 配对流程详解",
+  "description": "CH58X BLE 外设配对流程：从广播到加密",
+  "datePublished": "2026-07-11",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ch58x-ble-pairing-flow/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ch58x-ble-pairing-flow/"
+  },
+  "keywords": "BLE, CH58x, 嵌入式, MCU"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">CH58X BLE 配对流程详解</h1>
+  <article class="article-body">
+<h1>CH58X BLE 配对流程详解</h1>
+<p>本文基于 CH584 MCU 的 BLE 心率传感器项目，逐层拆解 BLE 外设的配对流程。文中的代码注释和配置均来自项目实际源码。</p>
+<h2>系统架构</h2>
+<p>整个 BLE 协议栈运行在沁恒 CH58x 系列的 TMOS 任务调度系统之上。调用链路如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Main.c 主循环</span></span>
+<span class="line"><span>  └─ ble_peripheral_process() → TMOS_SystemProcess()</span></span>
+<span class="line"><span>       └─ 事件分发 ble_peripheral_process_event()</span></span>
+<span class="line"><span>            └─ GAPRole_PeripheralStartDevice() → 启动设备</span></span>
+<span class="line"><span>                 └─ GAP → GATT → SM（安全管理器）</span></span>
+<span class="line"><span>                      └─ CH58x BLE Controller（硬件链路层）</span></span></code></pre><p><code>Main.c</code> 在主循环中交替执行 <code>ble_peripheral_process()</code> 和应用调度器。协议栈事件通过 TMOS 消息机制异步回调到应用层。</p>
+<h2>编译期 BLE 配置</h2>
+<p>项目在 <code>src/app_project_config.h</code> 中覆盖了 SDK 的默认 BLE 参数：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>BLE_MEMHEAP_SIZE</code></td>
+<td>10240 (10 KB)</td>
+<td>协议栈内存池</td>
+</tr>
+<tr>
+<td><code>BLE_BUFF_MAX_LEN</code></td>
+<td>251 (ATT_MTU = 247)</td>
+<td>最大应用数据包长度</td>
+</tr>
+<tr>
+<td><code>BLE_BUFF_NUM</code></td>
+<td>8</td>
+<td>收发缓冲区数量</td>
+</tr>
+<tr>
+<td><code>BLE_TX_NUM_EVENT</code></td>
+<td>6</td>
+<td>单连接事件最大发包数</td>
+</tr>
+<tr>
+<td><code>BLE_TX_POWER</code></td>
+<td><code>LL_TX_POWEER_MINUS_10_DBM</code></td>
+<td>发射功率 -10 dBm</td>
+</tr>
+</tbody></table>
+<p>SDK 层 <code>CONFIG.h</code> 还控制了绑定存储的硬件参数：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>BLE_SNV</code></td>
+<td>TRUE</td>
+<td>启用 SNV 绑定存储</td>
+</tr>
+<tr>
+<td><code>BLE_SNV_ADDR</code></td>
+<td><code>0x77000 - FLASH_ROM_MAX_SIZE</code></td>
+<td>存储起始地址</td>
+</tr>
+<tr>
+<td><code>BLE_SNV_BLOCK</code></td>
+<td>256 bytes</td>
+<td>块大小</td>
+</tr>
+<tr>
+<td><code>BLE_SNV_NUM</code></td>
+<td>1</td>
+<td>块数量</td>
+</tr>
+<tr>
+<td><code>PERIPHERAL_MAX_CONNECTION</code></td>
+<td>1</td>
+<td>最大同时连接数</td>
+</tr>
+</tbody></table>
+<h2>配对初始化</h2>
+<p>入口函数 <code>ble_peripheral_init()</code> 位于 <code>src/ble_peripheral.c:103</code>，分三步完成初始化。</p>
+<h3>第一步：底层初始化</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">CH58x_BLEInit</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">          // BLE 协议栈库初始化</span></span>
+<span class="line"><span style="color:#DCDCAA">HAL_Init</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">               // 硬件抽象层初始化</span></span>
+<span class="line"><span style="color:#DCDCAA">GAPRole_PeripheralInit</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955"> // 配置为 Peripheral 角色</span></span></code></pre><p><code>CH58x_BLEInit()</code> 内部配置 SNV 的 Flash 读写回调，为绑定数据持久化准备硬件通路。</p>
+<h3>第二步：广播与连接参数</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> BLE_PERIPHERAL_ADV_INTERVAL      </span><span style="color:#B5CEA8">160</span><span style="color:#6A9955">  // 160 × 0.625 ms = 100 ms</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> BLE_PERIPHERAL_MIN_CONN_INTERVAL </span><span style="color:#B5CEA8">6</span><span style="color:#6A9955">    // 6 × 1.25 ms = 7.5 ms</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> BLE_PERIPHERAL_MAX_CONN_INTERVAL </span><span style="color:#B5CEA8">6</span><span style="color:#6A9955">    // 同上，固定连接间隔</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> BLE_PERIPHERAL_SLAVE_LATENCY     </span><span style="color:#B5CEA8">0</span><span style="color:#6A9955">    // 无延迟</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> BLE_PERIPHERAL_CONN_TIMEOUT      </span><span style="color:#B5CEA8">100</span><span style="color:#6A9955">  // 100 × 10 ms = 1 s</span></span></code></pre><p>广播间隔 100 ms，连接间隔固定 7.5 ms，适合低延迟数据传输。</p>
+<h3>第三步：安全参数——核心决策</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> passkey  = </span><span style="color:#B5CEA8">0u</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4">  pair_mode = GAPBOND_PAIRING_MODE_WAIT_FOR_REQ;</span><span style="color:#6A9955">  // 等主机发起</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4">  mitm      = </span><span style="color:#569CD6">FALSE</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">                               // 无 MITM 保护</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4">  bonding   = </span><span style="color:#569CD6">FALSE</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">                               // 不保存绑定</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4">  io_cap    = GAPBOND_IO_CAP_NO_INPUT_NO_OUTPUT;</span><span style="color:#6A9955">  // 无输入输出</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">GAPBondMgr_SetParameter</span><span style="color:#D4D4D4">(GAPBOND_PERI_DEFAULT_PASSCODE, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(passkey), &#x26;</span><span style="color:#9CDCFE">passkey</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">GAPBondMgr_SetParameter</span><span style="color:#D4D4D4">(GAPBOND_PERI_PAIRING_MODE, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(pair_mode), &#x26;</span><span style="color:#9CDCFE">pair_mode</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">GAPBondMgr_SetParameter</span><span style="color:#D4D4D4">(GAPBOND_PERI_MITM_PROTECTION, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(mitm), &#x26;</span><span style="color:#9CDCFE">mitm</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">GAPBondMgr_SetParameter</span><span style="color:#D4D4D4">(GAPBOND_PERI_IO_CAPABILITIES, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(io_cap), &#x26;</span><span style="color:#9CDCFE">io_cap</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">GAPBondMgr_SetParameter</span><span style="color:#D4D4D4">(GAPBOND_PERI_BONDING_ENABLED, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(bonding), &#x26;</span><span style="color:#9CDCFE">bonding</span><span style="color:#D4D4D4">);</span></span></code></pre><p><strong>Bonding 关闭</strong>意味着每次断开后不会保存对端设备的密钥信息，重连时需要重新完成配对流程。</p>
+<h2>配对方式：Just Works</h2>
+<p>当前配置组合 (NoInputNoOutput + MITM=FALSE) 决定了采用 BLE 的 <strong>Just Works</strong> 配对：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Central（手机）                        Peripheral（CH58x）</span></span>
+<span class="line"><span>     │                                       │</span></span>
+<span class="line"><span>     │──── Pairing Request ─────────────────→│  主机发起配对</span></span>
+<span class="line"><span>     │←─── Pairing Response ────────────────│  IO=NoInputNoOutput, Bonding=0</span></span>
+<span class="line"><span>     │                                       │</span></span>
+<span class="line"><span>     │  ← 双方用 TK=0 计算确认值和 STK →    │  无用户交互</span></span>
+<span class="line"><span>     │                                       │</span></span>
+<span class="line"><span>     │←── Encryption Start ─────────────────→│  链路加密建立</span></span></code></pre><ul>
+<li>临时密钥 TK 固定为 0，无用户交互</li>
+<li>无 MITM 保护，链路上的中间人攻击无法被检测</li>
+<li>不存储 LTK / IRK / CSRK，设备断电或断开后密钥全部丢失</li>
+</ul>
+<h2>广播与扫描响应</h2>
+<p>设备启动后发出两类广播数据：</p>
+<p><strong>广播包</strong>（31 字节上限）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Flags: LE General Discoverable + BR/EDR Not Supported</span></span>
+<span class="line"><span>Service UUID: 0xFFF0（自定义服务）</span></span></code></pre><p><strong>扫描响应</strong>（在主机主动扫描时返回）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>设备名称: "CH584F_HR_PROTO"（15 字符完整名称）</span></span>
+<span class="line"><span>连接间隔范围: 最小 6，最大 6（固定 7.5 ms）</span></span>
+<span class="line"><span>TX Power: 0（未显式指定功率值）</span></span></code></pre><p>广播过滤策略使用默认值 <code>GAP_FILTER_POLICY_ALL</code>，未启用白名单过滤。</p>
+<h2>连接与断开事件流</h2>
+<p>应用层通过 <code>ble_peripheral_state_changed()</code> 回调处理状态迁移。该函数在 <code>ble_peripheral.c:330</code> 实现：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>状态机转换：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>   [空闲/广播中]</span></span>
+<span class="line"><span>        │ GAP_LINK_ESTABLISHED_EVENT</span></span>
+<span class="line"><span>        ▼</span></span>
+<span class="line"><span>   [已连接]</span></span>
+<span class="line"><span>        ├─ 记录 conn_handle</span></span>
+<span class="line"><span>        ├─ 80 TU 后发起连接参数更新请求</span></span>
+<span class="line"><span>        └─ 激活 TinyFrame 协议层</span></span>
+<span class="line"><span>        │</span></span>
+<span class="line"><span>        │ GAP_LINK_TERMINATED_EVENT</span></span>
+<span class="line"><span>        ▼</span></span>
+<span class="line"><span>   [等待/广播中]</span></span>
+<span class="line"><span>        ├─ 清除连接句柄</span></span>
+<span class="line"><span>        ├─ 清除协议层连接状态</span></span>
+<span class="line"><span>        └─ 若之前广播已开启 → 自动恢复广播</span></span></code></pre><p>连接参数更新请求始终使用相同的 min/max 间隔（6），本质上是在确认而非协商。断开后广播恢复逻辑由 <code>ble_peripheral_set_advertising()</code> 的状态变量 <code>g_ble_peripheral_advertising_enabled</code> 控制——如果应用层此前开启了广播，断开后自动延续。</p>
+<h2>绑定回调：当前全部为空</h2>
+<p>协议栈通过 <code>gapBondCBs_t</code> 结构体向应用层通知配对事件：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> gapBondCBs_t</span><span style="color:#D4D4D4"> g_ble_peripheral_bond_callbacks = {</span></span>
+<span class="line"><span style="color:#569CD6">    NULL</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">  // passcodeCB   — 动态密码请求</span></span>
+<span class="line"><span style="color:#569CD6">    NULL</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">  // pairStateCB  — 配对状态变化</span></span>
+<span class="line"><span style="color:#569CD6">    NULL</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">  // oobCB        — OOB 安全配对</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p>三个回调全部为 NULL 的影响：</p>
+<ul>
+<li><strong>passcodeCB = NULL</strong>：使用静态 Passkey=0，无法动态生成或向用户展示密码</li>
+<li><strong>pairStateCB = NULL</strong>：不感知配对进度，出现失败时无日志也无重试</li>
+<li><strong>oobCB = NULL</strong>：OOB 安全配对不支持</li>
+</ul>
+<h2>SNV 绑定存储：硬件已就绪，尚未启用</h2>
+<p><code>BLE_SNV = TRUE</code> 已在 <code>CONFIG.h</code> 中开启，Flash 读写回调已在 <code>CH58x_BLEInit()</code> 中注册。但由于 <code>bonding = FALSE</code>，协议栈不会实际写入任何绑定数据。</p>
+<p>如果将来启用 bonding，每个绑定设备将占用 6 条 NV 记录，NV ID 计算公式为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">nvID = (bondIdx * </span><span style="color:#B5CEA8">6</span><span style="color:#D4D4D4"> + offset) + </span><span style="color:#B5CEA8">0x0200</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">offset </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">: </span><span style="color:#4EC9B0">gapBondRec_t</span><span style="color:#D4D4D4">    — 设备地址、地址类型、状态标志</span></span>
+<span class="line"><span style="color:#D4D4D4">offset </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">: </span><span style="color:#4EC9B0">gapBondLTK_t</span><span style="color:#D4D4D4">    — 本地 LTK（</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4"> bytes）、ediv、rand、keySize</span></span>
+<span class="line"><span style="color:#D4D4D4">offset </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">: </span><span style="color:#4EC9B0">gapBondLTK_t</span><span style="color:#D4D4D4">    — 对端 LTK</span></span>
+<span class="line"><span style="color:#D4D4D4">offset </span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">: </span><span style="color:#DCDCAA">IRK</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">16</span><span style="color:#9CDCFE"> bytes</span><span style="color:#D4D4D4">)  — 身份解析密钥</span></span>
+<span class="line"><span style="color:#D4D4D4">offset </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">: </span><span style="color:#DCDCAA">CSRK</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">16</span><span style="color:#9CDCFE"> bytes</span><span style="color:#D4D4D4">) — 签名解析密钥</span></span>
+<span class="line"><span style="color:#D4D4D4">offset </span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">: SignCounter      — 签名计数器（</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4">）</span></span></code></pre><p>存储区域位于 Flash 末尾（<code>0x77000 - FLASH_ROM_MAX_SIZE</code>），单块 256 bytes。如果设备需要绑定多台主机，需要调整 <code>BLE_SNV_NUM</code> 扩大存储空间。</p>
+<h2>启用安全配对的方法</h2>
+<p>如果需要提升安全性，按以下顺序修改：</p>
+<p><strong>1. 启用 Bonding</strong></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> bonding = </span><span style="color:#569CD6">TRUE</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">GAPBondMgr_SetParameter</span><span style="color:#D4D4D4">(GAPBOND_PERI_BONDING_ENABLED, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(bonding), &#x26;</span><span style="color:#9CDCFE">bonding</span><span style="color:#D4D4D4">);</span></span></code></pre><p><strong>2. 实现绑定回调</strong></p>
+<p>至少实现 <code>pairStateCB</code>，在 <code>GAPBOND_PAIRING_STATE_BOND_SAVED</code> 状态时记录绑定完成。如果需要动态密码，则实现 <code>passcodeCB</code>。</p>
+<p><strong>3. 为 GATT 特征添加加密权限</strong></p>
+<p>当前 BLE UART 服务的读写权限不加加密限制（<code>ble_uart_service_16bit.c</code>）。需要修改两处：</p>
+<p>RX 特征值（第 138 行），将 <code>GATT_PERMIT_WRITE</code> 替换为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">GATT_PERMIT_ENCRYPT_WRITE,</span></span></code></pre><p>TX 特征 CCCD（第 124 行），将 <code>GATT_PERMIT_READ | GATT_PERMIT_WRITE</code> 替换为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">GATT_PERMIT_ENCRYPT_READ | GATT_PERMIT_ENCRYPT_WRITE,</span></span></code></pre><p>加密后，主机必须先完成配对建立加密链路，才能读写这些特征。<code>GATT_PERMIT_ENCRYPT_READ</code> 和 <code>GATT_PERMIT_ENCRYPT_WRITE</code> 定义在 <code>CH58xBLE_LIB.h</code> 中，分别为 <code>0x40</code> 和 <code>0x80</code>。</p>
+<p><strong>4. 按需启用 MITM</strong></p>
+<p>如果设备有显示或输入能力，可以启用 MITM 保护：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> mitm = </span><span style="color:#569CD6">TRUE</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> io_cap = GAPBOND_IO_CAP_DISPLAY_YES_NO;</span></span></code></pre><p>注意：启用 MITM 后配对需要用户交互（确认数字或输入密码），对无屏设备不适用。</p>
+<h2>总结</h2>
+<p>当前固件的 BLE 配对策略可以归纳为几条关键事实：</p>
+<ul>
+<li>配对模式为 Just Works，无认证、无 MITM 保护</li>
+<li>Bonding 关闭，断开后不记忆设备，每次重连都需要重新配对</li>
+<li>SNV Flash 存储已配置但未使用</li>
+<li>广播在断开后自动恢复，遵循应用层的开关状态</li>
+<li>连接间隔固定 7.5 ms，延迟极低，适合心率数据实时传输</li>
+<li>升级到安全配对只需修改 bonding 标志、实现回调、添加加密权限三步</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-11 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ch58x-ble-pairing-flow');
+  }
+  </script>
+</body>
+</html>

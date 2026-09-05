@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>低功耗设备测量电池电压时要关断分压并控制 ADC 源阻抗 - CacheRivulet小记</title>
+  <meta name="description" content="低功耗下电池电压测量">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ADC">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="数据采集">
+  <meta property="article:published_time" content="2026-06-26">
+  <meta property="og:title" content="低功耗设备测量电池电压时要关断分压并控制 ADC 源阻抗">
+  <meta property="og:description" content="低功耗下电池电压测量">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/power-voltage-low-power-sampling/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/power-voltage-low-power-sampling/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "低功耗设备测量电池电压时要关断分压并控制 ADC 源阻抗",
+  "description": "低功耗下电池电压测量",
+  "datePublished": "2026-06-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/power-voltage-low-power-sampling/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/power-voltage-low-power-sampling/"
+  },
+  "keywords": "嵌入式, ADC, 低功耗, MCU, 数据采集"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">低功耗设备测量电池电压时要关断分压并控制 ADC 源阻抗</h1>
+  <article class="article-body">
+<h1>低功耗设备测量电池电压时要关断分压并控制 ADC 源阻抗</h1>
+<p>电池供电设备经常需要知道自身电量。最直接的办法，是用两个电阻把电池电压分到 ADC 可接受的范围，再由 MCU 周期性采样。</p>
+<p>这个做法在常供电设备里很自然，但在低功耗设备里会暴露一个硬约束：分压电阻只要接在电池上，就会一直耗电。ADC 可以关闭，MCU 可以休眠，分压链路本身却还在消耗电池。</p>
+<p>这类电路的设计目标要同时满足三件事：</p>
+<ul>
+<li>休眠时分压电阻不长期吃电。</li>
+<li>测量时 ADC 输入电压不超过 MCU 允许范围。</li>
+<li>高阻分压不会让 ADC 采样结果失真。</li>
+</ul>
+<h2>原理图</h2>
+<p><img src="/posts/power-voltage-low-power-sampling/img/power-voltage-low-power-sampling.webp" alt="低功耗电池电压采样原理图"></p>
+<p>这张图的核心结构是一个可关断分压器。Q1 是 P 沟道 MOS，放在电池正端和分压电阻之间；Q2 是 N 沟道 MOS，用 MCU 的 <code>MCU_BAT_MEAS_EN</code> 控制 Q1 的栅极。R22、R19、R20 构成分压链，<code>MCU_ADC_BAT</code> 从 R19 和 R20 中间取样，C11 接在 ADC 节点上做滤波和保持。</p>
+<p>默认状态下，R24 把 Q1 的栅极上拉到 <code>+VBAT</code>，Q1 的 <code>VGS</code> 接近 0，分压链被切断；R25 把 Q2 栅极下拉，避免 MCU 引脚上电悬空时误开启测量。需要测量时，MCU 拉高 <code>MCU_BAT_MEAS_EN</code>，Q2 导通，把 Q1 栅极拉向地，Q1 导通，电池电压才接入分压电阻。</p>
+<h2>常接分压的问题</h2>
+<p>假设只用普通电阻分压，比如上臂 2MΩ、下臂 1MΩ，总阻值是 3MΩ。电池为 4.2V 时，分压电流大约是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>I = 4.2V / 3MΩ = 1.4uA</span></span></code></pre><p>1.4uA 看起来很小，但低功耗设备的休眠电流可能也是微安级甚至更低。一个常接分压器会把系统休眠电流直接抬高，而且这部分电流和采样频率无关：一天只测一次，它也会 24 小时流过。</p>
+<p>继续把电阻做大可以降低电流，但会引入另一个问题：ADC 输入源阻抗变高。很多 MCU ADC 都要求信号源阻抗不能太大，否则内部采样保持电容在采样时间内充不准，读数会偏低或受上一次通道影响。</p>
+<p>所以低功耗电池采样不能只靠“把分压电阻做大”。它需要在不测量时断开分压链，在测量时再临时接入。</p>
+<h2>用 PMOS 关断高边</h2>
+<p>Q1 放在高边，作用是从源头切断分压电阻。用 P 沟道 MOS 做这个开关有一个好处：关断时分压链不再直接挂在电池正端，静态耗电主要剩下 MOS 漏电、R24 上拉支路相关的微小泄漏，以及后级输入泄漏。</p>
+<p>Q1 的控制关系很直接：</p>
+<ul>
+<li>栅极被 R24 拉到 <code>+VBAT</code>：<code>VGS ≈ 0</code>，Q1 关闭。</li>
+<li>栅极被拉低：<code>VGS</code> 为负，Q1 打开。</li>
+</ul>
+<p>这种结构适合电池电压可能高于 MCU 供电电压的场景。ADC 分压以后送入 MCU，但分压链的上端仍然是电池电压，不能把所有控制节点都默认看成 MCU 电压域。</p>
+<h2>为什么还要一个 NMOS</h2>
+<p>图里增加了 Q2，避免 MCU IO 直接连接 Q1 栅极。Q2 实际上是一个低边开漏下拉器：MCU 只控制 Q2 的栅极，Q2 再负责把 Q1 栅极拉低。</p>
+<p>这一步主要是为了处理电压域差异。电池电压 <code>VBAT</code> 可能高于 MCU 的 <code>VDD</code>。Q1 的栅极在关闭状态会被 R24 拉到 <code>VBAT</code>，如果 MCU IO 直接接到这个节点，即使把 IO 配成开漏，IO 引脚仍然可能被外部拉到高于 MCU 供电的电压。</p>
+<p>这会带来几个风险：</p>
+<ul>
+<li>MCU 引脚的 ESD 或钳位二极管可能被正向偏置，电流从电池通过 IO 灌入 MCU 供电域。</li>
+<li>MCU 处于掉电或深睡时，IO 被高于 <code>VDD</code> 的电压反向供电，导致休眠电流异常或芯片状态不可控。</li>
+<li>许多 MCU 的开漏 IO 仍然不允许引脚电压超过 <code>VDD</code>；除非手册明确支持 5V tolerant 或 over-voltage tolerant，否则不能按开漏等同于完全隔离来设计。</li>
+</ul>
+<p>Q2 把这两个电压域隔开。MCU 只看见 Q2 栅极，这是一个普通的 MCU 逻辑输入；Q1 栅极则由 Q2 的漏极去下拉，可以被 R24 拉到 <code>VBAT</code>。只要 Q2 的 <code>VDS</code> 额定值覆盖电池电压，MCU IO 就不用直接承受 <code>VBAT</code>。</p>
+<h2>分压比例和 ADC 范围</h2>
+<p>图中 R22、R19、R20 都是 1MΩ。ADC 取样点在 R19 和 R20 之间，因此下臂是 R20，上臂是 R22 + R19。</p>
+<p>分压关系是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>V_ADC = VBAT * R20 / (R22 + R19 + R20)</span></span>
+<span class="line"><span>      = VBAT / 3</span></span></code></pre><p>如果单节锂电最高按 4.2V 计算，ADC 节点大约是 1.4V。这个电压通常低于 3.3V 或 1.8V MCU 的 ADC 输入范围。若使用多节电池，或者系统存在充电、热插拔、升压输出回灌等情况，就要按最高可能的 <code>VBAT</code> 重新计算，不能只按标称电压判断。</p>
+<p>分压电阻总值为 3MΩ，测量时电流约为 <code>VBAT / 3MΩ</code>。因为 Q1 只在采样前短时间打开，这个电流只出现在测量周期内，不再变成持续休眠电流。</p>
+<h2>高阻分压会影响 ADC 采样</h2>
+<p>这个电路为了省电使用了兆欧级电阻。代价是 ADC 节点的等效源阻抗很高。</p>
+<p>从 <code>MCU_ADC_BAT</code> 节点往外看，上臂是 R22 + R19，也就是 2MΩ；下臂是 R20，也就是 1MΩ。等效电阻为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Rth = 2MΩ || 1MΩ ≈ 667kΩ</span></span></code></pre><p>667kΩ 对 ADC 来说已经很高。ADC 内部通常有一个采样开关和采样保持电容。采样瞬间，这个电容要从外部信号源取电荷。如果源阻抗太高，在 MCU 配置的采样时间内电容来不及充到真实电压，ADC 读数就会偏。</p>
+<p>C11 的作用是给 ADC 节点提供一个本地电荷库。分压链慢慢把 C11 充到目标电压，ADC 采样瞬间主要从 C11 取电荷，对 667kΩ 高阻源瞬时供电能力的依赖会降低。</p>
+<h2>为什么要等待 300 到 500ms</h2>
+<p>C11 是 100nF。它和分压器的戴维南等效电阻形成 RC 充电过程。时间常数为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>τ = Rth * C</span></span>
+<span class="line"><span>  ≈ 667kΩ * 100nF</span></span>
+<span class="line"><span>  ≈ 66.7ms</span></span></code></pre><p>RC 电路不会在一个时间常数后立刻到达最终值。常用工程估算是等待 5 个时间常数，此时电压已经接近最终值：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>5τ ≈ 333ms</span></span></code></pre><p>所以固件流程应该是：</p>
+<ol>
+<li>拉高 <code>MCU_BAT_MEAS_EN</code>，打开 Q2 和 Q1。</li>
+<li>等待 300 到 500ms，让 C11 和分压节点稳定。</li>
+<li>配置 ADC 较长采样时间。</li>
+<li>丢弃第一次 ADC 结果。</li>
+<li>连续采几次取平均。</li>
+<li>关闭 <code>MCU_BAT_MEAS_EN</code>，重新断开分压链。</li>
+</ol>
+<p>这里的等待时间来自分压电阻和电容决定的模拟稳定过程，和按键类软件消抖无关。C11 越大，抗 ADC 采样扰动和噪声能力越强，但等待时间越长；电阻越小，稳定越快，但测量期间电流越大。</p>
+<h2>取值边界</h2>
+<p>这个设计可以成立，但要把几个边界写进检查项：</p>
+<ul>
+<li>Q1 的 Source 应接 <code>+VBAT</code>，Drain 接分压链上端，封装引脚不能接反。</li>
+<li>Q2 的 <code>VDS</code> 额定值要覆盖最高电池电压。</li>
+<li>Q1 的 <code>VGS</code> 额定值要覆盖栅极被拉低时的最大负压。</li>
+<li>ADC 节点最高电压要低于 MCU ADC 允许输入电压，并留出电阻误差和电池最高电压余量。</li>
+<li>ADC 采样时间要按高源阻抗场景配置，不能沿用低阻信号的默认采样周期。</li>
+<li>关闭测量后，ADC 引脚、C11 和 MCU 内部输入结构的泄漏也会影响残余电压，下一次采样仍应按完整稳定流程处理。</li>
+</ul>
+<h2>结论</h2>
+<p>低功耗电池电压采样的核心矛盾，是分压器既要在测量时提供 ADC 可读电压，又不能在休眠时长期耗电。高边 PMOS 可以切断分压链，NMOS 用来把 MCU 控制信号和电池高压控制节点隔离，避免 MCU IO 直接暴露在高于自身供电的电压上。</p>
+<p>分压电阻取到兆欧级以后，功耗降下来了，ADC 源阻抗也上去了。C11 可以改善 ADC 采样瞬间的电荷供给，但它和分压电阻共同决定了数百毫秒的稳定等待时间。这个电路最终要靠硬件开关和固件采样时序配合：打开分压、等待 RC 稳定、长采样、丢首样、多次平均、关闭分压。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=power-voltage-low-power-sampling');
+  }
+  </script>
+</body>
+</html>

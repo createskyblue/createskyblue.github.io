@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FDM打印防收缩槽：一条线消除散热孔槽冷却纹 - CacheRivulet小记</title>
+  <meta name="description" content="FDM散热孔冷却纹，用防收缩槽释放应力">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="3D打印">
+  <meta property="article:tag" content="FDM">
+  <meta property="article:tag" content="冷却纹">
+  <meta property="article:tag" content="防收缩槽">
+  <meta property="article:tag" content="打印技巧">
+  <meta property="article:tag" content="表面质量">
+  <meta property="article:published_time" content="2026-06-26">
+  <meta property="og:title" content="FDM打印防收缩槽：一条线消除散热孔槽冷却纹">
+  <meta property="og:description" content="FDM散热孔冷却纹，用防收缩槽释放应力">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/fdm-cooling-shrinkage-groove/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/fdm-cooling-shrinkage-groove/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "FDM打印防收缩槽：一条线消除散热孔槽冷却纹",
+  "description": "FDM散热孔冷却纹，用防收缩槽释放应力",
+  "datePublished": "2026-06-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/fdm-cooling-shrinkage-groove/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/fdm-cooling-shrinkage-groove/"
+  },
+  "keywords": "3D打印, FDM, 冷却纹, 防收缩槽, 打印技巧, 表面质量"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">FDM打印防收缩槽：一条线消除散热孔槽冷却纹</h1>
+  <article class="article-body">
+<h1>FDM打印防收缩槽：一条线消除散热孔槽冷却纹</h1>
+<blockquote>
+<p><strong>声明：</strong> 本文记录的防收缩槽技巧来自小红书用户「聆息听韵」（小红书号：26507740295）的帖子分享。本文是学习整理笔记，用于理解 FDM 打印中冷却收缩纹的成因与抑制方法。<strong>本文作者不是该技巧的原创者，未参与原帖的实验过程。</strong> 文中工程分析来自对打印现象的推理，不代表原作者的设计思路。</p>
+</blockquote>
+<p><img src="/posts/fdm-cooling-shrinkage-groove/sketch-diagram.webp" alt="封面"></p>
+<h2>问题：FDM 打印冷却纹</h2>
+<p>FDM 打印中，熔融塑料从喷嘴挤出后迅速冷却固化。当模型存在<strong>长条形散热孔槽</strong>时，孔槽上下边缘的冷却速度不一致——上层已固化收缩，下层还在挤出，层间积累的收缩应力会在孔槽根部释放，形成一道道横向冷却收缩纹。</p>
+<p>这种纹路在功能性结构件上尤其扎眼：散热齿、通风槽、卡扣开孔等位置的表面质量直接决定了成品观感。打磨可以缓解，但窄槽内部几乎无法处理。</p>
+<h2>偶然的对照实验</h2>
+<p>聆息听韵在打印一个&quot;过度工程的充电站&quot;底座时，意外做了一次完美的 A/B 对照：</p>
+<ul>
+<li><strong>左侧散热孔</strong>：建模时在孔槽根部预挖了一条细小的弧形<strong>防收缩槽</strong></li>
+<li><strong>右侧散热孔</strong>：忘了画这条槽，保持原始直角结构</li>
+</ul>
+<p>同一块底板、同一卷耗材、同一次打印——唯一的变量就是那条不起眼的线。</p>
+<p><img src="/posts/fdm-cooling-shrinkage-groove/cover.webp" alt="实物对比：木桌上同时展示开槽侧与未开槽侧，左侧冷却纹几乎不可见，右侧纹路清晰"></p>
+<p><img src="/posts/fdm-cooling-shrinkage-groove/comparison-print.webp" alt="实物对比：红圈标出防收缩槽区域，左侧开槽表面平整，右侧未开槽冷却纹明显"></p>
+<p>结果一目了然：<strong>有防收缩槽的一侧几乎看不到冷却纹，表面平整；没画槽的一侧，散热齿根部布满明显的收缩纹路。</strong></p>
+<h2>为什么一条线能解决问题</h2>
+<p>从原理上看，防收缩槽的作用是<strong>切断连续收缩应力路径</strong>：</p>
+<ul>
+<li>散热孔槽的上下边缘在冷却时各自收缩，在直角根部交汇处形成应力集中</li>
+<li>预挖的弧形槽将连续的直角拐点打断，收缩应力在槽的弧形表面分散释放，不再积累到一条线上</li>
+<li>弧形槽自身的曲率让收缩变形均匀分布，视觉上不可见</li>
+</ul>
+<p><img src="/posts/fdm-cooling-shrinkage-groove/sketch-diagram.webp" alt="手绘原理图：上方为原始直角结构（走线箭头指向应力集中点），下方为增加防收缩槽的改进结构"></p>
+<p>原作者在方格纸上手绘了两种结构的对比：上图为原始直角孔槽，挤出路径箭头直指应力集中拐点；下图在孔槽起始位置挖出弧形防收缩槽，将应力路径切断。</p>
+<p>本质上，这和注塑模具的&quot;防缩痕槽&quot;、金属焊接的&quot;应力释放槽&quot;是同一个工程直觉：<strong>不要让收缩应力在一条线上集中</strong>。</p>
+<h2>实操要点</h2>
+<p>从原帖的实践可以总结几条经验：</p>
+<ul>
+<li><strong>预挖而非后处理</strong>：防收缩槽是建模时画在模型上的，不是打印后雕刻。在 CAD 中孔槽根部加一段弧形切除即可</li>
+<li><strong>槽不需要大</strong>：从对比图看，一条宽度不到 1mm 的弧形线就能生效，不会影响结构强度</li>
+<li><strong>散热孔槽最容易中招</strong>：长条形开孔是冷却纹重灾区，圆孔由于应力分布均匀反而问题不大</li>
+<li><strong>别忘了对称结构</strong>：左右对称的孔槽要一起画，原作者&quot;只画左边没画右边&quot;恰好验证了效果</li>
+</ul>
+<h2>总结</h2>
+<p>这个技巧的价值在于<strong>成本极低、效果显著</strong>。建模时多画一条线的时间可以忽略不计，但打印成品的表面质量提升肉眼可见。对于经常打印功能性结构件的玩家，值得放进自己的建模习惯里。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=fdm-cooling-shrinkage-groove');
+  }
+  </script>
+</body>
+</html>

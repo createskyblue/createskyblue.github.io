@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif">
+  <rect width="960" height="360" fill="#f8fafc"/>
+  <text x="20" y="24" font-size="16" fill="#1e293b" font-weight="bold">固件保护的信任边界：密钥落在哪一侧，决定加密有没有效</text>
+
+  <!-- ===== left panel: flawed ===== -->
+  <rect x="20" y="40" width="450" height="300" rx="10" fill="#fef2f2" stroke="#f87171" stroke-width="1.5"/>
+  <text x="35" y="66" font-size="15" fill="#b91c1c" font-weight="bold">错误做法：解密密钥在 PC</text>
+
+  <g font-size="13" text-anchor="middle" fill="#1e293b">
+    <rect x="35" y="80" width="180" height="54" rx="6" fill="#ffffff" stroke="#b91c1c" stroke-width="1.5"/>
+    <text x="125" y="106">厂商服务器</text>
+    <text x="125" y="124" fill="#64748b">加密固件</text>
+
+    <rect x="255" y="80" width="205" height="54" rx="6" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+    <text x="357" y="106">上位机</text>
+    <text x="357" y="124" fill="#b91c1c">解密密钥写死在此</text>
+
+    <rect x="255" y="185" width="205" height="54" rx="6" fill="#ffffff" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="357" y="211">✗ 反编译即提取密钥</text>
+  </g>
+  <line x1="218" y1="107" x2="248" y2="107" stroke="#b91c1c" stroke-width="2" marker-end="url(#rarr)"/>
+  <text x="233" y="98" font-size="12" fill="#b91c1c" text-anchor="middle">下载</text>
+  <line x1="357" y1="137" x2="357" y2="178" stroke="#b91c1c" stroke-width="2" marker-end="url(#rarr)"/>
+  <text x="35" y="300" font-size="13" fill="#b91c1c">加密降级为混淆：挡得住随手翻文件的人，挡不住拿到程序的人</text>
+
+  <!-- ===== right panel: correct ===== -->
+  <rect x="490" y="40" width="450" height="300" rx="10" fill="#f0fdf4" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="505" y="66" font-size="15" fill="#15803d" font-weight="bold">正确做法：签名公钥在设备</text>
+
+  <g font-size="13" text-anchor="middle" fill="#1e293b">
+    <rect x="505" y="80" width="210" height="54" rx="6" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="610" y="106">厂商服务器</text>
+    <text x="610" y="124" fill="#15803d">私钥签名（私钥不出服务器）</text>
+
+    <rect x="755" y="80" width="175" height="54" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="842" y="106">上位机</text>
+    <text x="842" y="124" fill="#64748b">仅转发，不持密钥</text>
+
+    <rect x="755" y="185" width="175" height="54" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+    <text x="842" y="211">设备·内置公钥验签 ✓</text>
+    <text x="842" y="229" fill="#15803d">签名通过才写入</text>
+  </g>
+  <line x1="718" y1="107" x2="748" y2="107" stroke="#16a34a" stroke-width="2" marker-end="url(#garr)"/>
+  <text x="733" y="98" font-size="12" fill="#16a34a" text-anchor="middle">签名固件</text>
+  <line x1="842" y1="137" x2="842" y2="178" stroke="#16a34a" stroke-width="2" marker-end="url(#garr)"/>
+  <text x="505" y="300" font-size="13" fill="#15803d">攻破 PC 也伪造不了固件：私钥始终在厂商侧</text>
+
+  <defs>
+    <marker id="rarr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#b91c1c"/></marker>
+    <marker id="garr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#16a34a"/></marker>
+  </defs>
+</svg>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TinyFrame 可以给串口和 BLE 透传加一层可靠消息帧 - CacheRivulet小记</title>
+  <meta name="description" content="TinyFrame把串口字节流封成可校验消息帧">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="TinyFrame">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="TinyFrame 可以给串口和 BLE 透传加一层可靠消息帧">
+  <meta property="og:description" content="TinyFrame把串口字节流封成可校验消息帧">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/tinyframe-protocol-frame/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/tinyframe-protocol-frame/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "TinyFrame 可以给串口和 BLE 透传加一层可靠消息帧",
+  "description": "TinyFrame把串口字节流封成可校验消息帧",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/tinyframe-protocol-frame/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/tinyframe-protocol-frame/"
+  },
+  "keywords": "TinyFrame, 通信协议, 嵌入式, BLE"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">TinyFrame 可以给串口和 BLE 透传加一层可靠消息帧</h1>
+  <article class="article-body">
+<h1>TinyFrame 可以给串口和 BLE 透传加一层可靠消息帧</h1>
+<p>TinyFrame 是一个 C 语言消息帧库，适合放在 UART、BLE 透传、USB CDC、socket 这类字节流链路上。底层链路只负责收发字节，TinyFrame 负责把字节组织成一条条有边界、有类型、有校验的消息。</p>
+<p>这类库的价值在于减少重复造轮子。嵌入式项目里经常会遇到很多指令：设置时间、读取时间、读取传感器记录、删除记录、测速、查询版本。直接在透传数据里手写解析逻辑，很容易把包边界、长度检查、校验、指令分发和业务逻辑混在一起。TinyFrame 把这些通用动作收进协议层，业务代码只需要按消息类型处理指令。</p>
+<h2>适用场景</h2>
+<p>TinyFrame 适合这些场景：</p>
+<ul>
+<li>串口或 BLE 透传本身只提供字节收发，没有消息边界。</li>
+<li>指令类型比较多，希望用 <code>type</code> 字段分发业务命令。</li>
+<li>需要长度字段和校验，避免半包、粘包、乱包直接进入业务逻辑。</li>
+<li>需要请求和响应关联，可以用帧 ID 等待某次请求的回复。</li>
+<li>MCU 资源有限，希望协议层用静态缓冲区和少量 C 文件完成。</li>
+</ul>
+<p>TinyFrame 的定位是消息帧库，文件传输调度仍由应用层负责。TinyFrame 可以发送长 payload，也提供 multipart 发送接口，但接收端仍然需要用 <code>TF_MAX_PAYLOAD_RX</code> 缓冲完整一帧后再校验。超出接收缓冲区的大数据，应在应用层拆成多条消息传输。</p>
+<h2>帧里有什么</h2>
+<p>TinyFrame 的一帧通常包含这些部分：</p>
+<ul>
+<li>SOF：帧开始字节，可配置。</li>
+<li>ID：帧 ID，用来关联请求和响应。</li>
+<li>LEN：payload 长度。</li>
+<li>TYPE：消息类型，常用来当作指令号。</li>
+<li>HEAD_CKSUM：头部校验。</li>
+<li>DATA：业务数据。</li>
+<li>DATA_CKSUM：payload 校验。</li>
+</ul>
+<p>这些字段的字节数可以在 <code>TF_Config.h</code> 里配置。例如 ID、长度、类型字段可以选择 1、2 或 4 字节，校验可以选择无校验、XOR、CRC8、CRC16、CRC32 或自定义校验。两个通信端必须使用同一套配置。</p>
+<h2>优点</h2>
+<p>TinyFrame 的优点主要体现在工程边界清楚：</p>
+<ul>
+<li>协议层负责帧格式、校验、解析状态机和监听器。</li>
+<li>业务层只关心某个 <code>type</code> 对应哪条指令。</li>
+<li>发送接口只依赖 <code>TF_WriteImpl()</code>，可以接 UART、BLE notify/write、USB 或 TCP。</li>
+<li>接收接口只需要把收到的字节交给 <code>TF_Accept()</code>。</li>
+<li>静态初始化可避免 <code>malloc()</code>，适合 MCU 工程。</li>
+<li>多实例可用，但同一工程里的实例要使用同样的字段配置。</li>
+</ul>
+<p>对指令较多的嵌入式项目来说，<code>type</code> 字段很适合作为命令号。新增一条业务指令时，通常只需要定义新的 <code>type</code>，注册对应监听器，然后在回调里处理 payload。</p>
+<h2>移植步骤</h2>
+<p>移植时只需要把通用库和工程适配层分清楚。</p>
+<p>第一步，把这些文件放进工程：</p>
+<ul>
+<li><code>TinyFrame.c</code></li>
+<li><code>TinyFrame.h</code></li>
+<li><code>TF_Config.h</code></li>
+</ul>
+<p><code>TF_Config.example.h</code> 可以复制成 <code>TF_Config.h</code> 后再按项目调整。常见配置包括字段长度、校验类型、最大接收 payload、发送缓冲区长度、监听器数量和是否启用互斥锁。</p>
+<p>第二步，实现发送出口：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> TF_WriteImpl</span><span style="color:#D4D4D4">(TinyFrame *</span><span style="color:#9CDCFE">tf</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">buff</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    ble_or_uart_write</span><span style="color:#D4D4D4">(buff, len);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>TinyFrame 不直接操作硬件。所有 <code>TF_Send()</code>、<code>TF_Respond()</code> 最终都会调用 <code>TF_WriteImpl()</code>，所以这个函数就是协议层到物理链路的出口。</p>
+<p>第三步，初始化实例并注册监听器：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#D4D4D4"> TinyFrame tf;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> app_proto_init</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_InitStatic</span><span style="color:#D4D4D4">(&#x26;tf, TF_SLAVE);</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_AddTypeListener</span><span style="color:#D4D4D4">(&#x26;tf, </span><span style="color:#B5CEA8">0x01</span><span style="color:#D4D4D4">, on_set_time);</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_AddTypeListener</span><span style="color:#D4D4D4">(&#x26;tf, </span><span style="color:#B5CEA8">0x02</span><span style="color:#D4D4D4">, on_get_time);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>如果项目允许动态内存，也可以使用 <code>TF_Init()</code>。在 MCU 工程里更常用 <code>TF_InitStatic()</code>，实例由应用自己分配。</p>
+<p>第四步，把收到的数据喂给解析器：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> on_link_rx</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_Accept</span><span style="color:#D4D4D4">(&#x26;tf, data, len);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>UART 中断、BLE 写特征回调、USB CDC 接收回调都可以走这条路径。TinyFrame 会在内部累积字段、校验长度和校验和，解析出完整消息后再调用监听器。</p>
+<p>第五步，如果使用请求超时或解析超时，周期性调用：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> systick_handler</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_Tick</span><span style="color:#D4D4D4">(&#x26;tf);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>TF_Tick()</code> 的时间基准由调用周期决定。它用于解析器超时，也用于 ID 监听器超时。</p>
+<h2>简单发送和响应</h2>
+<p>发送一条普通消息可以使用 <code>TF_Send()</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> payload</span><span style="color:#569CD6">[]</span><span style="color:#D4D4D4"> = { </span><span style="color:#B5CEA8">0x01</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x02</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x03</span><span style="color:#D4D4D4"> };</span></span>
+<span class="line"><span style="color:#D4D4D4">TF_Msg msg;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">TF_ClearMsg</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">msg.type = </span><span style="color:#B5CEA8">0x10</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">msg.data = payload;</span></span>
+<span class="line"><span style="color:#D4D4D4">msg.len = </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(payload);</span></span>
+<span class="line"><span style="color:#DCDCAA">TF_Send</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">tf</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">);</span></span></code></pre><p>接收某个类型的消息时，监听器拿到的是 <code>TF_Msg</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#D4D4D4"> TF_Result </span><span style="color:#DCDCAA">on_get_time</span><span style="color:#D4D4D4">(TinyFrame *</span><span style="color:#9CDCFE">tf</span><span style="color:#D4D4D4">, TF_Msg *</span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#9CDCFE"> rsp</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">7</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    fill_time_payload</span><span style="color:#D4D4D4">(rsp);</span></span>
+<span class="line"><span style="color:#9CDCFE">    msg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4"> = rsp;</span></span>
+<span class="line"><span style="color:#9CDCFE">    msg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">len</span><span style="color:#D4D4D4"> = </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(rsp);</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_Respond</span><span style="color:#D4D4D4">(tf, msg);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> TF_STAY;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>TF_Respond()</code> 会复用收到消息的帧 ID，方便请求方把响应和原请求对应起来。监听器返回 <code>TF_STAY</code> 表示继续保留，后续同类型消息还会进入这个回调。</p>
+<h2>使用时要注意</h2>
+<p>配置要先定下来。字段长度、校验类型、SOF 开关、大小端和最大 payload 都会影响帧格式，通信双方必须一致。</p>
+<p>接收缓冲区要按最大单帧 payload 预留。TinyFrame 解析 payload 后才会交给业务回调，因此 <code>TF_MAX_PAYLOAD_RX</code> 太小会导致大帧被丢弃。大文件、大波形、大批量记录应拆成多条业务消息，不要依赖单帧硬扛。</p>
+<p>发送 multipart 只解决发送端不想一次性准备完整 payload 的问题。它不会降低接收端对完整单帧缓冲区的要求。</p>
+<p>如果在多线程或中断加主循环环境中共用同一个 TinyFrame 实例，要开启 <code>TF_USE_MUTEX</code> 并实现 <code>TF_ClaimTx()</code>、<code>TF_ReleaseTx()</code>，或者在应用层保证发送接口不会并发进入。</p>
+<h2>结论</h2>
+<p>TinyFrame 适合给“透传链路”补齐协议层。它不替代 UART、BLE 或 TCP，也不替代业务协议设计；它负责把字节流变成可校验、可分发、可响应的消息帧。</p>
+<p>在指令数量较多的 MCU 项目里，可以把 TinyFrame 放在链路层和业务层之间：链路层收发字节，TinyFrame 解析和封包，业务层按 <code>type</code> 处理命令。这样新增指令时，主要改业务回调，不需要反复重写包解析状态机。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=tinyframe-protocol-frame');
+  }
+  </script>
+</body>
+</html>

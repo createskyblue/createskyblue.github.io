@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas 将 Min-Max 心率采样绘成连续包络波形 - CacheRivulet小记</title>
+  <meta name="description" content="Canvas Min-Max 波形渲染：每桶包络连接极值">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="Canvas">
+  <meta property="article:tag" content="波形渲染">
+  <meta property="article:tag" content="降采样">
+  <meta property="article:tag" content="数据可视化">
+  <meta property="article:published_time" content="2026-07-17">
+  <meta property="og:title" content="Canvas 将 Min-Max 心率采样绘成连续包络波形">
+  <meta property="og:description" content="Canvas Min-Max 波形渲染：每桶包络连接极值">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/heart-rate-minmax-canvas-envelope/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/heart-rate-minmax-canvas-envelope/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Canvas 将 Min-Max 心率采样绘成连续包络波形",
+  "description": "Canvas Min-Max 波形渲染：每桶包络连接极值",
+  "datePublished": "2026-07-17",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/heart-rate-minmax-canvas-envelope/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/heart-rate-minmax-canvas-envelope/"
+  },
+  "keywords": "嵌入式, BLE, Canvas, 波形渲染, 降采样, 数据可视化"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Canvas 将 Min-Max 心率采样绘成连续包络波形</h1>
+  <article class="article-body">
+<h1>Canvas 将 Min-Max 心率采样绘成连续包络波形</h1>
+<p><img src="/posts/heart-rate-minmax-canvas-envelope/PixPin_2026-07-17_23-03-25.webp" alt="实时心率与同步采样 Min-Max 包络波形"></p>
+<p>心率记录需要同时返回 BPM 和一秒采样波形。设备端每秒处理 500 个 ADC 样本，将它们分成 10 个桶，每个桶输出一个 8-bit 最小值和最大值。这样一条记录会携带 20 个波形字节，主机端再把它显示在实时心率曲线下方。</p>
+<p>这类数据不能直接按 20 个普通采样点连线。20 个字节实际代表 10 组范围，每组范围覆盖一段原始样本。最终图表采用“一个桶一个 x 坐标”的包络绘制，再叠加一条中心线，既保留极值，也避免把 Min-Max 数据误读成带有明确先后顺序的波形点。</p>
+<h2>Min-Max 桶语义</h2>
+<p>协议中的波形部分由 10 组连续的 <code>[min,max]</code> 组成。每组覆盖 50 个新样本，桶边界保留一个重叠样本，用于保持边沿信息。<code>min</code> 和 <code>max</code> 只描述这段样本的范围，协议没有携带极值出现的原始索引。</p>
+<p>主机端为每个桶建立一条记录：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>timestamp</code></td>
+<td>桶中心对应的时间</td>
+</tr>
+<tr>
+<td><code>min</code></td>
+<td>该桶的 8-bit 最小值</td>
+</tr>
+<tr>
+<td><code>max</code></td>
+<td>该桶的 8-bit 最大值</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td><code>(min + max) / 2</code>，用于中心线</td>
+</tr>
+</tbody></table>
+<p>如果把每组 <code>[min,max]</code> 拆成两个有序时间点，页面必须猜测极值先后。上升段、下降段和重复量化值都会让这条猜测产生凹刺或不自然的平台。包络绘制直接使用协议提供的范围信息，避免引入这层猜测。</p>
+<h2>桶中心坐标与 15 秒窗口</h2>
+<p>记录时间戳表示这一秒波形的结束位置。第 <code>pairIndex</code> 个桶的中心时间计算为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> bucketTimestamp</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">recordTimestamp</span><span style="color:#D4D4D4"> - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4"> +</span></span>
+<span class="line"><span style="color:#D4D4D4">    (</span><span style="color:#9CDCFE">pairIndex</span><span style="color:#D4D4D4"> + </span><span style="color:#B5CEA8">0.5</span><span style="color:#D4D4D4">) / </span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">;</span></span></code></pre><p>10 个桶均匀落在 <code>[recordTimestamp - 1, recordTimestamp]</code> 内。每个桶只有一个 x 坐标，<code>min</code> 和 <code>max</code> 共同描述这个位置的上下边界。</p>
+<p>调试器只保留最近 15 秒，也就是 150 个桶。单条读取、批量读取和连续读取都进入同一个 <code>appendHeartRateSignalRecord()</code> 数据入口。记录用 <code>id:timestamp</code> 去重，Canvas 重绘通过一个待处理的 <code>requestAnimationFrame</code> 合并，避免一次批量响应触发多次完整绘制。</p>
+<h2>包络路径与中心线</h2>
+<p>Canvas 先把所有桶的 <code>min</code> 和 <code>max</code> 映射到动态 8-bit 纵轴。包络路径分两段建立：第一段从左到右连接每个桶的 <code>max</code>，第二段从右到左连接每个桶的 <code>min</code>，最后闭合路径并填充淡色区域。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">beginPath</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">let</span><span style="color:#9CDCFE"> index</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">start</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">index</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#9CDCFE">end</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">index</span><span style="color:#D4D4D4">++) {</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> bucket</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">buckets</span><span style="color:#D4D4D4">[</span><span style="color:#9CDCFE">index</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> x</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">xForTimestamp</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">bucket</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">timestamp</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> maxY</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">yForValue</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">bucket</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">max</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">min</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">max</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">area</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">index</span><span style="color:#D4D4D4"> === </span><span style="color:#9CDCFE">start</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">    ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">moveTo</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">maxY</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">  } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">    ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">lineTo</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">maxY</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">let</span><span style="color:#9CDCFE"> index</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">end</span><span style="color:#D4D4D4"> - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">index</span><span style="color:#D4D4D4"> >= </span><span style="color:#9CDCFE">start</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">index</span><span style="color:#D4D4D4">--) {</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> bucket</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">buckets</span><span style="color:#D4D4D4">[</span><span style="color:#9CDCFE">index</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> x</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">xForTimestamp</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">bucket</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">timestamp</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> minY</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">yForValue</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">bucket</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">min</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">min</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">max</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">area</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">  ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">lineTo</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">minY</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">closePath</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">fill</span><span style="color:#D4D4D4">();</span></span></code></pre><p>包络上下边界使用较浅的青绿色描边，中心线使用桶的中点：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> value</span><span style="color:#D4D4D4"> = (</span><span style="color:#9CDCFE">bucket</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">min</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">bucket</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">max</span><span style="color:#D4D4D4">) / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> y</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">yForValue</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">value</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">min</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">max</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">area</span><span style="color:#D4D4D4">);</span></span></code></pre><p>包络路径覆盖相邻桶之间的整个区间，所以画面不会出现独立柱子之间的空白。中心线提供清晰的趋势轮廓，淡色区域继续保留每个桶的极值范围。截图中的上下边界、中心线和右侧 0 到 255 刻度共同表达了同一组采样数据。</p>
+<h2>8-bit 量化的视觉表现</h2>
+<p>设备端把 12-bit ADC 极值量化为 8-bit：有效 ADC 值执行 <code>sample &gt;&gt; 4</code>，超出 12-bit 范围的值饱和到 <code>255</code>。量化会让相邻桶出现相同的最小值或最大值，包络边界可能形成短平台，中心线也会保留阶梯状变化。</p>
+<p>这种平台属于量化后的数据特征。它与多个采样点被错误放到同一 x 坐标的情况不同。包络图把一个桶的范围画在一个时间位置，中心线只使用一个中点值，因此图形结构和数据结构保持一致。</p>
+<h2>上位机数据流与显示分工</h2>
+<p>实时心率区域和同步采样区域使用两套历史数据：</p>
+<ul>
+<li>上方红色曲线保存 BPM、MAD、1 分钟均值和有效性状态。</li>
+<li>下方青绿色图形保存最近 15 秒的 Min-Max 桶。</li>
+<li>心率记录解析器从记录偏移 9 处读取 20 个波形字节。</li>
+<li>单条记录和批量记录共享同一套桶转换与绘制逻辑。</li>
+<li>原始 ADC 调试指令继续保留，便于对照未经 Min-Max 处理的采样数据。</li>
+</ul>
+<p>这样的分工让 BPM 趋势和采样形状各自使用合适的纵轴。BPM 图固定业务范围，采样图使用 8-bit 动态范围，两个图不会因为量纲不同互相压缩。</p>
+<h2>数据边界与验证结果</h2>
+<p>Min-Max 包络能保证每个桶的极值进入画面，却不能恢复极值在 50 个原始样本中的准确先后。如果产品需要一条严格对应原始时间顺序的折线，协议还需要传输极值索引或保留有序采样点。当前协议只提供范围信息，包络加中心线是与协议语义一致的显示方式。</p>
+<p>这次实现完成了三层校验：协议记录长度和 20 字节波形解析通过静态测试；调试器内联 JavaScript 通过语法检查；实机页面确认实时心率和同步波形上下排列，波形窗口稳定显示最近 15 秒。最终图形保持了极值信息，也让时间轴、包络范围和趋势线各自承担清晰的显示职责。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-17 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=heart-rate-minmax-canvas-envelope');
+  }
+  </script>
+</body>
+</html>

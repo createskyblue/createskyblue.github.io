@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 170" font-family="Consolas, 'Microsoft YaHei', sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7 Z" fill="#999"/></marker>
+  </defs>
+
+  <!-- Step 1 -->
+  <rect x="8" y="48" width="124" height="68" rx="4" fill="#E3ECF6" stroke="#7FA3C7" stroke-width="1.2"/>
+  <text x="70" y="74" text-anchor="middle" fill="#333" font-weight="bold" font-size="13">原始数据</text>
+  <text x="70" y="92" text-anchor="middle" fill="#667" font-size="11">CSV 文件</text>
+  <text x="70" y="106" text-anchor="middle" fill="#667" font-size="11">每行 6000 个点</text>
+
+  <line x1="132" y1="82" x2="162" y2="82" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 2 -->
+  <rect x="166" y="48" width="124" height="68" rx="4" fill="#F5F5F5" stroke="#CCC" stroke-width="1"/>
+  <text x="228" y="70" text-anchor="middle" fill="#444" font-weight="bold" font-size="13">特征提取</text>
+  <text x="228" y="86" text-anchor="middle" fill="#777" font-size="10">FFT 64 个频率 bin</text>
+  <text x="228" y="100" text-anchor="middle" fill="#777" font-size="10">时域 4 段 × 9 特征</text>
+  <text x="228" y="114" text-anchor="middle" fill="#777" font-size="10">→ 100 维向量</text>
+
+  <line x1="290" y1="82" x2="320" y2="82" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 3 -->
+  <rect x="324" y="48" width="124" height="68" rx="4" fill="#F5F5F5" stroke="#CCC" stroke-width="1"/>
+  <text x="386" y="70" text-anchor="middle" fill="#444" font-weight="bold" font-size="13">标准化</text>
+  <text x="386" y="88" text-anchor="middle" fill="#777" font-size="11">StandardScaler</text>
+  <text x="386" y="105" text-anchor="middle" fill="#777" font-size="11">零均值单位方差</text>
+
+  <line x1="448" y1="82" x2="478" y2="82" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 4 -->
+  <rect x="482" y="48" width="124" height="68" rx="4" fill="#F5F5F5" stroke="#CCC" stroke-width="1"/>
+  <text x="544" y="70" text-anchor="middle" fill="#444" font-weight="bold" font-size="13">Int8 量化</text>
+  <text x="544" y="88" text-anchor="middle" fill="#777" font-size="11">float32 → int8</text>
+  <text x="544" y="105" text-anchor="middle" fill="#777" font-size="11">q = round(r/S) + Z</text>
+
+  <line x1="606" y1="82" x2="636" y2="82" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 5 -->
+  <rect x="640" y="48" width="124" height="68" rx="4" fill="#E3ECF6" stroke="#7FA3C7" stroke-width="1.2"/>
+  <text x="702" y="70" text-anchor="middle" fill="#333" font-weight="bold" font-size="13">TFLM 推理</text>
+  <text x="702" y="88" text-anchor="middle" fill="#667" font-size="11">FC + Softmax</text>
+  <text x="702" y="105" text-anchor="middle" fill="#667" font-size="11">16KB Tensor Arena</text>
+
+  <line x1="764" y1="82" x2="794" y2="82" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Output -->
+  <rect x="280" y="128" width="240" height="32" rx="4" fill="#EDE2F0" stroke="#A681B5" stroke-width="1.2"/>
+  <text x="400" y="149" text-anchor="middle" fill="#4A3060" font-weight="bold" font-size="14">输出：震动A / 震动B / 震动C</text>
+
+  <line x1="702" y1="116" x2="520" y2="143" stroke="#A681B5" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="520" y1="143" x2="520" y2="128" stroke="#A681B5" stroke-width="1.2"/>
+
+  <!-- Step numbers -->
+  <text x="70" y="40" text-anchor="middle" fill="#AAA" font-size="11">①</text>
+  <text x="228" y="40" text-anchor="middle" fill="#AAA" font-size="11">②</text>
+  <text x="386" y="40" text-anchor="middle" fill="#AAA" font-size="11">③</text>
+  <text x="544" y="40" text-anchor="middle" fill="#AAA" font-size="11">④</text>
+  <text x="702" y="40" text-anchor="middle" fill="#AAA" font-size="11">⑤</text>
+
+  <!-- Divider -->
+  <line x1="8" y1="24" x2="772" y2="24" stroke="#DDD" stroke-width="0.8"/>
+  <text x="236" y="18" text-anchor="middle" fill="#BBB" font-size="10">Python 端（训练 + 导出模型）</text>
+  <text x="560" y="18" text-anchor="middle" fill="#BBB" font-size="10">C++ 端（MCU 推理）</text>
+  <line x1="464" y1="18" x2="480" y2="44" stroke="#DDD" stroke-width="0.5" stroke-dasharray="3,3"/>
+</svg>

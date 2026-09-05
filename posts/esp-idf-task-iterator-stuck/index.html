@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>遍历中修改列表元素：xTaskGetNext 在任务增删时陷入无限循环 - CacheRivulet小记</title>
+  <meta name="description" content="ESP-IDF xTaskGetNext 在生产环境遍历任务列表的失效分析">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ESP-IDF">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="RTOS">
+  <meta property="article:published_time" content="2026-08-28">
+  <meta property="og:title" content="遍历中修改列表元素：xTaskGetNext 在任务增删时陷入无限循环">
+  <meta property="og:description" content="ESP-IDF xTaskGetNext 在生产环境遍历任务列表的失效分析">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp-idf-task-iterator-stuck/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp-idf-task-iterator-stuck/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "遍历中修改列表元素：xTaskGetNext 在任务增删时陷入无限循环",
+  "description": "ESP-IDF xTaskGetNext 在生产环境遍历任务列表的失效分析",
+  "datePublished": "2026-08-28",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp-idf-task-iterator-stuck/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp-idf-task-iterator-stuck/"
+  },
+  "keywords": "嵌入式, ESP-IDF, ESP32-S3, 工程调试, RTOS"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">遍历中修改列表元素：xTaskGetNext 在任务增删时陷入无限循环</h1>
+  <article class="article-body">
+<h1>遍历中修改列表元素：xTaskGetNext 在任务增删时陷入无限循环</h1>
+<h2>概述</h2>
+<p>设备内置调试页面，每 5 秒自动刷新任务列表与内存水位，用于前期研发调试，便于远程观察运行状态；页面数据由设备 Web 服务在运行时遍历任务列表生成。</p>
+<p>该功能长期运行稳定。某次自动刷新后，任务列表出现数百行重复条目，内存水位降至 16 字节，设备失去响应并重启。以下记录现象、复现过程与根因判定。</p>
+<h2>现象</h2>
+<p>调试接口 <code>/debug.json</code> 由页面每 5 秒自动刷新，返回任务列表和内存水位。某次刷新后，任务列表出现同一批任务的几百行重复条目，堆的&quot;历史最低剩余&quot;掉到 16 字节，设备失去响应并重启。</p>
+<h2>复现</h2>
+<p>最小复现工程：一个任务每毫秒创建并删除子任务，另一个任务反复调用 <code>xTaskGetNext()</code> 遍历并统计每个任务句柄的返回次数。</p>
+<p>第一轮统计把&quot;句柄重复&quot;当信号，被 FreeRTOS 的句柄复用干扰（子任务删除后新任务复用同一内存地址），数据虚高。改为只统计永不删除的持久任务后，结论稳定：遍历期间任务被增删时，迭代器会卡在同一段列表反复重走，5000 次调用都不返回结束标志；挂起搅动任务后异常消失。</p>
+<p><img src="/posts/esp-idf-task-iterator-stuck/iterator-stuck.svg" alt="点名的人卡在被划掉的第2人，反复重走，永远到不了名单末尾"></p>
+<h2>官方回复</h2>
+<p>issue 提交后，Espressif 维护者 igrr 回复：</p>
+<blockquote>
+<p>These private functions are intended to be used in debug contexts: GDB Stub, Core Dump, where iteration over the list of tasks happens while the application isn&#39;t running.</p>
+</blockquote>
+<p>这些私有函数只用于调试场景：GDB Stub、Core Dump，且这些场景在应用未运行时遍历任务列表。翻译成大白话：这是调试专用工具，设计前提是遍历时应用不运行、任务列表不动。我们把它用在了运行中的系统里，遍历期间任务增删导致卡住。</p>
+<p>官方回应的边界成立，但它不消解缺陷本身：代码显式写了“遇到失效节点”的分支，正确的处理应当跳过并推进迭代器状态，或无法推进时返回 -1 终止；实际实现却只跳过不推进，形成无限循环。错误处理路径本身有 bug，这一点与“调试专用”的定位无关，后者只解释了它为何长期未被触发。</p>
+<p>issue：<a href="https://github.com/espressif/esp-idf/issues/19022">#19022</a>，复现工程：<a href="https://github.com/createskyblue/esp-idf-xtaskgetnext-repro">esp-idf-xtaskgetnext-repro</a>。</p>
+<h2>结论</h2>
+<p>经排查：设备调试页面按 5 秒周期刷新任务列表，在任务频繁创建、删除的运行环境下，<code>xTaskGetNext()</code> 遍历出现不结束现象。迭代器反复重走同一段列表，单次刷新产生数百行重复条目，堆的历史最低水位降至 16 字节，设备失去响应并重启。</p>
+<p>经最小复现工程验证，该现象可稳定复现：遍历期间存在任务增删时，迭代器连续 5000 次调用不返回结束标志；任务增删停止后，异常消失。</p>
+<p>经分析，根因在 <code>xTaskGetNext()</code> 的错误处理路径：代码为“遇到失效节点”写有处理分支，但该分支仅跳过当前节点、不推进迭代器状态，遍历因此无限循环且不返回结束标志。该缺陷属“遍历中修改容器”一类已知缺陷，触发与否取决于运行场景，缺陷本身不随场景变化。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-28 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp-idf-task-iterator-stuck');
+  }
+  </script>
+</body>
+</html>

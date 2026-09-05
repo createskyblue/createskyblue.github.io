@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图片非线性扰动工具可以用参数码加扰和还原图片 - CacheRivulet小记</title>
+  <meta name="description" content="非线性图像扰动工具本地处理图片">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="图像工具">
+  <meta property="article:tag" content="非线性扰动">
+  <meta property="article:tag" content="隐私保护">
+  <meta property="article:tag" content="React">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="图片非线性扰动工具可以用参数码加扰和还原图片">
+  <meta property="og:description" content="非线性图像扰动工具本地处理图片">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/nonlinear-image-distortion-tool/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/nonlinear-image-distortion-tool/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "图片非线性扰动工具可以用参数码加扰和还原图片",
+  "description": "非线性图像扰动工具本地处理图片",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/nonlinear-image-distortion-tool/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/nonlinear-image-distortion-tool/"
+  },
+  "keywords": "图像工具, 非线性扰动, 隐私保护, React"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">图片非线性扰动工具可以用参数码加扰和还原图片</h1>
+  <article class="article-body">
+<h1>图片非线性扰动工具可以用参数码加扰和还原图片</h1>
+<p>图片非线性扰动工具是一个在浏览器本地运行的图片处理工具。它可以把截图、图纸、资料图处理成带非线性形变的版本，并生成对应参数码。之后拿到同一张处理后图片和同一个参数码，就可以尝试还原。</p>
+<p><img src="/posts/nonlinear-image-distortion-tool/cover.webp" alt="图片非线性扰动工具界面"></p>
+<h2>工具入口</h2>
+<ul>
+<li>GitHub：<a href="https://github.com/createskyblue/Nonlinear-Image-Distortion-Tool">https://github.com/createskyblue/Nonlinear-Image-Distortion-Tool</a></li>
+<li>在线体验：<a href="https://createskyblue.github.io/Nonlinear-Image-Distortion-Tool/">https://createskyblue.github.io/Nonlinear-Image-Distortion-Tool/</a></li>
+</ul>
+<h2>核心功能</h2>
+<p>工具的主流程很直接：导入图片，选择加扰或还原，调整密钥、偏移强度、网格尺度和旋转扰动，然后处理并下载结果。</p>
+<p>它支持几种常用输入方式：</p>
+<ul>
+<li>选择本地图片文件。</li>
+<li>手机或电脑直接拍照。</li>
+<li>拖拽图片到页面。</li>
+<li>从剪贴板粘贴截图。</li>
+</ul>
+<p>处理完成后可以下载 PNG，也可以打开自动复制结果，把处理后的图片直接放进剪贴板，方便粘贴到聊天工具、文档或工单里。</p>
+<h2>参数码用于复现同一组扰动</h2>
+<p>加扰结果会生成 <code>NO3:</code> 开头的参数码。参数码记录了密钥、偏移强度、网格尺度、旋转扰动等关键参数。后续还原时，只靠记住密钥不够，还需要使用同一个参数码。</p>
+<p>这个设计适合做轻量来源确认。给不同分享对象或不同讨论场景使用不同参数码，后续如果看到疑似派生图片，可以用对应参数码尝试还原。正确参数通常能得到明显更好的还原效果。</p>
+<p>工具也兼容旧版 <code>NO2:</code> 参数码，已有旧图不需要重新生成。</p>
+<h2>支持等比例缩放后的还原</h2>
+<p>图片经过放大或缩小后，仍然可以放回工具里用同一参数码尝试还原。这一点对截图传播很重要，因为图片在聊天软件、网页预览或文档里经常会被等比例缩放。</p>
+<p>还原目标是辅助恢复可识别结构，不承诺逐像素无损。压缩、截图、缩放和局部编辑都会带来损失。这个工具让正确参数和错误参数之间形成可观察差异，用来辅助判断来源。</p>
+<h2>适用场景</h2>
+<p>这个工具适合处理需要“能看大概内容，但不希望直接拿走原图细节”的图片。</p>
+<p>典型场景包括：</p>
+<ul>
+<li>对外展示 CAD 导出图、结构图或设计稿预览。</li>
+<li>分享内部截图时降低敏感文字和细节的可读性。</li>
+<li>给不同沟通对象生成不同扰动版本，辅助后续来源判断。</li>
+<li>在不上传图片到服务器的前提下完成本地处理。</li>
+</ul>
+<p>它不适合作为司法级鉴定工具，也不应该替代正式的保密流程。它的定位是轻量的视觉脱敏和来源辅助。</p>
+<h2>为什么不用传统水印</h2>
+<p>这个项目早期考虑过暗水印和明水印，但最终选择把主要能力放在非线性扰动上。</p>
+<p>暗水印容易受到缩放、压缩、截图和局部干扰影响，提取失败后很难继续判断。明水印在视觉上更明显，但也更容易被裁剪、擦除或用 AI 修补。</p>
+<p>非线性扰动的优势是直接改变图片几何结构。别人仍然可以看到图的大概布局，但想要准确恢复原图，需要知道对应参数码。</p>
+<h2>使用方式</h2>
+<p>打开在线页面后，按下面顺序使用即可：</p>
+<ol>
+<li>导入图片或粘贴截图。</li>
+<li>选择“加扰”模式。</li>
+<li>调整密钥、偏移强度、网格尺度和旋转扰动。</li>
+<li>保存生成的参数码。</li>
+<li>下载或复制处理后的图片。</li>
+</ol>
+<p>需要还原时，切换到“还原”模式，粘贴参数码，再导入处理后的图片重新处理。</p>
+<p><img src="/posts/nonlinear-image-distortion-tool/img/english-ui.webp" alt="英文界面"></p>
+<h2>小结</h2>
+<p>图片非线性扰动工具解决的是一个很具体的需求：图片要能被展示和讨论，但不希望原始细节被轻易复用；同时又希望以后能用参数码尝试还原或确认来源。</p>
+<p>它的特点是本地运行、输入方式灵活、参数码可复现、对等比例缩放有一定容忍度。对设计图、资料截图和预览图来说，这比单纯打水印更贴近实际传播场景。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=nonlinear-image-distortion-tool');
+  }
+  </script>
+</body>
+</html>

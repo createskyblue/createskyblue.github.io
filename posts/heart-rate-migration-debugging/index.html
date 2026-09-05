@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片 - CacheRivulet小记</title>
+  <meta name="description" content="用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="算法迁移">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:tag" content="数据采集">
+  <meta property="article:published_time" content="2026-06-13">
+  <meta property="og:title" content="用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片">
+  <meta property="og:description" content="用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/heart-rate-migration-debugging/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/heart-rate-migration-debugging/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片",
+  "description": "用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片",
+  "datePublished": "2026-06-13",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/heart-rate-migration-debugging/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/heart-rate-migration-debugging/"
+  },
+  "keywords": "嵌入式, 算法迁移, 性能优化, 数据采集"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片</h1>
+  <article class="article-body">
+<h1>用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片</h1>
+<p><img src="/posts/heart-rate-migration-debugging/PixPin_2026-06-13_00-13-40.webp" alt="WCH 蓝牙芯片心率算法迁移调试记录"></p>
+<h2>迁移目标</h2>
+<p>原来的心率算法已经在 ESP32 项目里稳定运行。本次目标是迁移到 WCH 蓝牙芯片，并让新硬件保持稳定的心率输出。</p>
+<p>这是第一次使用 WCH 家的蓝牙芯片。迁移时将原项目工程、WCH SDK 和官方示例一起交给 GPT-5.5 辅助理解，再配合人工调试和实机验证。</p>
+<h2>初版问题</h2>
+<p>初版移植后，程序能运行，但结果不能直接接受。</p>
+<p>主要有两个问题：一是计算速度太慢，一次心率计算大约需要 4500ms；二是实机读数会跳，和预期结果不一致。</p>
+<p>这两个问题如果只看表面，很容易误判成算法本身不稳定。实际处理时，先把它们拆开验证。</p>
+<h2>同一份波形做两路验证</h2>
+<p><img src="/posts/heart-rate-migration-debugging/PixPin_2026-06-13_00-33-22.webp" alt="仿真工具中的心率波形与参考结果"></p>
+<p>这一步用到的是 <a href="https://github.com/createskyblue/signal-analysis-lab">signal-analysis-lab</a>。这个工具最初就是为了解决调参太慢的问题：用可拖拽节点先搭出信号处理流程，把滤波、窗口和参数效果在仿真里看清楚，再把稳定下来的方案固化成代码。</p>
+<p>排查时先从仿真软件里导出两样东西：一份原始波形数据，一份对应的参考答案。原始波形用于重复输入，参考答案用于判断结果是否正确。</p>
+<p>后续验证分成两路。第一路是本地静态测试：AI 用 GCC 编译算法测试程序，把同一份原始波形喂进去，再把输出结果和参考答案放进质量评估公式。这样可以先确认代码改动有没有破坏算法结果。</p>
+<p>第二路是实机验证：把同一份原始波形导入外部信号发生器，让信号发生器输出给 WCH 芯片的 ADC。</p>
+<p><img src="/posts/heart-rate-migration-debugging/PixPin_2026-06-13_00-35-13.webp" alt="外部信号发生器输出已知波形给 ADC"></p>
+<p>设备端会通过串口打印计算出的心率结果，AI 再读取串口输出，进入同一套质量评估。</p>
+<p>这里没有要求实机结果和仿真参考答案逐点完全一致。仿真导出、信号重放和 ADC 采样之间会有量化误差，也可能因为窗口边界和因果处理带来轻微偏移。</p>
+<p>所以判断方式是质量评估：综合看平均偏差、最大偏差、连续结果的跳变幅度，以及是否出现明显离谱值。只要偏差在合理范围内、趋势稳定、没有异常跳变，就说明迁移结果是可信的。</p>
+<p>这个对照很关键。本地静态测试负责确认算法改动是否正确，信号发生器和串口结果负责确认实机采样和运行过程是否正确。两边输入相同，评价标准也一致，结果就不能靠感觉解释。</p>
+<p>环境搭好以后，这个流程可以持续复用。AI 可以完成本地编译、静态测试、固件编译、烧录、串口采集和结果对比，人工主要负责判断异常现象是否符合产品预期。</p>
+<h2>优化慢计算</h2>
+<p>先处理计算太慢的问题。排查后发现，初版里有一些重复计算，同一段历史数据被反复统计。后面把这部分改成滚动累加和缓存更新。</p>
+<p>这个改法没有改变算法结果，只是减少重复劳动。改完后继续用同一份原始数据验证，确认输出一致。计算耗时从约 4500ms 降到约 400-500ms，新硬件才有足够余量继续采样和输出。</p>
+<h2>修复共用缓冲区</h2>
+<p>速度问题解决后，继续处理读数跳变。这个问题来自 AI 初版移植没有严格保留 ESP32 原工程里的缓冲设计。</p>
+<p>问题很直接：采样和算法处理共用了同一块数据区。采样还在写入，算法同时读取这块数据，读数就会被干扰。</p>
+<p>后面按原项目思路把两边隔开。采样只负责写入，算法只处理已经完整交付的数据块。</p>
+<h2>处理结果</h2>
+<p>修改后，实机结果和仿真趋势重新对齐，心率输出恢复稳定。</p>
+<p>这次一个下午完成了迁移、性能优化和稳定性修复。AI 确实缩短了阅读工程、理解 SDK 和修改代码的时间。</p>
+<p>最终证明结果可靠的依据，是同一份波形、本地静态测试、信号发生器输入、串口结果采集、质量评估公式和每一步修改后的对照验证。</p>
+<h2>复盘结论</h2>
+<p>这次最大的收获，是 AI 开始能参与更多工程自动化工作。</p>
+<p>前一层是用 AI 造工具。signal-analysis-lab 先把调参、滤波和波形验证这些脏活累活放到可视化仿真里完成，等方案稳定后再固化成代码。</p>
+<p>后一层是用 AI 做迁移。固件移植后的效果判断，依赖移植版本持续向仿真软件里的结果对齐。</p>
+<p>AI 可以让项目推进更快，也可以让一些原本重复、琐碎、容易出错的验证工作变成流程。工程判断仍然重要，但它可以更多放在目标、边界和结果验收上。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-13 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=heart-rate-migration-debugging');
+  }
+  </script>
+</body>
+</html>

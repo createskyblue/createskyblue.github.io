@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一个面向 BLE 芯片的 FlashDB 持久化配置管理台 - CacheRivulet小记</title>
+  <meta name="description" content="一个面向 BLE 芯片的 FlashDB 持久化Web配置控制台">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="FlashDB">
+  <meta property="article:tag" content="TinyFrame">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:published_time" content="2026-06-17">
+  <meta property="og:title" content="一个面向 BLE 芯片的 FlashDB 持久化配置管理台">
+  <meta property="og:description" content="一个面向 BLE 芯片的 FlashDB 持久化Web配置控制台">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/flashdb-tinyframe-ble-debugger/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/flashdb-tinyframe-ble-debugger/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "一个面向 BLE 芯片的 FlashDB 持久化配置管理台",
+  "description": "一个面向 BLE 芯片的 FlashDB 持久化Web配置控制台",
+  "datePublished": "2026-06-17",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/flashdb-tinyframe-ble-debugger/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/flashdb-tinyframe-ble-debugger/"
+  },
+  "keywords": "FlashDB, TinyFrame, BLE, 嵌入式"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">一个面向 BLE 芯片的 FlashDB 持久化配置管理台</h1>
+  <article class="article-body">
+<h1>一个面向 BLE 芯片的 FlashDB 持久化配置管理台</h1>
+<div style="margin: 18px 0; padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+  <div style="font-weight: 700; color: #1e293b; margin-bottom: 14px;">交付架构</div>
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(128px, 1fr)); gap: 10px; align-items: stretch; font-size: 13px; line-height: 1.45; color: #334155;">
+    <div style="padding: 12px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;">
+      <div style="font-weight: 700; color: #1e293b;">Web 管理台</div>
+      <div>表格化管理配置项，显示串口和协议日志</div>
+    </div>
+    <div style="display: grid; place-items: center; color: #64748b; font-weight: 700;">Web Bluetooth</div>
+    <div style="padding: 12px; background: #dbeafe; border: 1px solid #bfdbfe; border-radius: 8px;">
+      <div style="font-weight: 700; color: #1d4ed8;">TinyFrame</div>
+      <div>提供统一帧格式和请求响应通道</div>
+    </div>
+    <div style="padding: 12px; background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 8px;">
+      <div style="font-weight: 700; color: #166534;">KV 应用层</div>
+      <div>校验配置名、数据长度和操作类型</div>
+    </div>
+    <div style="padding: 12px; background: #fef9c3; border: 1px solid #fde68a; border-radius: 8px;">
+      <div style="font-weight: 700; color: #854d0e;">FlashDB</div>
+      <div>在芯片 Data-Flash 中保存配置数据</div>
+    </div>
+  </div>
+</div>
+
+<p>这个交付物给 BLE 芯片增加了一套持久化配置管理能力。设备端使用 FlashDB 保存配置数据；BLE 通道使用 TinyFrame 提供稳定的访问接口；浏览器端通过 Web Bluetooth 做成管理台，可以查看、添加、修改和删除配置项。</p>
+<p>界面效果如下。上方是配置管理表格，下方是固定的串口与协议日志面板。</p>
+<p><img src="/posts/flashdb-tinyframe-ble-debugger/flashdb-debugger.webp" alt="FlashDB 配置管理台"></p>
+<h2>交付内容</h2>
+<p>这次交付包含三部分。</p>
+<p>第一部分是设备端持久化存储。FlashDB 被移植到 CH58x 工程中，使用 CH583 Data-Flash 的前 16KB 作为业务配置区。WCH BLE 协议栈默认使用的 SNV 区域仍保留在 Data-Flash 尾部，避免应用配置和协议栈内部数据互相覆盖。</p>
+<p>第二部分是 BLE 访问接口。配置读写通过一个独立的 KV 应用层统一处理，再由 TinyFrame 通过 BLE UART 传输。这样浏览器端看到的是稳定的配置访问接口，设备端仍保留清晰的存储边界。</p>
+<p>第三部分是 Web 管理台。它通过 Web Bluetooth 连接设备，通过 Web Serial 观察串口日志，用表格管理设备里的配置项。</p>
+<h2>KV 是什么</h2>
+<p>KV 是 key-value 的缩写，也就是“键值对”。</p>
+<p>可以把它理解成一个小型配置表。每一行都有一个名字和一份数据：</p>
+<ul>
+<li>key：配置名，例如 <code>cfg/demo</code>、<code>cfg/Byte</code>。</li>
+<li>value：配置值，可以是一段字符串，也可以是一段字节数据。</li>
+</ul>
+<p>设备程序可以用 key 查到对应 value。比如一个设备可以把采样间隔、开关状态、校准参数、功能标志位都放进这个表里。断电后这些配置仍然保存在 Flash 中，下次启动时继续读取。</p>
+<p>FlashDB 提供的就是这种嵌入式 KV 数据库能力。它把底层 Flash 的擦写限制封装起来，让业务代码按 key-value 的方式保存配置。</p>
+<h2>总体架构</h2>
+<p>这套管理能力分成五层。</p>
+<p>Web 管理台运行在浏览器里。它负责展示配置表格，并把用户操作转成读、写、列出配置名、删除配置这几类请求。</p>
+<p>Web Bluetooth 负责连接 BLE 设备。浏览器把 TinyFrame 字节流写入 BLE UART 特征值，也从 Notify 中接收设备返回的数据。</p>
+<p>TinyFrame 负责帧格式。BLE UART 只是字节流，TinyFrame 提供帧头、长度、类型、校验和请求响应边界，避免上层直接处理分包和粘包。</p>
+<p>KV 应用层负责业务校验。它检查 key 是否为空、长度是否超限、字符是否允许、value 是否超长，再把合法请求交给 FlashDB。</p>
+<p>FlashDB 负责持久化。它最终把配置写入芯片 Data-Flash，并支持读取、写入、遍历和删除。</p>
+<h2>设备端能力</h2>
+<p>设备端提供一个统一的 FlashDB KV 命令。命令类型只有一个，具体动作放在 payload 内部区分。</p>
+<p>当前支持四类动作：</p>
+<ul>
+<li>读取：根据 key 读取 value。</li>
+<li>写入：把 key 和 value 保存到 FlashDB。</li>
+<li>列表：返回当前已保存的一批 key。</li>
+<li>删除：删除指定 key。</li>
+</ul>
+<p>key 的长度限制为 31 字节，只允许字母、数字、下划线、短横线、点和斜杠。value 单次最大 128 字节。这个限制让 BLE 传输、FlashDB 存储和前端显示都保持在比较容易控制的范围内。</p>
+<p>当前 value 类型只用于前端显示。FlashDB 内部保存的是原始字节，同一个 key 只有一份 value。后续如果需要设备端记住字符串、字节数组等真实类型，可以把类型字段一起封装进 value 再保存。</p>
+<h2>Web 管理台</h2>
+<p>Web 管理台把设备里的配置项显示成表格。每一行对应一个 key，列包括类型、数值和操作按钮。</p>
+<p>已经提供的操作包括：</p>
+<ul>
+<li>添加行：在前端新增一条待写入配置。</li>
+<li>刷新列表：从设备读取当前保存的 key 列表。</li>
+<li>刷新：读取单行 key 的 value。</li>
+<li>写入：把单行 key 和 value 写回设备。</li>
+<li>删除：删除单行 key。</li>
+</ul>
+<p>底部固定的“串口与日志”面板用于观察运行过程。面板不会随着上方功能页滚动消失，并且可以拖拽调整高度。日志里同时显示 TinyFrame 的发送、接收、Notify 分片和设备串口输出，便于定位问题发生在前端、BLE 传输还是设备端。</p>
+<h2>适用范围</h2>
+<p>这套管理台适合固件开发和内部调试阶段使用。</p>
+<p>它解决的是“BLE 芯片里有持久化配置后，开发者如何通过蓝牙直接管理这些配置”。它不替代正式产品 App。正式产品还需要权限控制、配置版本迁移、误删保护、用户交互和更完整的异常处理。</p>
+<p>当前交付已经覆盖配置管理的基本闭环：设备能保存，浏览器能连接，前端能列出配置，单行能读取、写入和删除，日志能同步观察通信过程。</p>
+<p>后续可以继续补两项能力：一是把 value 类型持久化，让设备端返回真实类型；二是给 key 列表增加分页，避免配置项很多时单次 BLE 响应装不下。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-17 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=flashdb-tinyframe-ble-debugger');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>加速度计波形上传到云端后出现尖峰，设备端逐点检查却无异常 - CacheRivulet小记</title>
+  <meta name="description" content="加速度计遥测数据经 4G 模块上传后出现极端值的排查记录">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="STM32L4">
+  <meta property="article:tag" content="合宙4G模块">
+  <meta property="article:tag" content="CRC32">
+  <meta property="article:tag" content="遥测数据">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:tag" content="数据上报">
+  <meta property="article:published_time" content="2026-05-10">
+  <meta property="og:title" content="加速度计波形上传到云端后出现尖峰，设备端逐点检查却无异常">
+  <meta property="og:description" content="加速度计遥测数据经 4G 模块上传后出现极端值的排查记录">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32l4-hezhou-4g-telemetry-crc32-spike/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32l4-hezhou-4g-telemetry-crc32-spike/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "加速度计波形上传到云端后出现尖峰，设备端逐点检查却无异常",
+  "description": "加速度计遥测数据经 4G 模块上传后出现极端值的排查记录",
+  "datePublished": "2026-05-10",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32l4-hezhou-4g-telemetry-crc32-spike/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32l4-hezhou-4g-telemetry-crc32-spike/"
+  },
+  "keywords": "STM32L4, 合宙4G模块, CRC32, 遥测数据, 边缘AI, 数据上报"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">加速度计波形上传到云端后出现尖峰，设备端逐点检查却无异常</h1>
+  <article class="article-body">
+<h1>一次遥测波形上报后出现极端尖峰的故障排查记录</h1>
+<p>设备使用 STM32L4 系列 MCU，外接合宙 4G 模块上传传感器数据。业务中有一段几百 KB 的遥测数据，供后台前端预览时间序列波形。</p>
+<p>故障现象是前端曲线偶发极端尖峰，峰值明显超出传感器量程，破坏整段波形可读性。可能来源有三个：传感器采集异常、MCU 输入缓冲区被改写、遥测上报链路数据损坏。</p>
+<h2>数据路径</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>传感器采集 -> 输入缓冲区 -> 边缘 AI 推理 -> 遥测报文打包 -> 合宙 4G 模块 -> 云后台 -> 前端波形预览</span></span></code></pre><p>报文本身带 CRC32，后端收到后计算并记录校验结果。这段波形只用于问题分析和体验改进，所以即使校验失败，后端仍会保存报文并生成报告，损坏数据因此会继续进入前端预览。</p>
+<h2>排除采集与内存损坏</h2>
+<p>在固件里加两个校验点：边缘 AI 推理前和数据上报后，各对同一份输入缓冲区算一次 CRC32。同时加断言，检查采样值量程、缓冲区长度和写指针。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> crc_before = </span><span style="color:#DCDCAA">crc32_calc</span><span style="color:#D4D4D4">(input_buf, input_len);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; sample_count; i++) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    ASSERT</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">sample</span><span style="color:#D4D4D4">[i] >= SENSOR_MIN);</span></span>
+<span class="line"><span style="color:#DCDCAA">    ASSERT</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">sample</span><span style="color:#D4D4D4">[i] &#x3C;= SENSOR_MAX);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">run_edge_ai_inference</span><span style="color:#D4D4D4">(input_buf, input_len);</span></span>
+<span class="line"><span style="color:#DCDCAA">upload_telemetry_packet</span><span style="color:#D4D4D4">(input_buf, input_len);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> crc_after = </span><span style="color:#DCDCAA">crc32_calc</span><span style="color:#D4D4D4">(input_buf, input_len);</span></span>
+<span class="line"><span style="color:#DCDCAA">ASSERT</span><span style="color:#D4D4D4">(crc_before == crc_after);</span></span></code></pre><p>实测两次 CRC32 一致，断言未触发。输入缓冲区在推理前后没有被改写，传感器输出也没有超量程值。范围收敛到报文打包、串口传输、4G 模块发送、云端接收和后端解析。</p>
+<h2>后端 CRC32 日志</h2>
+<p>检查出现尖峰的报告，对应的遥测上报都存在 CRC32 校验错误。三条证据放在一起：</p>
+<ul>
+<li>MCU 输入缓冲区 CRC32 正常，断言正常。</li>
+<li>后端收到的报文 CRC32 错误。</li>
+<li>CRC32 错误的报告更容易出现极端尖峰。</li>
+</ul>
+<p>错误字节被后端按原格式解析，解释成异常大的采样值，这就是前端尖峰的来源。波形渲染和边缘 AI 推理的嫌疑排除。</p>
+<h2>板级差异</h2>
+<p>老 PCB 复现，新 PCB 未复现同类 CRC32 错误。两个版本 STM32L4 到 4G 模块的主要连接没有改动，原理图差异在其他边缘线路。</p>
+<p>新 PCB 稳定不能证明老 PCB 某个器件坏了，它给出的约束是：固件和后端协议基本可用，问题与旧硬件环境下的大块数据上报强相关。后续方向是硬件版本差异、供电完整性、4G 模块发射时的电源与地噪声。</p>
+<h2>结论</h2>
+<p>MCU 侧输入缓冲区前后 CRC32 一致、断言未报错，采集和内存安全的嫌疑排除；后端日志显示尖峰报告存在遥测 CRC32 错误，大块数据上报链路确实存在损坏；老 PCB 复现、新 PCB 不复现，把方向指向硬件版本差异与供电完整性。</p>
+<p>遥测数据用于排查故障时，允许 CRC32 错误的数据进入报告可以接受，但后端必须记录校验结果、前端必须标记完整性状态。否则损坏点会被画成正常曲线，通信问题伪装成传感器异常。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-10 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32l4-hezhou-4g-telemetry-crc32-spike');
+  }
+  </script>
+</body>
+</html>

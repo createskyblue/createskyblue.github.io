@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP-IDF VS Code 插件缓存 JTAG 序列号导致第二块开发板 OpenOCD 启动失败的排查与解决 - CacheRivulet小记</title>
+  <meta name="description" content="ESP-IDF换板后OpenOCD启动失败排查">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="ESP32">
+  <meta property="article:tag" content="ESP-IDF">
+  <meta property="article:tag" content="VSCode">
+  <meta property="article:tag" content="OpenOCD">
+  <meta property="article:tag" content="USB-JTAG">
+  <meta property="article:published_time" content="2026-06-03">
+  <meta property="og:title" content="ESP-IDF VS Code 插件缓存 JTAG 序列号导致第二块开发板 OpenOCD 启动失败的排查与解决">
+  <meta property="og:description" content="ESP-IDF换板后OpenOCD启动失败排查">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp-idf-vscode-openocd-second-board/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp-idf-vscode-openocd-second-board/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP-IDF VS Code 插件缓存 JTAG 序列号导致第二块开发板 OpenOCD 启动失败的排查与解决",
+  "description": "ESP-IDF换板后OpenOCD启动失败排查",
+  "datePublished": "2026-06-03",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp-idf-vscode-openocd-second-board/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp-idf-vscode-openocd-second-board/"
+  },
+  "keywords": "ESP32, ESP-IDF, VSCode, OpenOCD, USB-JTAG"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP-IDF VS Code 插件缓存 JTAG 序列号导致第二块开发板 OpenOCD 启动失败的排查与解决</h1>
+  <article class="article-body">
+<h1>ESP-IDF VS Code 插件缓存 JTAG 序列号导致第二块开发板 OpenOCD 启动失败的排查与解决</h1>
+<h2>问题现象</h2>
+<p>使用 ESP-IDF VS Code 插件调试 ESP32-S3 时，第一块开发板 OpenOCD 正常启动，换第二块板后报错：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Info : No device matches the serial string</span></span>
+<span class="line"><span>Error: esp_usb_jtag: could not find or open device!</span></span></code></pre><p>Windows 设备管理器显示设备正常，VID/PID 正确（303A:1001），WinUSB 驱动已安装。</p>
+<h2>根因分析</h2>
+<p>ESP-IDF VS Code 插件会将第一块开发板的 USB JTAG 序列号静默保存到 VS Code 的 workspace SQLite 数据库（<code>state.vscdb</code>）中。换板后，插件仍使用旧序列号启动 OpenOCD，导致新板的序列号不匹配而无法连接。</p>
+<p><strong>关键判断依据</strong>：命令行 <code>idf.py openocd</code> 或 <code>openocd -f board/esp32s3-builtin.cfg</code> 可正常启动，仅 VS Code 图形化启动失败。</p>
+<h2>解决方案</h2>
+<h3>方法一：清除缓存的 JTAG 序列号（推荐）</h3>
+<p>这是 Espressif 官方提供的方法，来自 <a href="https://github.com/espressif/vscode-esp-idf-extension/issues/1788">Issue #1788</a> 的维护者回复：</p>
+<ol>
+<li>在 VS Code 中打开 ESP-IDF 项目</li>
+<li>点击左侧活动栏的 <strong>ESP-IDF 插件图标</strong>（Espressif logo），打开插件命令面板</li>
+<li>在命令列表中找到 <strong><code>OpenOCD Adaptor (serial &amp; location)</code></strong>，点击启用它</li>
+<li>启用后，底部<strong>状态栏</strong>左侧会出现一个新按钮，显示当前缓存的 JTAG 序列号和 USB 端口位置</li>
+<li><strong>点击该状态栏按钮</strong>即可清除缓存的序列号，插件将自动连接到下一个可用的 JTAG 设备</li>
+</ol>
+<p>清除后重新启动 OpenOCD 即可正常连接第二块开发板。</p>
+<h3>方法二：命令行启动 OpenOCD 绕过插件</h3>
+<p>如果状态栏方法不适用，可以命令行启动 OpenOCD，VS Code 仅连接已有的 GDB Server：</p>
+<pre><code>idf.py openocd</code></pre><p>然后在 VS Code 的 <code>launch.json</code> 中配置：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#CE9178">"miDebuggerServerAddress"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"localhost:3333"</span></span></code></pre><h2>验证步骤</h2>
+<ol>
+<li>插上第一块板，VS Code 中启动 OpenOCD，确认正常</li>
+<li>换第二块板，直接在 VS Code 中启动 OpenOCD —— 此时应报错 <code>No device matches the serial string</code></li>
+<li>按上述方法一清除序列号缓存，重新启动 OpenOCD，确认第二块板正常连接</li>
+</ol>
+<h2>参考</h2>
+<ul>
+<li><a href="https://github.com/espressif/vscode-esp-idf-extension/issues/1788">ESP-IDF VSCode Extension Issue #1788</a> - Virtual JTAG silently saved in workspace database（维护者回复中给出了状态栏清除方法）</li>
+<li><a href="https://docs.espressif.com/projects/vscode-esp-idf-extension/en/latest/debugproject.html">ESP-IDF VSCode Debug Documentation</a></li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-03 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp-idf-vscode-openocd-second-board');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,716 @@
+{
+  "id": "p_5d65250d",
+  "name": "技能树",
+  "nodes": [
+    {
+      "id": "7419e728-856f-4fd3-ba23-704a55fea91b",
+      "name": "嵌入式",
+      "parentId": null,
+      "order": 0,
+      "desc": "软硬全栈开发，偏软",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 111,
+      "x": 347,
+      "y": 20
+    },
+    {
+      "id": "a18e2002-bdd0-4405-a91b-ae3b90cd4c53",
+      "name": "通信",
+      "parentId": "7419e728-856f-4fd3-ba23-704a55fea91b",
+      "order": 0,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 0,
+      "x": 20,
+      "y": 170
+    },
+    {
+      "id": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804",
+      "name": "低功耗",
+      "parentId": "7419e728-856f-4fd3-ba23-704a55fea91b",
+      "order": 1,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 16,
+      "x": 238,
+      "y": 170
+    },
+    {
+      "id": "e2834a60-d53d-478f-aae3-a7ff9bb55bf9",
+      "name": "操作系统",
+      "parentId": "7419e728-856f-4fd3-ba23-704a55fea91b",
+      "order": 2,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 14,
+      "x": 456,
+      "y": 170
+    },
+    {
+      "id": "220cb312-bd79-44b0-adf9-7bf385883c27",
+      "name": "Linux",
+      "parentId": "e2834a60-d53d-478f-aae3-a7ff9bb55bf9",
+      "order": 0,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 5,
+      "x": 347,
+      "y": 320
+    },
+    {
+      "id": "0967ab53-9dfa-40d8-8df6-89a185837bef",
+      "name": "RTOS",
+      "parentId": "e2834a60-d53d-478f-aae3-a7ff9bb55bf9",
+      "order": 1,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 10,
+      "x": 565,
+      "y": 320
+    },
+    {
+      "id": "4b236159-b503-4c00-81fa-2f0129b07d2b",
+      "name": "FreeRTOS",
+      "parentId": "0967ab53-9dfa-40d8-8df6-89a185837bef",
+      "order": 0,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 2,
+      "x": 238,
+      "y": 470
+    },
+    {
+      "id": "bbc59c5e-5b31-4459-8716-eb72488a73bc",
+      "name": "RT-Thread",
+      "parentId": "0967ab53-9dfa-40d8-8df6-89a185837bef",
+      "order": 1,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 5,
+      "x": 456,
+      "y": 470
+    },
+    {
+      "id": "46662343-fa3e-45ce-8d1c-0954591e6f66",
+      "name": "LiteOS",
+      "parentId": "0967ab53-9dfa-40d8-8df6-89a185837bef",
+      "order": 2,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 0,
+      "x": 674,
+      "y": 470
+    },
+    {
+      "id": "e62a7921-8417-42a1-9acc-80f1f1bf2558",
+      "name": "3D建模",
+      "parentId": null,
+      "order": 9,
+      "desc": "Fusion360参数建模",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 1,
+      "x": 891,
+      "y": -98
+    },
+    {
+      "id": "464d9ae5-e4ca-4428-9474-661656726f08",
+      "name": "Zephyr",
+      "parentId": "0967ab53-9dfa-40d8-8df6-89a185837bef",
+      "order": 3,
+      "desc": "",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 1,
+      "x": 892,
+      "y": 470
+    },
+    {
+      "id": "b8864858-0836-4139-85b2-7e45944c68ce",
+      "name": "芯片",
+      "parentId": "7419e728-856f-4fd3-ba23-704a55fea91b",
+      "order": 3,
+      "desc": "ESP32\nSTM32L4",
+      "showInSidebar": false,
+      "autoTag": true,
+      "count": 0,
+      "x": 674,
+      "y": 170
+    },
+    {
+      "id": "b8ccd1f9-016d-4a0c-83bb-776b9817e1d8",
+      "name": "正在调试中",
+      "parentId": null,
+      "order": 12,
+      "desc": "非实装功能\n2026/7/20",
+      "showInSidebar": true,
+      "autoTag": true,
+      "count": 0,
+      "x": 514,
+      "y": -107
+    }
+  ],
+  "placements": [
+    {
+      "articleSlug": "esp32s3-fastcharger-repair",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "sine-wavetable-bitmask",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "nh50bat-bq40z50-unseal-debug",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "rtthread-uart-dma-buffer-philosophy",
+      "nodeId": "bbc59c5e-5b31-4459-8716-eb72488a73bc"
+    },
+    {
+      "articleSlug": "rtthread-uart-dma-buffer-philosophy",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "u8g2-horizontal-line-cache",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "perf-flamegraph-basics",
+      "nodeId": "220cb312-bd79-44b0-adf9-7bf385883c27"
+    },
+    {
+      "articleSlug": "old-phone-cross-compile-sandbox",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "dual-clock-rtc-fusion",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "esp-idf-task-iterator-stuck",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "esp-idf-task-iterator-stuck",
+      "nodeId": "0967ab53-9dfa-40d8-8df6-89a185837bef"
+    },
+    {
+      "articleSlug": "hall-power-cycle-counting-limit",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "hall-power-cycle-counting-limit",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "ble-provisioning-wifi-conflict",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "flashdb-mqtt-outbox",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "iotspool-internals",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "iotspool-mqtt-spool",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "loxdb-vs-flashdb",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "loxseq-intro",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "lwevt-core-design",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "lwevt-getting-started",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "mcu-malloc-tracker",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "microbus-core-design",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "microbus-getting-started",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "microbus-vs-lwevt",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "microcbor-internals",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "microcbor-quickstart",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "esp32s3-imu-gesture-recognition",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "embedded_selection_guide",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "byte-stream-fsm-frame-parser",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "dual-adc-parallel-sampling",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "gear-switch-transient",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "gear-switch-transient",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "auto-ranging-hysteresis",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "emk850-mcp-server",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "emk850-mcp-server",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "firmware-encryption-key-flaw",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "serial-stream-state-machine",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "pwm-carrier-frequency-power",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "pwm-carrier-frequency-power",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "esp32c3-httpd-single-connection",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "esp32c3-soft-i2c-sampling-architecture",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "eink-caster-high-refresh",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "epaper-sensor-trend",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "franklin-oscillator-lc-meter",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "stm32-exti-two-gates",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "stm32-exti-two-gates",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "air001-chacha20-flashstore",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "flashstore-ab-partition",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "pyocd-preserve-mcu-fault-site",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "pyocd-cortex-debug-late-attach",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ab-partition-flash-store",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ab-partition-vs-flashdb",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "esp32s3-sensor-driver-decoupling",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "esp32s3-sensor-driver-decoupling",
+      "nodeId": "bbc59c5e-5b31-4459-8716-eb72488a73bc"
+    },
+    {
+      "articleSlug": "esp32s3-sensor-driver-decoupling",
+      "nodeId": "220cb312-bd79-44b0-adf9-7bf385883c27"
+    },
+    {
+      "articleSlug": "stm32-hal-spi-ws2812",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "streaming-frame-parser",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "py32f030-vrefint-gpio-overvoltage",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "air001-light-sensing-mutation-switch-433rf",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "batch-ack-fifo-cache",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "sync-request-response-fifo-exchange",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "heart-rate-minmax-canvas-envelope",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "cortex-debug-pyocd-startup-timeout-regex",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "vscode-cppdbg-pyocd-main-breakpoint",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "dc-motor-p-pi-controller",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "i2c-slave",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ai-code-human-value",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ble-mesh-overview-ch585",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ch58x-ble-pairing-flow",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ch58x-nfc-p2p-data-exchange",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "flashdb-littlefs-storage-principles",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "rtthread-ble-ch585",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "rtthread-ble-ch585",
+      "nodeId": "bbc59c5e-5b31-4459-8716-eb72488a73bc"
+    },
+    {
+      "articleSlug": "rtthread-ble-ch585",
+      "nodeId": "0967ab53-9dfa-40d8-8df6-89a185837bef"
+    },
+    {
+      "articleSlug": "esp32s3-idf-template",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "py32-sop8-swd-remap",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "tinyframe-footprint-py32f002a",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "mcu-timer-pulse-width-capture",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "stm32-edge-ai-scenarios",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ch585m-tflite-micro-sin-demo",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "tflite-int8-quantization-tf221",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "tflite-mcu-gcc-port",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "tiny-ml-vibration-tflm",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "wch-ch58x-stm32-gpio-low-power",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "wch-ch58x-stm32-gpio-low-power",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "51-mcu-engineering-margin",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "antenna-control-terminal",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "antenna-control-terminal",
+      "nodeId": "0967ab53-9dfa-40d8-8df6-89a185837bef"
+    },
+    {
+      "articleSlug": "software-dual-edge-pulse-filter",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "stm32-bootloader-exflash",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "uart-dma-idle-fifo",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ch58x-sleep-gpio-remap",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ch58x-sleep-gpio-remap",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "vibration-monitor-system-architecture",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "vibration-monitor-system-architecture",
+      "nodeId": "0967ab53-9dfa-40d8-8df6-89a185837bef"
+    },
+    {
+      "articleSlug": "vibration-monitor-system-architecture",
+      "nodeId": "bbc59c5e-5b31-4459-8716-eb72488a73bc"
+    },
+    {
+      "articleSlug": "n320a-modbus-gateway",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "n320a-modbus-gateway",
+      "nodeId": "bbc59c5e-5b31-4459-8716-eb72488a73bc"
+    },
+    {
+      "articleSlug": "memory-dump-context-debugging",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "memory-dump-context-debugging",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "使用VNA进行阻抗匹配",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "stm32-uart-ore-long-run",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "stm32-uart-ore-long-run",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "low-power-gps-tracker",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "low-power-gps-tracker",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "mcu-gas-sensor-nanoedgeai",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "adc-key-low-power-wakeup",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "adc-key-low-power-wakeup",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "mcu-low-power-io-interrupt-timing",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "mcu-low-power-io-interrupt-timing",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "power-voltage-low-power-sampling",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "power-voltage-low-power-sampling",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "flashdb-kv-vs-struct-config",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "dali-manchester-codec",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "html-canvas-waveform-chart",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "flashdb-porting-guide",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "flashdb-tinyframe-ble-debugger",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "nanoModbus",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "tinyframe-protocol-frame",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "ble-low-power-data-upload",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "ble-rtc-offset-note",
+      "nodeId": "c04ff06f-f6e9-42eb-833c-d4c9e0eca804"
+    },
+    {
+      "articleSlug": "ble-rtc-offset-note",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "heart-rate-migration-debugging",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "esp32-dns-hijack-captive-portal",
+      "nodeId": "4b236159-b503-4c00-81fa-2f0129b07d2b"
+    },
+    {
+      "articleSlug": "hampel-filter-algorithm",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "noeticmaze-stm32-lidar-slam-navigation",
+      "nodeId": "4b236159-b503-4c00-81fa-2f0129b07d2b"
+    },
+    {
+      "articleSlug": "zephyr-stm32l496-rtos-skeleton",
+      "nodeId": "464d9ae5-e4ca-4428-9474-661656726f08"
+    },
+    {
+      "articleSlug": "zephyr-stm32l496-rtos-skeleton",
+      "nodeId": "0967ab53-9dfa-40d8-8df6-89a185837bef"
+    },
+    {
+      "articleSlug": "zephyr-stm32l496-rtos-skeleton",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "key-debounce-shift-register",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "stack-watermark-and-struct-guards",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "af-alg-crypto-api",
+      "nodeId": "220cb312-bd79-44b0-adf9-7bf385883c27"
+    },
+    {
+      "articleSlug": "hall-pulse-width-validation",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    },
+    {
+      "articleSlug": "pipe-ipc-stream",
+      "nodeId": "220cb312-bd79-44b0-adf9-7bf385883c27"
+    },
+    {
+      "articleSlug": "splice-zero-copy",
+      "nodeId": "220cb312-bd79-44b0-adf9-7bf385883c27"
+    },
+    {
+      "articleSlug": "卡扣设计",
+      "nodeId": "e62a7921-8417-42a1-9acc-80f1f1bf2558"
+    },
+    {
+      "articleSlug": "par20-4h-ina228-wireless-sampler",
+      "nodeId": "7419e728-856f-4fd3-ba23-704a55fea91b"
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlasbDB足以应对大部分情况，LoxDB更强但资源占用更多 - CacheRivulet小记</title>
+  <meta name="description" content="嵌入式数据库  FlashDB vs LoxDB">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="数据库">
+  <meta property="article:tag" content="FlashDB">
+  <meta property="article:tag" content="loxdb">
+  <meta property="article:tag" content="选型">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="FlasbDB足以应对大部分情况，LoxDB更强但资源占用更多">
+  <meta property="og:description" content="嵌入式数据库  FlashDB vs LoxDB">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/loxdb-vs-flashdb/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/loxdb-vs-flashdb/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "FlasbDB足以应对大部分情况，LoxDB更强但资源占用更多",
+  "description": "嵌入式数据库\n FlashDB vs LoxDB",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/loxdb-vs-flashdb/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/loxdb-vs-flashdb/"
+  },
+  "keywords": "嵌入式, MCU, 数据库, FlashDB, loxdb, 选型"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">FlasbDB足以应对大部分情况，LoxDB更强但资源占用更多</h1>
+  <article class="article-body">
+<h1>跑得动 FlashDB 的板子不一定跑得动 loxdb：两份嵌入式数据库的资源实测与选型</h1>
+<blockquote>
+<p><strong>声明：</strong> loxdb 是一个开源项目，作者为 <a href="https://github.com/Vanderhell/loxdb">Vanderhell</a>；FlashDB 是一个开源项目，作者为 <a href="https://github.com/armink/FlashDB">Armink</a>。本文是阅读两个项目源码并在本地完成资源实测后整理的学习笔记，用于理解嵌入式数据库的资源消耗与设计取舍。<strong>本文作者不是这两个项目的开发者，未参与任何代码贡献。</strong> 文中工程细节与测量数据来自开源代码分析与本地编译结果，不代表项目作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/loxdb" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/loxdb</a>（可预测内存的三引擎嵌入式数据库）；<a href="https://github.com/armink/FlashDB" target="_blank" rel="noopener noreferrer">github.com/armink/FlashDB</a>（RT-Thread 生态的极简 KV/TS 数据库）</p>
+<p>loxdb 与 FlashDB 都是面向 MCU 的嵌入式数据库。实测（Cortex-M4，-Os，链接裁剪）下，FlashDB 的 KV+TS 占 10.5KB Flash、RAM 约 1KB；loxdb 同功能占 16.7KB，全功能（KV+TS+关系型+WAL）24.3KB，RAM 最少 8.2KB 句柄加可配 arena。loxdb 用多出的 Flash 换 TTL 过期、事务、关系引擎、写入前预检和可观测的崩溃恢复；FlashDB 用极简换来资源效率与多年量产验证。RAM 预算紧张、只需配置存储时选 FlashDB，需要多引擎与可诊断性时选 loxdb。</p>
+<h2>loxdb 用资源换来的能力</h2>
+<p>两类库的资源差距来自存储架构。FlashDB 把状态写进 Flash 按需扫描，换取约 1KB 的总 RAM；loxdb 把状态放进预分配 RAM，Flash 只做持久化快照，代价是句柄与 arena 的固定占用。</p>
+<p><img src="/posts/loxdb-vs-flashdb/arch-compare.svg" alt="loxdb 与 FlashDB 架构对比"></p>
+<p>loxdb 的回报集中在写入前就能感知的五项能力：</p>
+<ul>
+<li><strong>写入前预检</strong>：<code>lox_preflight()</code> 在初始化前验证配置与存储几何，<code>lox_admit_kv_set()</code> 在写入前返回本次操作是否会失败，<code>lox_get_pressure()</code> 随时查询剩余容量。FlashDB 的扇区 GC 失败只能在事后通过返回值察觉，部分 API 甚至不返回错误。</li>
+<li><strong>TTL 过期</strong>：<code>lox_kv_set()</code> 带 ttl 参数，配合 <code>lox_kv_purge_expired()</code> 清理。FlashDB 需要自己存时间戳、自己写扫描删除逻辑。</li>
+<li><strong>事务</strong>：<code>lox_txn_begin()</code> 到 <code>lox_txn_commit()</code> 让多个 key 的更新原子生效，断电也不破坏。FlashDB 每个 KV 独立写入，配网参数写到一半掉电会留下半新配置。</li>
+<li><strong>可观测的崩溃恢复</strong>：<code>lox_stats()</code> 暴露 <code>recovery_count</code> 与 <code>last_recovery_status</code>，设备经历过掉电恢复可以被记录用于售后诊断。FlashDB 的状态位翻转同样防掉电，但不会上报恢复事件。</li>
+<li><strong>关系型引擎与迁移</strong>：schema 建表、索引列、<code>lox_rel_find_by()</code> 按列查找；schema 带版本号，<code>on_migrate</code> 回调处理固件升级时的结构变更。FlashDB 只有 KV 默认值升级，解决不了表结构变化。</li>
+</ul>
+<h2>资源占用实测</h2>
+<p>以下数字来自 arm-none-eabi-gcc 14.3.1 对 Cortex-M4 的 <code>-Os</code> 编译，链接时开启 <code>--gc-sections</code> 裁剪。loxdb 使用官方默认配置（64 键、8 条 TS 流、4 张表）；FlashDB 数字包含其仓库自带的 FAL 抽象层（单独编译约 2.3KB），loxdb 不含存储移植层。数字用于说明资源量级，不代表所有芯片和工具链都会得到相同结果。</p>
+<table>
+<thead>
+<tr>
+<th>配置</th>
+<th>loxdb</th>
+<th>FlashDB</th>
+<th>差距</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>KV-only（含断电保护）</td>
+<td>11,109 B（KV+WAL）</td>
+<td>8,400 B（含 FAL）</td>
+<td>loxdb 多 3 成</td>
+</tr>
+<tr>
+<td>KV + TS</td>
+<td>16,684 B（KV+TS+WAL）</td>
+<td>10,534 B（含 FAL）</td>
+<td>loxdb 多 6 成</td>
+</tr>
+<tr>
+<td>全功能 KV+TS+关系型+WAL</td>
+<td>24,243 B</td>
+<td>无对应功能</td>
+<td>无法直接对比</td>
+</tr>
+</tbody></table>
+<p>静态 RAM 的构成差异更大：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>loxdb</th>
+<th>FlashDB</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>库自身静态量</td>
+<td>128 B</td>
+<td>16 B</td>
+</tr>
+<tr>
+<td>用户必须提供的数据结构</td>
+<td>lox_t 句柄 8,200 B、schema 896 B</td>
+<td>fdb_kvdb 876 B、fdb_tsdb 100 B</td>
+</tr>
+<tr>
+<td>运行期动态内存</td>
+<td>arena（可配 8~64KB）</td>
+<td>无</td>
+</tr>
+</tbody></table>
+<h2>能力对比</h2>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>loxdb</th>
+<th>FlashDB</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>KV / TS 存储</td>
+<td>有</td>
+<td>有</td>
+</tr>
+<tr>
+<td>关系型表</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>事务原子提交</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>TTL 过期</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>写入前预检与容量查询</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>断电恢复可观测</td>
+<td>有（恢复计数与状态）</td>
+<td>无（状态位翻转，不上报）</td>
+</tr>
+<tr>
+<td>错误码粒度</td>
+<td>16 类</td>
+<td>粗粒度，部分 API 无返回</td>
+</tr>
+<tr>
+<td>schema 版本迁移</td>
+<td>有（on_migrate）</td>
+<td>仅 KV 默认值升级</td>
+</tr>
+<tr>
+<td>存储后端可替换</td>
+<td>有（RAM/FS/裸 Flash）</td>
+<td>绑定 FAL</td>
+</tr>
+<tr>
+<td>C++ 封装与 JSON 导入导出</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>线程安全钩子</td>
+<td>有（可选）</td>
+<td>无（需外部加锁）</td>
+</tr>
+<tr>
+<td>代码占用与 RAM</td>
+<td>高</td>
+<td>极低</td>
+</tr>
+<tr>
+<td>成熟度与量产验证</td>
+<td>新项目（v1.5.x）</td>
+<td>多年量产</td>
+</tr>
+</tbody></table>
+<h2>选型依据</h2>
+<ul>
+<li><strong>RAM 预算 ≥ 32KB</strong>，需要多引擎、事务、TTL 或结构化查询，看重运行时可诊断，选 loxdb。</li>
+<li><strong>8~16KB RAM</strong>，只需 KV 配置存储，量产验证优先，选 FlashDB。</li>
+<li>折中路径：loxdb 支持编译期裁剪（可单独关闭 TS/REL/WAL），KV-only 档约 11KB，仍高于 FlashDB 的 8.4KB。</li>
+<li>建议按自己的芯片与工具链重测一次。方法可复现：<code>arm-none-eabi-gcc -Os -ffunction-sections -fdata-sections</code> 编译，链接加 <code>--gc-sections</code>，用 <code>arm-none-eabi-size</code> 读 section 尺寸。</li>
+</ul>
+<p>loxdb 的工程化优势（预检、自检、统计、可观测恢复）建立在 8KB 以上的 RAM 契约上，这条契约在小内存 MCU 上不成立。选型依据是 RAM 预算落在哪一档；预算允许时，功能清单才参与比较。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=loxdb-vs-flashdb');
+  }
+  </script>
+</body>
+</html>

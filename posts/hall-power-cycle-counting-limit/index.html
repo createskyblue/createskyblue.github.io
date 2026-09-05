@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>单霍尔传感器低功耗断电前应先避开迟滞临界区 - CacheRivulet小记</title>
+  <meta name="description" content="单霍尔出厂用惩罚函数标定停靠区，降低断电计数偏移">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="电机">
+  <meta property="article:tag" content="霍尔">
+  <meta property="article:published_time" content="2026-08-26">
+  <meta property="og:title" content="单霍尔传感器低功耗断电前应先避开迟滞临界区">
+  <meta property="og:description" content="单霍尔出厂用惩罚函数标定停靠区，降低断电计数偏移">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/hall-power-cycle-counting-limit/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/hall-power-cycle-counting-limit/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "单霍尔传感器低功耗断电前应先避开迟滞临界区",
+  "description": "单霍尔出厂用惩罚函数标定停靠区，降低断电计数偏移",
+  "datePublished": "2026-08-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/hall-power-cycle-counting-limit/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/hall-power-cycle-counting-limit/"
+  },
+  "keywords": "嵌入式, 低功耗, 电机, 霍尔"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">单霍尔传感器低功耗断电前应先避开迟滞临界区</h1>
+  <article class="article-body">
+<h1>单霍尔传感器低功耗断电前应先避开迟滞临界区</h1>
+<h2>1. 概述</h2>
+<p>单向电机可以用数字霍尔开关计数。磁铁经过霍尔时，输出在激活与释放之间翻转；固件统计这些边沿，就能估计电机转过多少。</p>
+<p>霍尔本身耗电大，低功耗设备要省这电流，只能在电机停稳后切断霍尔电源。本文默认断电期间电机不动。重新上电后，霍尔会丢掉断电前的内部状态，按上电瞬间的磁场重新判决。单霍尔一圈只有一次有效边沿，软件读不出停靠点落在进入临界区还是离开临界区。前后输出一致，也不能证明已经离开临界区。必须关断霍尔电源时，应先让停靠点以较大概率离开这两个临界区。</p>
+<h2>2. 迟滞区</h2>
+<p><img src="/posts/hall-power-cycle-counting-limit/hall-hysteresis.webp" alt="数字霍尔传感器的动作阈值、释放阈值与迟滞区"></p>
+<p><img src="/posts/hall-power-cycle-counting-limit/hall-single-critical-zone.svg" alt="单霍尔传感器的稳定区、临界区与磁铁停靠位置"></p>
+<p><img src="/posts/hall-power-cycle-counting-limit/hall-magnetic-characteristics.webp" alt="某款数字霍尔开关的数据手册磁特性参数示例"></p>
+<p>数字霍尔开关有两个阈值：<code>Bop</code> 进入激活，<code>Brp</code> 退出激活。沿磁铁路径，它们对应两个临界区：</p>
+<ul>
+<li>进入临界区：靠近 <code>Bop</code>，即将从释放变为激活。</li>
+<li>离开临界区：靠近 <code>Brp</code>，即将从激活变为释放。</li>
+</ul>
+<p>中间是稳定激活区，外侧是稳定释放区。迟滞防止边界附近反复跳变，也留下状态记忆。断电会清掉这份记忆。上电后若停在任一临界区，器件重新判决；单霍尔读不出停在进入侧还是离开侧。前后输出一致，也不能证明已经离开临界区。</p>
+<p>电机转一圈才有一次有效反馈，精度是 <code>1</code> 圈。区分两个临界区需要精度 <code>0.5</code>。用精度 <code>1</code> 唯一确定精度 <code>0.5</code> 的位置，数学上做不到。</p>
+<p>数字磁开关常见两类：霍尔和磁阻。本文用霍尔，因为现有磁路是单磁铁正对，并且要跟上转速。</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>平均电流</th>
+<th>采样速度</th>
+<th>工作方向</th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>霍尔</td>
+<td>约 <code>187 µA</code></td>
+<td>约 <code>2.6 kHz</code></td>
+<td>只吃垂直封装面的磁场，磁铁必须正对靠近或离开</td>
+<td>速度快</td>
+<td>费电，低功耗只能断电；侧面滑过不敏感</td>
+</tr>
+<tr>
+<td>磁阻</td>
+<td>约 <code>1.4 µA</code></td>
+<td>约 <code>1 kHz</code></td>
+<td>只吃平行封装面的磁场，磁铁必须沿平面滑过</td>
+<td>省电，可一直供电</td>
+<td>正对靠近不敏感，现有磁路要改；转快易漏沿</td>
+</tr>
+</tbody></table>
+<h3>迟滞区临界情况分析</h3>
+<h4>符号约定</h4>
+<p><img src="/posts/hall-power-cycle-counting-limit/%E7%AC%A6%E5%8F%B7%E7%BA%A6%E5%AE%9A.webp" alt=""></p>
+<h4>屏蔽中断时直接计数</h4>
+<p>霍尔低功耗断电期间屏蔽边沿中断，重新上电并等待输出稳定后再恢复计数。这个策略把临界区的不确定性限制在单个边沿：一次运动本应产生 <code>2</code> 个边沿，结果可能是 <code>1</code> 个、<code>2</code> 个或 <code>3</code> 个。</p>
+<p>以下分析假定：一次运动过程应产生两个边沿，霍尔断电时电机位置不变，重新上电后再继续运动。若断电点落在两个临界区之一，霍尔重新上电后的输出可能与断电前不同。按两个临界区和两种输出变化方向枚举，共有 8 种情况，其中 4 种会改变计数结果：</p>
+<ul>
+<li><strong>丢失一个边沿</strong>：真实边沿发生在中断被屏蔽期间，预期计数为 <code>2</code>，实际只计到 <code>1</code>。</li>
+<li><strong>多计一个边沿</strong>：上电后的重新判决被当成运动边沿，预期计数为 <code>2</code>，实际计到 <code>3</code>。</li>
+</ul>
+<p>两类错误方向相反，出现概率在理想条件下相近，长期平均值可能互相抵消；单次停机或单台设备的计数不能依赖这种抵消。</p>
+<p><img src="/posts/hall-power-cycle-counting-limit/PixPin_2026-09-05_19-51-46.webp" alt="丢失一个边沿"></p>
+<p><img src="/posts/hall-power-cycle-counting-limit/PixPin_2026-09-05_19-52-05.webp" alt="多计一个边沿的情况"></p>
+<h4>不屏蔽中断时的计数偏差</h4>
+<p>不屏蔽边沿中断后，丢失边沿的情况可以被 GPIO 中断捕获，预期 <code>2</code> 个边沿、实际 <code>2</code> 个边沿。多计边沿的情况却会被进一步放大：重新判决产生的边沿与后续运动边沿同时进入计数，预期 <code>2</code> 个边沿、实际 <code>4</code> 个边沿。</p>
+<p><img src="/posts/hall-power-cycle-counting-limit/PixPin_2026-09-05_19-51-25.webp" alt="如果霍尔低功耗断电时不屏蔽边沿中断"></p>
+<h4>严格边沿配对的欠计数</h4>
+<p>严格边沿配对可以过滤多计边沿的情况，使预期 <code>2</code> 个边沿、实际 <code>2</code> 个边沿；但丢失一个边沿时，剩余边沿无法组成完整配对，整组边沿都会被舍弃，预期 <code>2</code> 个边沿、实际 <code>0</code> 个边沿。</p>
+<p><img src="/posts/hall-power-cycle-counting-limit/PixPin_2026-09-05_19-51-10.webp" alt="如果严格边沿配对"></p>
+<h4>结论</h4>
+<p>三种策略的代价如下：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>丢失边沿场景</th>
+<th>多计边沿场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>屏蔽中断，直接计数</td>
+<td>预期 <code>2</code>，实际 <code>1</code></td>
+<td>预期 <code>2</code>，实际 <code>3</code></td>
+</tr>
+<tr>
+<td>不屏蔽中断</td>
+<td>预期 <code>2</code>，实际 <code>2</code></td>
+<td>预期 <code>2</code>，实际 <code>4</code></td>
+</tr>
+<tr>
+<td>严格边沿配对</td>
+<td>预期 <code>2</code>，实际 <code>0</code></td>
+<td>预期 <code>2</code>，实际 <code>2</code></td>
+</tr>
+</tbody></table>
+<p>在这组临界区枚举下，屏蔽中断后直接计数的单次误差为 <code>±1</code> 个边沿；不屏蔽中断可能产生 <code>+2</code> 个边沿，严格配对可能丢掉完整的 <code>2</code> 个边沿。因此，必须在单霍尔断电的前提下继续计数时，屏蔽中断并直接计数的代价相对可控，但它仍然不能消除临界区带来的不确定性。</p>
+<h2>3. 实验现象</h2>
+<p>用示波器同时监测霍尔供电（绿色，外部手动通断）与霍尔输出（黄色）。把磁铁分别停在触发位、非触发位与临界区，观察两块样品反复上电、下电时的输出。</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>样品 A</th>
+<th>样品 B</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>触发位</strong></td>
+<td><img src="/posts/hall-power-cycle-counting-limit/hall-a-trigger-power-cycle.bmp" alt="样品A 触发位 上电-下电"></td>
+<td><img src="/posts/hall-power-cycle-counting-limit/hall-b-trigger-power-cycle.bmp" alt="样品B 触发位 上电-下电"></td>
+</tr>
+<tr>
+<td><strong>非触发位</strong></td>
+<td><img src="/posts/hall-power-cycle-counting-limit/hall-a-nontrigger-power-cycle.bmp" alt="样品A 非触发位 上电-下电"></td>
+<td><img src="/posts/hall-power-cycle-counting-limit/hall-b-nontrigger-power-cycle.bmp" alt="样品B 非触发位 上电-下电"></td>
+</tr>
+<tr>
+<td><strong>临界区</strong></td>
+<td><img src="/posts/hall-power-cycle-counting-limit/hall-a-critical-power-cycle.bmp" alt="样品A 临界区 反复上电"></td>
+<td><img src="/posts/hall-power-cycle-counting-limit/hall-b-critical-power-cycle.bmp" alt="样品B 临界区 反复上电"></td>
+</tr>
+</tbody></table>
+<p>对应现象如下：</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>样品 A</th>
+<th>样品 B</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>触发位</strong></td>
+<td>上电先出现假尖峰，随后稳定到激活；下电时电源不可靠处有一个小陡坡</td>
+<td>上电先出现约 <code>150 ms</code> 的释放台阶，随后才落到正确的激活；下电处有上升小陡坡</td>
+</tr>
+<tr>
+<td><strong>非触发位</strong></td>
+<td>上电稳定到释放；下电瞬间悬崖跳到激活，接着电源不可靠处有向上小陡坡</td>
+<td>上电先出现假尖峰，随后约 <code>150 ms</code> 误入激活，再跳回释放；下电缓慢下降，电源不可靠处出现大量尖刺假脉冲</td>
+</tr>
+<tr>
+<td><strong>临界区</strong></td>
+<td>反复上电，输出每次可能不同</td>
+<td>反复上电，输出每次可能不同 （样品B的截图没截好，看不出来，参考样品A的图）</td>
+</tr>
+</tbody></table>
+<p>实验给出两点。第一，上电后过早打开中断会把启动尖峰和暂态台阶计进去；正确顺序是先给霍尔供电，等待输出稳定，清除旧中断标志，最后再恢复计数。第二，稳定区的最终输出通常可复现，临界区则不然。样品 A 在临界区反复上电时输出可能翻转；样品 B 多数时候前后一致，但这份一致不能证明它已经离开临界区，更不能说明它停在进入侧还是离开侧。霍尔持续供电时，计数通常更稳定，因为器件状态没有被清掉。</p>
+<h2>4. 解决办法</h2>
+<h3>方案一：出厂标定停靠参数</h3>
+<p>这是概率缓解，无法保证形式正确。单霍尔给不出 <code>0.5</code> 圈的位置，所以不去解“现在停在哪个临界区”。每台机器出厂时，用惩罚函数学习一组电机停靠参数，让电机自己停下来时，有较大概率落在安全区。</p>
+<p>它成立有三个前提：</p>
+<ul>
+<li>温度漂移：<code>Bop</code> / <code>Brp</code> 会随温度、批次和老化平移。出厂标的是这台机器、这只霍尔当时的迟滞宽度。换料号，或跑数年以后，原来的安全区可能缩进临界区。</li>
+<li>电源暂态：上电尖峰、掉电陡坡和供电波动会改变霍尔的重新判决。标定环境若和现场供电差太远，样本无效。</li>
+<li>电机可控：惩罚函数学的是停机参数，电机必须能按这组参数重复停到相近位置。停点散差大于安全区宽度时，标定没有意义。</li>
+</ul>
+<p>惩罚函数的核心观测是一次断电再上电的霍尔输出：</p>
+<ul>
+<li>前后不一致：这次停靠点让霍尔重新判决翻了面，给明确惩罚。</li>
+<li>前后一致：只说明这一次没有翻面，不能当成已经安全，最多给较弱奖励。</li>
+</ul>
+<p>对同一台设备反复停机、断电、上电，就能采到一批样本。学到的参数要留 margin，例如目标停点远离 <code>Bop</code>、<code>Brp</code> 各至少 <code>30%</code> 迟滞宽度，不能只靠多次断电样本把翻面概率压低。标定结果随机器保存，后续休眠时按这组参数停机，再关闭霍尔电源。</p>
+<h3>方案二：双霍尔判别区间</h3>
+<p>把两个霍尔错开安装。两路输出的组合可以直接给出磁铁所在区间；其中一路接近进入或离开阈值时，另一路仍能提供稳定判断。</p>
+<p><img src="/posts/hall-power-cycle-counting-limit/hall-dual-position-zones.svg" alt="双霍尔传感器通过两路电平组合判断磁铁位置区间"></p>
+<h2>5. 结论</h2>
+<p>单霍尔计数在持续供电时是可靠的。一旦切断霍尔电源，软件就不知道停靠点落在进入临界区还是离开临界区。一次边沿分辨不出停在哪一侧；断电前后输出一致，也不能证明已经离开临界区。</p>
+<p>必须关闭单个霍尔电源时，出厂标定只能降低停进临界区的概率，并要给 <code>Bop</code> / <code>Brp</code> 留 margin；它缓解计数偏移，并不保证形式正确。需要连续且准确的计数时，应保持霍尔供电，或改用至少两个霍尔传感器。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=hall-power-cycle-counting-limit');
+  }
+  </script>
+</body>
+</html>

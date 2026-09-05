@@ -1,0 +1,339 @@
+/*
+ * 博客文章独立页面样式表
+ * 用于生成的静态 HTML 文章页面
+ * 与 ArticleModal.vue 中的样式保持一致
+ * 源文件位置：src/styles/post-styles.css
+ * 构建时由 generate-data.js 复制到 public/posts/post-styles.css
+ */
+
+/* === 基础排版 === */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  line-height: 1.8;
+  color: #333;
+  background: #fff;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 24px 60px;
+}
+
+/* === 文章正文 === */
+.article-body {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.article-body a,
+.article-body a[href^="mailto:"],
+.article-body b {
+  color: #0000FF;
+  font-weight: 300;
+}
+
+.article-body img {
+  display: block;
+  border-radius: 1rem;
+  box-shadow: 0 0 0 1px rgb(229, 231, 235);
+  max-width: 100%;
+  height: auto;
+  /* 默认左对齐：不设 auto 左右边距，图片贴左边缘 */
+  margin: 1.5rem 0;
+}
+
+/* 横图 / 方图：撑满宽度 */
+.article-body img.img-fill {
+  width: min(100%, var(--article-image-natural-width, 100%));
+  max-width: 100%;
+}
+
+/* 竖图：限制高度，居中 */
+.article-body img.img-fit {
+  max-height: 80vh;
+}
+
+.article-body pre {
+  border-radius: 1rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+
+.article-body pre code.hljs,
+.article-body pre code {
+  border-radius: 1rem;
+  font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.article-body :not(pre) > code {
+  background: #FFF0F2;
+  color: #FF2442;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 1em;
+  font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+}
+
+/* === 标题 === */
+.article-body h1 { font-size: 1.8rem; margin: 2rem 0 1rem; font-weight: 700; }
+.article-body h2 { font-size: 1.5rem; margin: 1.8rem 0 0.8rem; font-weight: 700; }
+.article-body h3 { font-size: 1.3rem; margin: 1.5rem 0 0.6rem; font-weight: 600; }
+.article-body h4 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; font-weight: 600; }
+
+/* === 段落和列表 === */
+.article-body p {
+  margin: 0.8rem 0;
+}
+
+.article-body ul,
+.article-body ol {
+  margin: 0.8rem 0;
+  padding-left: 1.5rem;
+}
+
+.article-body li {
+  margin: 0.3rem 0;
+}
+
+.article-body blockquote {
+  border-left: 4px solid #ff2442;
+  padding: 0.5rem 1rem;
+  margin: 1rem 0;
+  background: #fafafa;
+  color: #555;
+}
+
+/* === 表格 === */
+/* 紧凑显示：宽度随内容自适应（够用就好），仅当内容超出容器时才占满 */
+.article-body table {
+  width: auto;
+  max-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1rem 0;
+  font-size: 0.85rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.article-body thead,
+.article-body thead tr,
+.article-body th {
+  background: #F0F1F2 !important;
+  color: #060A26 !important;
+  font-weight: 600;
+}
+
+.article-body th {
+  padding: 6px 12px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  border-bottom: 1px solid #e0e0e0;
+  border-right: 1px solid #e0e0e0;
+}
+
+.article-body th:last-child {
+  border-right: none;
+}
+
+.article-body td {
+  padding: 6px 12px;
+  text-align: center;
+  vertical-align: middle;
+  border-bottom: 1px solid #e0e0e0;
+  border-right: 1px solid #e0e0e0;
+  color: #555 !important;
+  background: #fff !important;
+}
+
+.article-body td:last-child {
+  border-right: none;
+}
+
+.article-body tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.article-body tbody tr:hover td {
+  background: #fafafa !important;
+}
+
+/* === 数学公式 === */
+.article-body .math-block {
+  margin: 1.2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+  text-align: center;
+}
+
+.article-body .math-inline {
+  display: inline;
+}
+
+.article-body .math-error {
+  background: #fff3cd;
+  color: #856404;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 0.875em;
+}
+
+/* === 页脚 === */
+.post-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.back-link {
+  color: #ff2442;
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.back-link:hover {
+  opacity: 0.7;
+}
+
+.post-meta {
+  color: #999;
+  font-size: 0.85rem;
+}
+
+.post-author-contact {
+  color: #999;
+  font-size: 0.85rem;
+  font-style: normal;
+}
+
+.post-author-contact a {
+  color: #777;
+  text-decoration: none;
+}
+
+.post-author-contact a:hover {
+  color: #ff2442;
+}
+
+/* === 加密文章：密码输入界面 === */
+.decrypt-ui {
+  max-width: 420px;
+  margin: 80px auto;
+  padding: 28px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+}
+
+.decrypt-lock-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  border-radius: 8px;
+  background: #fff0f2;
+  color: #ff2442;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.decrypt-lock-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.decrypt-ui h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.decrypt-hint {
+  color: #6b7280;
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+
+.decrypt-ui label {
+  display: block;
+  margin-bottom: 8px;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.decrypt-input-row {
+  display: flex;
+  gap: 10px;
+}
+
+.decrypt-input-row input {
+  min-width: 0;
+  flex: 1;
+  height: 42px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0 12px;
+  outline: none;
+  font-size: 14px;
+}
+
+.decrypt-input-row input:focus {
+  border-color: #ff2442;
+  box-shadow: 0 0 0 2px rgba(255, 36, 66, 0.12);
+}
+
+.decrypt-input-row button {
+  height: 42px;
+  min-width: 76px;
+  border: none;
+  border-radius: 8px;
+  background: #ff2442;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.decrypt-input-row button:hover {
+  background: #e6203c;
+}
+
+.decrypt-error {
+  margin: 12px 0 0;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+/* === 响应式 === */
+@media (max-width: 768px) {
+  body {
+    padding: 20px 16px 40px;
+  }
+
+  .article-body h1 { font-size: 1.5rem; }
+  .article-body h2 { font-size: 1.3rem; }
+  .article-body h3 { font-size: 1.15rem; }
+
+  .decrypt-ui {
+    margin: 40px auto;
+  }
+}

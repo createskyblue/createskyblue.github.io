@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LwEVT 入门：注册回调，dispatch 广播事件 - CacheRivulet小记</title>
+  <meta name="description" content="LwEVT 广播分发器  最简入门与示例代码">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="Cortex-M">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="LwEVT 入门：注册回调，dispatch 广播事件">
+  <meta property="og:description" content="LwEVT 广播分发器  最简入门与示例代码">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/lwevt-getting-started/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/lwevt-getting-started/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "LwEVT 入门：注册回调，dispatch 广播事件",
+  "description": "LwEVT 广播分发器\n 最简入门与示例代码",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/lwevt-getting-started/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/lwevt-getting-started/"
+  },
+  "keywords": "嵌入式, MCU, C语言, Cortex-M"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">LwEVT 入门：注册回调，dispatch 广播事件</h1>
+  <article class="article-body">
+<h1>LwEVT 入门：注册回调，dispatch 广播事件</h1>
+<blockquote>
+<p><strong>声明：</strong> LwEVT 是一个开源项目，作者为 <a href="https://github.com/MaJerle/LwEVT">Tilen MAJERLE</a>。本文是阅读该项目源码和文档后整理的入门笔记。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 示例代码已在本机 GCC 与 ARM GCC 下编译运行验证。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/MaJerle/LwEVT" target="_blank" rel="noopener noreferrer">github.com/MaJerle/LwEVT</a></p>
+<p>这篇文章帮你完成一件事：<strong>把 LwEVT 跑起来，实现&quot;按键按下发一个事件、温度采集完发一个带数据的事件&quot;</strong>。全程只用 5 个 API，不需要理解内部实现。</p>
+<h2>LwEVT 的调用流程</h2>
+<p>LwEVT 是事件分发器：事件（event）由类型 type 区分，监听器（listener）就是普通回调函数。核心动作只有两个：</p>
+<ol>
+<li><code>LwEVT_register()</code> 注册回调，可注册多个，最多 <code>LwEVT_CFG_MAX_EVT_LISTENERS</code> 个（默认 8）</li>
+<li><code>LwEVT_dispatch()</code> 广播事件给所有已注册回调，逐个调用</li>
+</ol>
+<p><img src="/posts/lwevt-getting-started/lwevt-flow.svg" alt="LwEVT 分发流程"></p>
+<h2>示例代码：按键与温度事件</h2>
+<p>先建两个文件：<code>LwEVT_opts.h</code>（配置）和 <code>LwEVT_types.h</code>（事件类型），从仓库的 <code>LwEVT_opts_template.h</code>、<code>LwEVT_types_template.h</code> 复制改名即可。</p>
+<p><code>LwEVT_types.h</code> 定义事件类型。<code>LwEVT_TYPE_BASIC</code> 定义不带数据的事件，<code>LwEVT_TYPE_EXT</code> 定义带数据的事件，数据声明成 C 结构体：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">LwEVT_TYPE_BASIC</span><span style="color:#D4D4D4">(LwEVT_TYPE_BTN_PRESSED)</span></span>
+<span class="line"><span style="color:#DCDCAA">LwEVT_TYPE_BASIC</span><span style="color:#D4D4D4">(LwEVT_TYPE_BTN_RELEASED)</span></span>
+<span class="line"><span style="color:#DCDCAA">LwEVT_TYPE_EXT</span><span style="color:#D4D4D4">(LwEVT_TYPE_TEMP_READY, </span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> { </span><span style="color:#569CD6">int16_t</span><span style="color:#D4D4D4"> temp_x10; } temp)</span></span></code></pre><p><code>main.c</code> 完整流程：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "LwEVT/LwEVT.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdint.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint32_t</span><span style="color:#D4D4D4"> btn_press_count;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 监听器 1：按键计数 + 温度判断 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> on_event</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">LwEVT_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">evt</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">    switch</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">evt</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">type</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> LwEVT_TYPE_BTN_PRESSED:</span></span>
+<span class="line"><span style="color:#D4D4D4">        btn_press_count++;</span></span>
+<span class="line"><span style="color:#C586C0">        break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> LwEVT_TYPE_TEMP_READY:</span></span>
+<span class="line"><span style="color:#6A9955">        /* 零拷贝：直接读句柄 union 里的数据 */</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (evt->msg.temp.temp_x10 > </span><span style="color:#B5CEA8">300</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">            /* 超过 30.0 °C */</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#C586C0">        break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    default</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#C586C0">        break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 监听器 2：只关心温度，独立记录 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> on_temp_log</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">LwEVT_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">evt</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">evt</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">type</span><span style="color:#D4D4D4"> == LwEVT_TYPE_TEMP_READY) {</span></span>
+<span class="line"><span style="color:#6A9955">        /* 把温度写入日志缓冲区 */</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#4EC9B0">    LwEVT_t</span><span style="color:#D4D4D4"> *evt;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    LwEVT_init</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">                 /* 1. 初始化 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    LwEVT_register</span><span style="color:#D4D4D4">(on_event);</span><span style="color:#6A9955">     /* 2. 注册监听器 1 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    LwEVT_register</span><span style="color:#D4D4D4">(on_temp_log);</span><span style="color:#6A9955">  /* 3. 注册监听器 2 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 4. 无数据事件：直接 dispatch */</span></span>
+<span class="line"><span style="color:#DCDCAA">    LwEVT_dispatch</span><span style="color:#D4D4D4">(LwEVT_TYPE_BTN_PRESSED);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 5. 带数据事件：先拿句柄写数据，再 dispatch */</span></span>
+<span class="line"><span style="color:#D4D4D4">    evt = </span><span style="color:#DCDCAA">LwEVT_get_handle</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">    evt</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">temp</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">temp_x10</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">315</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">    LwEVT_dispatch</span><span style="color:#D4D4D4">(LwEVT_TYPE_TEMP_READY);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>运行输出（验证版加 printf）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>button pressed, count=1</span></span>
+<span class="line"><span>temp=31.5 C</span></span>
+<span class="line"><span>over 30.0 C</span></span>
+<span class="line"><span>temp logged=315</span></span></code></pre><p>关键点：dispatch 是广播，所有已注册监听器都会收到每个事件（上例两个监听器各处理一次）；监听器自己判断关心哪种事件（用 switch 或 if）。注册顺序就是调用顺序，同一函数指针重复注册会被去重。</p>
+<h2>LwEVT_opts.h 配置项</h2>
+<ul>
+<li><code>LwEVT_CFG_MAX_EVT_LISTENERS</code>：监听器上限，默认 8</li>
+<li><code>LwEVT_CFG_ENABLE_DEFAULT_HANDLE</code>：默认句柄开关，默认 1；置 0 时改用 <code>LwEVT_dispatch_ex(&amp;evt, type)</code> 传自己的句柄</li>
+</ul>
+<h2>LwEVT 的特色</h2>
+<ul>
+<li>极小：库代码约 170 B（Cortex-M4，-Os），静态 RAM 48 B</li>
+<li>X-macro 类型系统：事件类型和携带数据在编译期生成，改类型只动 <code>LwEVT_types.h</code></li>
+<li>零拷贝：监听器直接读写句柄里的数据</li>
+<li>API 只有 5 个函数，注册自动去重</li>
+</ul>
+<h2>适用边界</h2>
+<ul>
+<li>全局单例：整个程序只有一套监听表，无法创建多个独立的事件系统</li>
+<li>无法退订：注册后不能移除回调</li>
+<li>无队列：dispatch 同步执行全部回调，在中断里调用时回调也在中断上下文运行</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=lwevt-getting-started');
+  }
+  </script>
+</body>
+</html>

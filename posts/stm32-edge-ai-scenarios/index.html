@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>从 STM32 Model Zoo 看边缘 AI 的 14 个落地场景 - CacheRivulet小记</title>
+  <meta name="description" content="43 个优化模型覆盖 14 类边缘 AI 场景，从视觉、音频到工业传感">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="模型量化">
+  <meta property="article:tag" content="AI">
+  <meta property="article:published_time" content="2026-07-06">
+  <meta property="og:title" content="从 STM32 Model Zoo 看边缘 AI 的 14 个落地场景">
+  <meta property="og:description" content="43 个优化模型覆盖 14 类边缘 AI 场景，从视觉、音频到工业传感">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32-edge-ai-scenarios/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32-edge-ai-scenarios/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "从 STM32 Model Zoo 看边缘 AI 的 14 个落地场景",
+  "description": "43 个优化模型覆盖 14 类边缘 AI 场景，从视觉、音频到工业传感",
+  "datePublished": "2026-07-06",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32-edge-ai-scenarios/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32-edge-ai-scenarios/"
+  },
+  "keywords": "边缘AI, 嵌入式, MCU, STM32, 模型量化, AI"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">从 STM32 Model Zoo 看边缘 AI 的 14 个落地场景</h1>
+  <article class="article-body">
+<h1>从 STM32 Model Zoo 看边缘 AI 的 14 个落地场景</h1>
+<blockquote>
+<p><strong>声明：</strong> <a href="https://github.com/STMicroelectronics/stm32ai-modelzoo">STM32 AI Model Zoo</a> 是 STMicroelectronics 维护的开源项目。本文是阅读该项目源码、文档和模型清单后整理的学习笔记，用于理解边缘 AI 在微控制器上的工程落地方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有模型数据均来自项目文档与 manifest，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>边缘 AI 跑到了 MCU 上。Cortex-M4、Cortex-M7、Cortex-M85 —— 几十 MHz 主频、几百 KB SRAM —— 这些单片机现在能直接运行量化后的神经网络。</p>
+<p>STMicroelectronics 开源的 <a href="https://github.com/STMicroelectronics/stm32ai-modelzoo">stm32ai-modelzoo</a> 是观察这个趋势的绝佳窗口。仓库收录了 <strong>14 个应用领域、43 个预训练模型</strong>，全部经过 INT8 量化，提供 TensorFlow Lite 和 ONNX QDQ 两种格式，可以直接部署到 STM32H7、STM32MP2、STM32N6 等目标平台。配套仓库 <a href="https://github.com/STMicroelectronics/stm32ai-modelzoo-services">stm32ai-modelzoo-services</a> 包含完整的训练脚本和模型架构源码。</p>
+<hr>
+<h2>一、视觉类（8 类）</h2>
+<p>视觉是边缘 AI 最密集的方向，从简单分类到像素级理解，Model Zoo 提供了完整的任务链。</p>
+<h3>图像分类</h3>
+<p>最基础的 CV 任务：输入一张图，输出类别标签。Model Zoo 提供了 29 个模型变体 —— 是数量最多的分类。TensorFlow 侧有 MobileNetV1/V2、EfficientNetV2、ResNet8/20/32 等经典架构；PyTorch 侧覆盖 20 种轻量网络，包括 ShuffleNetV2、RegNet、HarDNet、PeleeNet，以及 ST 自研的 ST-ResNet 系列（pico / nano / micro / milli / tiny 五个尺寸）。</p>
+<p><img src="/posts/stm32-edge-ai-scenarios/img/output_application_ic.webp" alt="图像分类"></p>
+<p>预训练数据集覆盖 ImageNet、Food101、CIFAR-10/100、TF Flowers、Plant Leaf Diseases 等。输入分辨率从 128×128 到 384×384 不等。</p>
+<h3>目标检测</h3>
+<p>框出物体位置并分类。16 个模型变体，YOLO 家族是主力：Tiny-YOLOv2、YOLOv8-n、YOLOv11-n、最新的 YOLO26-n，以及 ST 自研的 ST-YOLO-LC、ST-YOLO-X 系列。SSD/SSDLite + MobileNet 组合也在列。</p>
+<p><img src="/posts/stm32-edge-ai-scenarios/img/output_application_od.webp" alt="目标检测"></p>
+<h3>人脸检测</h3>
+<p>YuNet 和 BlazeFace Front 两个模型，输入分辨率 128×128 和 320×320。输出人脸框和关键点（眼睛、鼻子、嘴角），通常作为人脸识别 pipeline 的第一级。</p>
+<h3>姿态估计</h3>
+<p>检测人体 17 个关键点。包含 MoveNet（ST 改进版）、YOLOv8-n Pose、YOLOv11-n Pose，以及手部关键点和头部关键点专用模型。</p>
+<p><img src="/posts/stm32-edge-ai-scenarios/img/output_application_pe.webp" alt="姿态估计"></p>
+<h3>语义分割</h3>
+<p>给每个像素打类别标签。基于 DeepLabV3 + MobileNetV2 backbone，256×256 和 320×320 两种分辨率。在 NPU 加速的 STM32N6 上可以实时运行。</p>
+<p><img src="/posts/stm32-edge-ai-scenarios/img/output_application_semseg.webp" alt="语义分割"></p>
+<h3>实例分割</h3>
+<p>比语义分割更进一步 —— 区分同一类别的不同实例。YOLOv8-n Seg 和 YOLOv11-n Seg 两个模型，需要 NPU 加速。</p>
+<h3>深度估计</h3>
+<p>从单张 2D 图像推断每个像素的距离。FastDepth 模型，基于 NYU Depth v2 数据集训练。</p>
+<h3>神经风格迁移</h3>
+<p>把照片转换成指定艺术风格。Xinet-Picasso-Muse 模型，输入 160×160，在 COCO 上训练。Model Zoo 里最&quot;好玩&quot;的模型，也可用于相机实时滤镜和 AR 特效。</p>
+<hr>
+<h2>二、音频类（2 类）</h2>
+<h3>音频事件检测</h3>
+<p>识别声音中的特定事件：玻璃破碎、婴儿哭声、警报声等。MiniResNetV1/V2 和 YAMNet（多种嵌入尺寸），输入是梅尔频谱图。</p>
+<p><img src="/posts/stm32-edge-ai-scenarios/img/output_application_aed.webp" alt="音频事件检测"></p>
+<h3>语音增强</h3>
+<p>从嘈杂环境中提取干净人声。STFT-TCNN 模型，在 Valentini 数据集上训练。输入带噪语音的 STFT 频谱，输出降噪后的语音。</p>
+<hr>
+<h2>三、传感类（4 类）</h2>
+<p>视觉和音频之外，Model Zoo 还覆盖了基于传感器信号的四个场景。</p>
+<h3>人体活动识别</h3>
+<p>通过加速度计数据判断行走、跑步、静坐等状态。ST-GMP 和 ST-IGN 两个模型，输入 48×3 的时序数据（48 个时间步、3 轴加速度）。模型极小，Cortex-M4 可跑。</p>
+<p><img src="/posts/stm32-edge-ai-scenarios/img/output_application_har.webp" alt="人体活动识别"></p>
+<h3>手势识别</h3>
+<p>用 ToF 测距传感器（VL53L5CX / VL53L8CX）识别 8 种手势。ST-CNN2D HandPosture 模型。ToF 只拿到低分辨率深度图，天然隐私友好，适合公共场所。</p>
+<h3>电弧故障检测</h3>
+<p>检测电路中的电弧 —— 电气火灾的主要成因之一。ST-Conv（时域 CNN）和 ST-Dense（频域全连接）两个模型，输入电流采样序列。</p>
+<p><img src="/posts/stm32-edge-ai-scenarios/img/output_application_afd.webp" alt="电弧故障检测"></p>
+<h3>人员重识别</h3>
+<p>判断两张照片中是否为同一个人。MobileNetV2 和 OSNet 两个模型，256×128 输入分辨率。多摄像头跟踪系统的关键组件。</p>
+<hr>
+<h2>四、模型架构完全开源</h2>
+<p>模型架构定义代码在 <a href="https://github.com/STMicroelectronics/stm32ai-modelzoo-services">stm32ai-modelzoo-services</a> 中完整开源。以图像分类为例：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>image_classification/</span></span>
+<span class="line"><span>├── tf/src/models/</span></span>
+<span class="line"><span>│   ├── mobilenetv1.py        # MobileNetV1</span></span>
+<span class="line"><span>│   ├── mobilenetv2.py        # 倒置残差 + 线性瓶颈</span></span>
+<span class="line"><span>│   ├── efficientnetv2.py     # EfficientNetV2 B0~S</span></span>
+<span class="line"><span>│   ├── resnet.py             # ResNet8/20/32</span></span>
+<span class="line"><span>│   ├── squeezenetv11.py      # Fire 模块</span></span>
+<span class="line"><span>│   └── ...</span></span>
+<span class="line"><span>├── pt/src/models/</span></span>
+<span class="line"><span>│   ├── mobilenetv1/          # PyTorch 版</span></span>
+<span class="line"><span>│   ├── mobilenetv3/</span></span>
+<span class="line"><span>│   ├── edgevit/              # EdgeViT</span></span>
+<span class="line"><span>│   ├── stresnet/             # ST 自研 ResNet 系列</span></span>
+<span class="line"><span>│   └── ...</span></span></code></pre><p>每个 <code>.py</code> 文件是完整的模型类定义，可以逐行阅读、修改宽度因子、换激活函数、加注意力模块。通过 <code>stm32ai_main.py</code> 加 YAML 配置文件驱动全流程：训练 → 评估 → 量化 → 部署。</p>
+<p>主仓库提供的是量化后的推理文件：TFLite INT8（全整数量化）和 ONNX QDQ（支持混合精度 w4/w8/a8）。</p>
+<hr>
+<h2>五、为什么在 MCU 上跑 AI</h2>
+<p>云端 GPU 算力远超 MCU，但在以下四个维度上本地推理有不可替代的优势：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>云端推理</th>
+<th>MCU 本地推理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>延迟</td>
+<td>50-500ms（含网络往返）</td>
+<td>1-50ms</td>
+</tr>
+<tr>
+<td>隐私</td>
+<td>数据上传服务器</td>
+<td>数据不出设备</td>
+</tr>
+<tr>
+<td>功耗</td>
+<td>WiFi/4G 持续工作</td>
+<td>毫瓦级</td>
+</tr>
+<tr>
+<td>离线</td>
+<td>断网不可用</td>
+<td>始终在线</td>
+</tr>
+</tbody></table>
+<p>一个典型场景：智能门铃的人形检测。如果每帧图像上传云端，延迟高、云服务持续计费、有隐私顾虑。在 STM32 上本地跑一个 300KB 的 SSD-MobileNet 模型，50ms 出结果，功耗不到 100mW。</p>
+<hr>
+<h2>六、总结</h2>
+<p>STM32 AI Model Zoo 覆盖了边缘 AI 的主流应用方向。从 43 个预训练模型出发，配合 modelzoo-services 的训练工具链，可以做到：选模型 → 改模型（微调或从头训练）→ 量化导出 → 上板运行。</p>
+<p>如果你在做需要本地智能的嵌入式产品 —— 无论是产线视觉质检、智能门铃、可穿戴运动追踪，还是工业电弧检测 —— 这个仓库是一个务实的技术起点。</p>
+<hr>
+<blockquote>
+<p><strong>相关链接：</strong></p>
+<ul>
+<li><a href="https://github.com/STMicroelectronics/stm32ai-modelzoo">stm32ai-modelzoo（预训练模型）</a></li>
+<li><a href="https://github.com/STMicroelectronics/stm32ai-modelzoo-services">stm32ai-modelzoo-services（训练脚本 + 模型架构源码）</a></li>
+</ul>
+</blockquote>
+<p><em>本文基于 STM32 AI Model Zoo v4.1（2026 年 4 月发布）撰写。</em></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-06 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32-edge-ai-scenarios');
+  }
+  </script>
+</body>
+</html>

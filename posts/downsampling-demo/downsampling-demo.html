@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>降采样算法交互演示</title>
+<style>
+  :root {
+    --bg: #f3f4f8;
+    --surface: #ffffff;
+    --surface2: #f0f1f6;
+    --border: #dde0e8;
+    --text: #1e1e30;
+    --text2: #6e7086;
+    --accent: #4a7cf7;
+    --accent2: #f07b3f;
+    --green: #2da44e;
+    --red: #d73a49;
+    --yellow: #bf8600;
+    --purple: #8250df;
+    --cyan: #2a9daf;
+    --radius: 10px;
+    --transition: 0.2s ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Header ─────────────────────── */
+  .header {
+    background: linear-gradient(135deg, #e8ecf8 0%, #dce8f8 50%, #e8ecf8 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 32px;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #2c3e80;
+    margin-bottom: 6px;
+  }
+  .header p {
+    color: var(--text2);
+    font-size: 0.95rem;
+  }
+  .github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: var(--transition);
+  }
+  .github-link:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Layout ─────────────────────── */
+  /* iframe 嵌入时作为测高的内容容器，flow-root 防止子元素外边距塌陷到容器外 */
+  .wrap { display: flow-root; }
+  .main-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 32px;
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 960px) {
+    .main-container {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── Controls Panel ─────────────── */
+  .controls {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    height: fit-content;
+    position: sticky;
+    top: 24px;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  select, input[type="range"] {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  select:hover, select:focus { border-color: var(--accent); outline: none; }
+  input[type="range"] {
+    -webkit-appearance: none;
+    height: 6px;
+    padding: 0;
+    background: var(--border);
+    border: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+  }
+  .range-value {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text2);
+  }
+  .range-value strong { color: var(--accent); }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .checkbox-row input[type="checkbox"] {
+    width: 18px; height: 18px;
+    accent-color: var(--accent);
+  }
+  .checkbox-row label { cursor: pointer; }
+
+  .btn {
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: var(--transition);
+    font-weight: 500;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #3b6de0; }
+
+  /* ── Charts Area ────────────────── */
+  .charts-area {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .chart-card h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .chart-card .chart-subtitle {
+    font-size: 0.78rem;
+    color: var(--text2);
+    margin-bottom: 10px;
+  }
+  canvas {
+    width: 100%;
+    height: 280px;
+    display: block;
+    border-radius: 4px;
+    background: #fafbfd;
+  }
+
+  /* ── Stats Row ──────────────────── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 700px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-card .stat-label {
+    font-size: 0.75rem;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+
+  /* ── Algorithm Info ─────────────── */
+  .info-section {
+    max-width: 1400px;
+    margin: 0 auto 40px;
+    padding: 0 32px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    transition: var(--transition);
+    cursor: default;
+  }
+  .info-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .info-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 2px 16px rgba(74, 124, 247, 0.18);
+  }
+  .info-card h4 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .info-card p {
+    font-size: 0.8rem;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+  .info-card .badge-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-size: 0.68rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .badge.good { color: #1a6b30; border-color: #b8dcc4; background: #eaf7ee; }
+  .badge.warn { color: #8a6000; border-color: #e8d898; background: #fdf8e8; }
+  .badge.info { color: #2c5cc5; border-color: #b8c8e8; background: #eaf0fb; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="header">
+  <h1>降采样算法 · 交互演示</h1>
+  <p>对比不同降采样策略在时间序列数据上的表现 — 可选择低通滤波器观察抗混叠效果</p>
+  <a href="https://github.com/createskyblue/downsampling-demo" target="_blank" class="github-link">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    GitHub
+  </a>
+</div>
+
+<div class="main-container">
+  <!-- ── Controls ─────────────────── -->
+  <aside class="controls">
+    <div class="control-group">
+      <label>📡 信号类型</label>
+      <select id="signalType">
+        <option value="composite">复合正弦波 + 噪声</option>
+        <option value="step">阶跃信号 + 噪声</option>
+        <option value="spike">尖峰脉冲信号</option>
+        <option value="ecg">模拟心电信号</option>
+        <option value="randomWalk">随机游走</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>📊 降采样算法</label>
+      <select id="algorithm">
+        <option value="direct">直接抽样 (Direct)</option>
+        <option value="mean">均值降采样 (Mean)</option>
+        <option value="median">中位数降采样 (Median)</option>
+        <option value="minmax">Min-Max 降采样</option>
+        <option value="lttb">LTTB (最大三角形)</option>
+        <option value="piecewise">分段线性 (Piecewise Linear)</option>
+        <option value="rdp">Ramer–Douglas–Peucker</option>
+      </select>
+    </div>
+
+    <div class="control-group" id="targetGroup">
+      <label>🎯 目标点数</label>
+      <input type="range" id="targetPoints" min="20" max="500" value="100" step="5">
+      <div class="range-value"><span>20</span><strong id="targetPointsVal">100</strong><span>500</span></div>
+    </div>
+
+    <div class="control-group" id="rdpGroup" style="display:none;">
+      <label>🎯 容差阈值 ε（垂直偏差）</label>
+      <input type="range" id="rdpEpsilon" min="0.002" max="0.5" value="0.04" step="0.002">
+      <div class="range-value"><span>0.002</span><strong id="rdpEpsilonVal">0.04</strong><span>0.5</span></div>
+    </div>
+
+    <div class="control-group">
+      <label>📐 原始数据点数</label>
+      <input type="range" id="sourcePoints" min="500" max="10000" value="2000" step="100">
+      <div class="range-value"><span>500</span><strong id="sourcePointsVal">2,000</strong><span>10,000</span></div>
+    </div>
+
+    <div class="control-group" style="border-top:1px solid var(--border); padding-top:12px;">
+      <div class="checkbox-row">
+        <input type="checkbox" id="enableFilter">
+        <label for="enableFilter"><strong>🔌 启用低通滤波器</strong>（抗混叠）</label>
+      </div>
+    </div>
+
+    <div class="control-group" id="filterGroup" style="opacity:0.4; pointer-events:none;">
+      <label>🔧 滤波窗口大小</label>
+      <input type="range" id="filterWindow" min="3" max="51" value="15" step="2">
+      <div class="range-value"><span>3</span><strong id="filterWindowVal">15</strong><span>51</span></div>
+    </div>
+
+    <button class="btn btn-primary" id="regenerateBtn">🔄 重新生成信号</button>
+  </aside>
+
+  <!-- ── Charts ────────────────────── -->
+  <div class="charts-area">
+    <div class="chart-card">
+      <h3>📈 原始信号 <span style="font-weight:400;color:var(--text2);font-size:0.82rem;" id="originalLabel"></span></h3>
+      <div class="chart-subtitle" id="originalSubtitle"></div>
+      <canvas id="canvasOriginal"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>📉 降采样结果 <span style="font-weight:400;color:var(--text2);font-size:0.82rem;" id="resultLabel"></span></h3>
+      <div class="chart-subtitle" id="resultSubtitle"></div>
+      <canvas id="canvasResult"></canvas>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value" id="statOriginal">2,000</div>
+        <div class="stat-label">原始点数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statResult">100</div>
+        <div class="stat-label">降采样点数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statRatio">20:1</div>
+        <div class="stat-label">压缩比</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statRmse">—</div>
+        <div class="stat-label">RMSE</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Algorithm Info Cards ────────── -->
+<div class="info-section" id="infoSection">
+  <div class="info-card" data-algo="direct">
+    <h4>🎲 直接抽样 Direct Sampling</h4>
+    <p>等间隔选取数据点，每隔 N 个点取一个。最简单高效，但可能丢失重要的局部特征（峰值、谷值）。</p>
+    <div class="badge-row">
+      <span class="badge info">⚡ 最快</span>
+      <span class="badge warn">⚠ 易丢特征</span>
+      <span class="badge">O(n)</span>
+    </div>
+  </div>
+  <div class="info-card" data-algo="mean">
+    <h4>📐 均值降采样 Mean Downsampling</h4>
+    <p>将数据分成等宽的桶（bucket），每个桶内取平均值。天然具有抗混叠效果，但会削弱尖峰和突变。</p>
+    <div class="badge-row">
+      <span class="badge good">🛡 抗混叠</span>
+      <span class="badge warn">⚠ 削峰</span>
+      <span class="badge">O(n)</span>
+    </div>
+  </div>
+  <div class="info-card" data-algo="minmax">
+    <h4>🔺 Min-Max 降采样</h4>
+    <p>每个桶内同时保留最小值和最大值，完美保留信号的包络（envelope）。常用于金融K线图和监控告警。</p>
+    <div class="badge-row">
+      <span class="badge good">📦 保留包络</span>
+      <span class="badge info">📈 金融常用</span>
+      <span class="badge">O(n)</span>
+    </div>
+  </div>
+  <div class="info-card" data-algo="lttb">
+    <h4>📐 LTTB 最大三角形</h4>
+    <p>首尾两点固定保留。中间每桶用"已选中点(前) + 候选点 + 下一桶均值(后)"构成三角形，选面积最大的点为该桶输出，逐桶滑动。视觉效果最优。</p>
+    <div class="badge-row">
+      <span class="badge good">👁 视觉最优</span>
+      <span class="badge info">🎯 特征保持</span>
+      <span class="badge">O(n)</span>
+    </div>
+  </div>
+  <div class="info-card" data-algo="piecewise">
+    <h4>📏 分段线性 Piecewise Linear</h4>
+    <p>将数据分段并对每段做线性回归，用分段直线逼近原始信号。平滑噪声的同时保持趋势，适合趋势分析。</p>
+    <div class="badge-row">
+      <span class="badge good">📉 趋势保持</span>
+      <span class="badge good">🧹 去噪平滑</span>
+      <span class="badge">O(n)</span>
+    </div>
+  </div>
+  <div class="info-card" data-algo="median">
+    <h4>📊 中位数降采样 Median</h4>
+    <p>每桶取中位数而非平均值。天然抗异常尖峰——一个极端值能拉偏均值，但影响不了中位数。配合尖峰/脉冲信号对比效果显著。</p>
+    <div class="badge-row">
+      <span class="badge good">🛡 抗尖峰</span>
+      <span class="badge info">🔀 均值对偶</span>
+      <span class="badge">O(n log n)</span>
+    </div>
+  </div>
+  <div class="info-card" data-algo="rdp">
+    <h4>✂️ Ramer–Douglas–Peucker</h4>
+    <p>不按点数、按精度来。设定容差 ε 后，平坦区域（细节少）留很少点，剧烈波动区域（细节多）自动多留点。就像画简笔画：直线的部分两点够了，拐弯的地方需要多几个点。</p>
+    <div class="badge-row">
+      <span class="badge good">🔄 自适应</span>
+      <span class="badge info">🗺 地图经典</span>
+      <span class="badge">O(n²)</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════╗
+// ║   Data Generation                           ║
+// ╚══════════════════════════════════════════════╝
+
+function generateData(type, numPoints, seed = 42) {
+  // Simple seeded random
+  let s = seed;
+  function rand() {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  }
+
+  const data = [];
+  for (let i = 0; i < numPoints; i++) {
+    const t = i / (numPoints - 1); // 0 to 1
+    let y;
+
+    switch (type) {
+      case 'composite':
+        // Multiple sine waves + noise
+        y = Math.sin(2 * Math.PI * t * 3) * 0.6           // low freq
+          + Math.sin(2 * Math.PI * t * 17) * 0.2           // medium freq
+          + Math.sin(2 * Math.PI * t * 43) * 0.08          // high freq detail
+          + (rand() - 0.5) * 0.15;                         // noise
+        break;
+
+      case 'step':
+        // Step function with noise
+        y = 0;
+        if (t > 0.1) y += 0.3;
+        if (t > 0.25) y += 0.5;
+        if (t > 0.45) y -= 0.4;
+        if (t > 0.6) y += 0.7;
+        if (t > 0.8) y -= 0.3;
+        y += (rand() - 0.5) * 0.12;
+        break;
+
+      case 'spike':
+        // Spike/impulse signal
+        y = Math.sin(2 * Math.PI * t * 2) * 0.3;
+        // Add spikes
+        const spikes = [0.15, 0.3, 0.5, 0.7, 0.85];
+        for (const sp of spikes) {
+          const dist = Math.abs(t - sp);
+          if (dist < 0.008) y += (1 - dist / 0.008) * 0.8;
+        }
+        y += (rand() - 0.5) * 0.08;
+        break;
+
+      case 'ecg':
+        // Simulated ECG-like signal
+        const cycle = (t * 5) % 1; // 5 heartbeats
+        y = 0;
+        if (cycle < 0.05) y = 0.05 * Math.sin(Math.PI * cycle / 0.05);           // P wave
+        else if (cycle < 0.15) y = 0;
+        else if (cycle < 0.2) y = -0.15 * Math.sin(Math.PI * (cycle-0.15)/0.05); // Q
+        else if (cycle < 0.22) y = 1.0 * Math.sin(Math.PI * (cycle-0.2)/0.02);    // R peak
+        else if (cycle < 0.28) y = -0.3 * Math.sin(Math.PI * (cycle-0.22)/0.06);  // S
+        else if (cycle < 0.40) y = 0.2 * Math.sin(Math.PI * (cycle-0.28)/0.12);   // T wave
+        else y = 0;
+        y += (rand() - 0.5) * 0.04;
+        break;
+
+      case 'randomWalk':
+        // Random walk
+        if (i === 0) y = 0;
+        else y = data[i-1].y + (rand() - 0.5) * 0.04;
+        // Add some sinusoidal drift
+        y += Math.sin(2 * Math.PI * t * 0.5) * 0.003;
+        break;
+
+      default:
+        y = Math.sin(2 * Math.PI * t * 5) + (rand() - 0.5) * 0.2;
+    }
+
+    data.push({ x: t, y: y, idx: i });
+  }
+  return data;
+}
+
+// ╔══════════════════════════════════════════════╗
+// ║   Low-Pass Filter (Moving Average)          ║
+// ╚══════════════════════════════════════════════╝
+
+function lowPassFilter(data, windowSize) {
+  const half = Math.floor(windowSize / 2);
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    const start = Math.max(0, i - half);
+    const end = Math.min(data.length - 1, i + half);
+    let sum = 0;
+    for (let j = start; j <= end; j++) {
+      sum += data[j].y;
+    }
+    result.push({ x: data[i].x, y: sum / (end - start + 1), idx: data[i].idx });
+  }
+  return result;
+}
+
+// ╔══════════════════════════════════════════════╗
+// ║   Downsampling Algorithms                   ║
+// ╚══════════════════════════════════════════════╝
+
+const ALGORITHMS = {
+
+  // 1. Direct sampling — pick every Nth point
+  direct: {
+    name: '直接抽样',
+    fn: (data, target) => {
+      if (target >= data.length) return [...data];
+      const step = (data.length - 1) / (target - 1);
+      const result = [];
+      for (let i = 0; i < target; i++) {
+        const idx = Math.round(i * step);
+        result.push({ ...data[Math.min(idx, data.length - 1)] });
+      }
+      return result;
+    }
+  },
+
+  // 2. Mean downsampling — average within buckets
+  mean: {
+    name: '均值降采样',
+    fn: (data, target) => {
+      if (target >= data.length) return [...data];
+      const bucketSize = data.length / target;
+      const result = [];
+      for (let b = 0; b < target; b++) {
+        const start = Math.floor(b * bucketSize);
+        const end = Math.floor((b + 1) * bucketSize);
+        let sumX = 0, sumY = 0, count = 0;
+        for (let i = start; i < end && i < data.length; i++) {
+          sumX += data[i].x;
+          sumY += data[i].y;
+          count++;
+        }
+        if (count > 0) {
+          result.push({ x: sumX / count, y: sumY / count, idx: data[Math.floor((start + end - 1) / 2)]?.idx ?? 0 });
+        }
+      }
+      return result;
+    }
+  },
+
+  // 3. Min-Max downsampling — keep min & max per bucket
+  minmax: {
+    name: 'Min-Max降采样',
+    fn: (data, target) => {
+      if (target >= data.length) return [...data];
+      // Each bucket produces 2 points, so numBuckets = target / 2
+      const numBuckets = Math.max(1, Math.floor(target / 2));
+      const bucketSize = data.length / numBuckets;
+      const result = [];
+      for (let b = 0; b < numBuckets; b++) {
+        const start = Math.floor(b * bucketSize);
+        const end = Math.floor((b + 1) * bucketSize);
+        if (start >= data.length) break;
+        let minPt = data[start], maxPt = data[start];
+        for (let i = start; i < end && i < data.length; i++) {
+          if (data[i].y < minPt.y) minPt = data[i];
+          if (data[i].y > maxPt.y) maxPt = data[i];
+        }
+        // Order by x
+        if (minPt.x <= maxPt.x) {
+          result.push({ ...minPt });
+          result.push({ ...maxPt });
+        } else {
+          result.push({ ...maxPt });
+          result.push({ ...minPt });
+        }
+      }
+      return result;
+    }
+  },
+
+  // 4. LTTB — Largest Triangle Three Buckets
+  lttb: {
+    name: 'LTTB',
+    fn: (data, threshold) => {
+      if (threshold >= data.length || threshold < 3) return [...data];
+
+      const dataLength = data.length;
+      const result = [];
+      result.push({ ...data[0] }); // Always keep first
+
+      const bucketSize = (dataLength - 2) / (threshold - 2);
+      let prevSelected = 0; // Index in original data
+
+      for (let i = 0; i < threshold - 2; i++) {
+        const bucketStart = 1 + Math.floor(i * bucketSize);
+        const bucketEnd = 1 + Math.floor((i + 1) * bucketSize);
+        const nextBucketStart = bucketEnd;
+        const nextBucketEnd = Math.min(dataLength - 1, 1 + Math.floor((i + 2) * bucketSize));
+
+        // Average of next bucket
+        let avgX = 0, avgY = 0, avgCount = 0;
+        for (let j = nextBucketStart; j < nextBucketEnd; j++) {
+          avgX += data[j].x;
+          avgY += data[j].y;
+          avgCount++;
+        }
+        if (avgCount > 0) {
+          avgX /= avgCount; avgY /= avgCount;
+        } else {
+          // Fallback: use the last point as reference
+          avgX = data[dataLength - 1].x;
+          avgY = data[dataLength - 1].y;
+        }
+
+        // Find point in current bucket with max triangle area
+        const a = data[prevSelected];
+        let maxArea = -1;
+        let maxIdx = bucketStart;
+
+        const actualEnd = Math.min(bucketEnd, dataLength - 1);
+
+        // Guard against empty bucket
+        if (bucketStart >= actualEnd) {
+          result.push({ ...data[Math.min(bucketStart, dataLength - 2)] });
+          prevSelected = Math.min(bucketStart, dataLength - 2);
+          continue;
+        }
+
+        for (let j = bucketStart; j < actualEnd; j++) {
+          const area = Math.abs(
+            (a.x - avgX) * (data[j].y - a.y) -
+            (a.x - data[j].x) * (avgY - a.y)
+          ) * 0.5;
+          if (area > maxArea) {
+            maxArea = area;
+            maxIdx = j;
+          }
+        }
+
+        result.push({ ...data[maxIdx] });
+        prevSelected = maxIdx;
+      }
+
+      result.push({ ...data[dataLength - 1] }); // Always keep last
+      return result;
+    }
+  },
+
+  // 5. Piecewise Linear — linear regression per segment
+  piecewise: {
+    name: '分段线性',
+    fn: (data, target) => {
+      if (target >= data.length) return [...data];
+      if (target < 3) return [data[0], data[data.length - 1]];
+
+      const numSegments = target - 1; // target points = segment boundaries
+      const segSize = (data.length - 1) / numSegments;
+
+      const result = [];
+      // First point
+      result.push({ ...data[0] });
+
+      for (let s = 0; s < numSegments; s++) {
+        const start = Math.floor(s * segSize);
+        const end = Math.min(data.length - 1, Math.floor((s + 1) * segSize));
+        const n = end - start + 1;
+
+        if (n < 2) {
+          // Single-point segment: use the point directly
+          result.push({ ...data[start] });
+          continue;
+        }
+
+        // Linear regression for this segment
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        for (let i = start; i <= end; i++) {
+          sumX += data[i].x;
+          sumY += data[i].y;
+          sumXY += data[i].x * data[i].y;
+          sumX2 += data[i].x * data[i].x;
+        }
+        const denom = n * sumX2 - sumX * sumX;
+        let slope, intercept;
+        if (Math.abs(denom) < 1e-12) {
+          // Nearly vertical or all same x: use mean y
+          slope = 0;
+          intercept = sumY / n;
+        } else {
+          slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+          intercept = (sumY - slope * sumX) / n;
+        }
+
+        // Value at right boundary of segment
+        const xRight = data[end].x;
+        const yRight = slope * xRight + intercept;
+
+        result.push({ x: xRight, y: yRight, idx: data[end].idx });
+      }
+
+      return result;
+    }
+  },
+
+  // 6. Median downsampling — median per bucket, robust to outliers
+  median: {
+    name: '中位数降采样',
+    fn: (data, target) => {
+      if (target >= data.length) return [...data];
+      const bucketSize = data.length / target;
+      const result = [];
+      for (let b = 0; b < target; b++) {
+        const start = Math.floor(b * bucketSize);
+        const end = Math.floor((b + 1) * bucketSize);
+        if (start >= data.length) break;
+        const bucket = [];
+        for (let i = start; i < end && i < data.length; i++) {
+          bucket.push(data[i]);
+        }
+        if (bucket.length === 0) continue;
+        bucket.sort((a, b) => a.y - b.y);
+        const mid = Math.floor(bucket.length / 2);
+        result.push({ ...bucket[mid] });
+      }
+      return result;
+    }
+  },
+
+  // 7. Ramer–Douglas–Peucker — adaptive, epsilon-driven
+  rdp: {
+    name: 'RDP',
+    fn: (data, epsilon) => {
+      if (data.length < 3) return [...data];
+
+      // Vertical distance from point to the line segment
+      function vDist(point, lineStart, lineEnd) {
+        const dx = lineEnd.x - lineStart.x;
+        if (Math.abs(dx) < 1e-12) return Math.abs(point.y - lineStart.y);
+        const t = (point.x - lineStart.x) / dx;
+        const yOnLine = lineStart.y + t * (lineEnd.y - lineStart.y);
+        return Math.abs(point.y - yOnLine);
+      }
+
+      function recurse(startIdx, endIdx, keep) {
+        if (endIdx <= startIdx + 1) return;
+        let maxDist = 0, maxIdx = startIdx;
+        for (let i = startIdx + 1; i < endIdx; i++) {
+          const d = vDist(data[i], data[startIdx], data[endIdx]);
+          if (d > maxDist) { maxDist = d; maxIdx = i; }
+        }
+        if (maxDist > epsilon) {
+          keep.add(maxIdx);
+          recurse(startIdx, maxIdx, keep);
+          recurse(maxIdx, endIdx, keep);
+        }
+      }
+
+      const keep = new Set([0, data.length - 1]);
+      recurse(0, data.length - 1, keep);
+      const result = [];
+      // Output in original order
+      for (let i = 0; i < data.length; i++) {
+        if (keep.has(i)) result.push({ ...data[i] });
+      }
+      return result;
+    }
+  }
+};
+
+// ╔══════════════════════════════════════════════╗
+// ║   Chart Rendering (Canvas)                  ║
+// ╚══════════════════════════════════════════════╝
+
+function drawChart(canvas, originalData, filteredData, resultData, useFilter, algoKey) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const W = rect.width;
+  const H = rect.height;
+
+  // Set canvas size accounting for DPR
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  // Padding
+  const pad = { top: 20, right: 20, bottom: 35, left: 55 };
+  const pw = W - pad.left - pad.right;
+  const ph = H - pad.top - pad.bottom;
+
+  // Clear
+  ctx.clearRect(0, 0, W, H);
+
+  // Compute y range from original data
+  let yMin = Infinity, yMax = -Infinity;
+  for (const pt of originalData) {
+    if (pt.y < yMin) yMin = pt.y;
+    if (pt.y > yMax) yMax = pt.y;
+  }
+  const yRange = yMax - yMin || 1;
+  yMin -= yRange * 0.1;
+  yMax += yRange * 0.1;
+  const ySpan = yMax - yMin;
+
+  const toX = (x) => pad.left + x * pw;
+  const toY = (y) => pad.top + (1 - (y - yMin) / ySpan) * ph;
+
+  // Grid lines
+  ctx.strokeStyle = '#d5d7e0';
+  ctx.lineWidth = 1;
+  const gridLines = 5;
+  for (let i = 0; i <= gridLines; i++) {
+    const y = pad.top + (i / gridLines) * ph;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(W - pad.right, y);
+    ctx.stroke();
+
+    // Y axis labels
+    const val = yMax - (i / gridLines) * ySpan;
+    ctx.fillStyle = '#6e7086';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(2), pad.left - 6, y + 4);
+  }
+  // X axis labels
+  const xLabels = 5;
+  for (let i = 0; i <= xLabels; i++) {
+    const x = pad.left + (i / xLabels) * pw;
+    ctx.fillStyle = '#6e7086';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText((i / xLabels).toFixed(1), x, H - pad.bottom + 16);
+  }
+
+  // Draw filtered data (if filter is enabled)
+  if (useFilter && filteredData && filteredData.length > 0) {
+    ctx.strokeStyle = 'rgba(30, 130, 150, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    for (let i = 0; i < filteredData.length; i++) {
+      const px = toX(filteredData[i].x);
+      const py = toY(filteredData[i].y);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Draw original data — lighter when overlaid by result
+  const hasOverlay = resultData && resultData.length > 0;
+  ctx.strokeStyle = hasOverlay ? 'rgba(51, 102, 214, 0.28)' : '#3366d6';
+  ctx.lineWidth = hasOverlay ? 0.8 : 1.2;
+  ctx.beginPath();
+  for (let i = 0; i < originalData.length; i++) {
+    const px = toX(originalData[i].x);
+    const py = toY(originalData[i].y);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // Draw result data (downsampled) if provided
+  if (resultData && resultData.length > 0) {
+
+    // ── Min-Max special handling: band/envelope rendering ──
+    if (algoKey === 'minmax') {
+      // Separate into high/low pairs per bucket
+      const highPts = [], lowPts = [];
+      for (let i = 0; i < resultData.length; i += 2) {
+        const a = resultData[i];
+        const b = (i + 1 < resultData.length) ? resultData[i + 1] : a;
+        const midX = (a.x + b.x) / 2;
+        const hiY = Math.max(a.y, b.y);
+        const loY = Math.min(a.y, b.y);
+        highPts.push({ x: midX, y: hiY });
+        lowPts.push({ x: midX, y: loY });
+      }
+
+      // Draw filled band between low and high
+      ctx.beginPath();
+      for (let i = 0; i < highPts.length; i++) {
+        const px = toX(highPts[i].x);
+        const py = toY(highPts[i].y);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      for (let i = lowPts.length - 1; i >= 0; i--) {
+        const px = toX(lowPts[i].x);
+        const py = toY(lowPts[i].y);
+        ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(220, 100, 40, 0.15)';
+      ctx.fill();
+
+      // Draw midpoint line
+      ctx.strokeStyle = 'rgba(200, 80, 30, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < highPts.length; i++) {
+        const px = toX(highPts[i].x);
+        const midY = (highPts[i].y + lowPts[i].y) / 2;
+        const py = toY(midY);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+    } else {
+      // ── Standard rendering: line + dots ──
+      ctx.strokeStyle = '#e06830';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = 'rgba(220, 100, 40, 0.2)';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      for (let i = 0; i < resultData.length; i++) {
+        const px = toX(resultData[i].x);
+        const py = toY(resultData[i].y);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+    }
+  }
+
+  // Legend
+  const legendY = pad.top + 4;
+  let legendX = pad.left;
+
+  // Original
+  ctx.fillStyle = '#3366d6';
+  ctx.fillRect(legendX, legendY, 14, 4);
+  ctx.fillStyle = '#4a4b58';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('原始信号', legendX + 18, legendY + 5);
+  legendX += 80;
+
+  // Filtered (if shown)
+  if (useFilter && filteredData && filteredData.length > 0) {
+    ctx.strokeStyle = '#1e8296';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(legendX, legendY + 2);
+    ctx.lineTo(legendX + 14, legendY + 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#4a4b58';
+    ctx.fillText('滤波后', legendX + 18, legendY + 5);
+    legendX += 80;
+  }
+
+  // Result
+  if (resultData && resultData.length > 0) {
+    // For minmax, show filled band in legend
+    if (algoKey === 'minmax') {
+      ctx.fillStyle = 'rgba(220, 100, 40, 0.2)';
+      ctx.fillRect(legendX, legendY, 14, 4);
+      ctx.strokeStyle = '#cc5a20';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(legendX, legendY, 14, 4);
+    } else {
+      ctx.fillStyle = '#e06830';
+      ctx.fillRect(legendX, legendY, 14, 4);
+    }
+    ctx.fillStyle = '#4a4b58';
+    ctx.fillText(algoKey === 'minmax' ? 'Min‑Max 包络带' : '降采样结果', legendX + 18, legendY + 5);
+  }
+
+  // Draw border
+  ctx.strokeStyle = '#dde0e8';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad.left, pad.top, pw, ph);
+}
+
+// ╔══════════════════════════════════════════════╗
+// ║   RMSE Calculation                          ║
+// ╚══════════════════════════════════════════════╝
+
+function calculateRMSE(original, downsampled, algoKey) {
+  if (downsampled.length < 2) return NaN;
+
+  // For minmax, compute RMSE against the band midpoint (not the zigzag)
+  if (algoKey === 'minmax') {
+    // Build midpoints from paired min-max data
+    const midpoints = [];
+    for (let i = 0; i < downsampled.length; i += 2) {
+      const a = downsampled[i];
+      const b = (i + 1 < downsampled.length) ? downsampled[i + 1] : a;
+      midpoints.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    }
+    if (midpoints.length < 2) return NaN;
+    let sumSqErr = 0;
+    let dsIdx = 0;
+    for (let i = 0; i < original.length; i++) {
+      const ox = original[i].x;
+      while (dsIdx < midpoints.length - 2 && midpoints[dsIdx + 1].x < ox) dsIdx++;
+      const a = midpoints[dsIdx];
+      const b = midpoints[Math.min(dsIdx + 1, midpoints.length - 1)];
+      let interpY;
+      if (Math.abs(b.x - a.x) < 1e-10) interpY = a.y;
+      else { const t = (ox - a.x) / (b.x - a.x); interpY = a.y + t * (b.y - a.y); }
+      sumSqErr += (original[i].y - interpY) ** 2;
+    }
+    return Math.sqrt(sumSqErr / original.length);
+  }
+
+  // For each original point, find interpolated value from downsampled
+  let sumSqErr = 0;
+  let dsIdx = 0;
+  for (let i = 0; i < original.length; i++) {
+    const ox = original[i].x;
+    // Advance dsIdx until we bracket ox
+    while (dsIdx < downsampled.length - 2 && downsampled[dsIdx + 1].x < ox) {
+      dsIdx++;
+    }
+    const a = downsampled[dsIdx];
+    const b = downsampled[Math.min(dsIdx + 1, downsampled.length - 1)];
+    // Linear interpolation
+    let interpY;
+    if (Math.abs(b.x - a.x) < 1e-10) {
+      interpY = a.y;
+    } else {
+      const t = (ox - a.x) / (b.x - a.x);
+      interpY = a.y + t * (b.y - a.y);
+    }
+    const err = original[i].y - interpY;
+    sumSqErr += err * err;
+  }
+  return Math.sqrt(sumSqErr / original.length);
+}
+
+// ╔══════════════════════════════════════════════╗
+// ║   App State & Update                        ║
+// ╚══════════════════════════════════════════════╝
+
+let appData = null;
+let filteredData = null;
+let resultData = null;
+
+function update() {
+  const signalType = document.getElementById('signalType').value;
+  const algoKey = document.getElementById('algorithm').value;
+  const isRDP = (algoKey === 'rdp');
+  const sourcePoints = parseInt(document.getElementById('sourcePoints').value);
+  const enableFilter = document.getElementById('enableFilter').checked;
+  const filterWindow = parseInt(document.getElementById('filterWindow').value);
+
+  // Toggle slider visibility
+  document.getElementById('targetGroup').style.display = isRDP ? 'none' : '';
+  document.getElementById('rdpGroup').style.display = isRDP ? '' : 'none';
+
+  const targetPoints = isRDP ? null : parseInt(document.getElementById('targetPoints').value);
+  const rdpEpsilon = isRDP ? parseFloat(document.getElementById('rdpEpsilon').value) : null;
+
+  // Generate data
+  appData = generateData(signalType, sourcePoints);
+
+  // Apply low-pass filter if enabled
+  if (enableFilter) {
+    filteredData = lowPassFilter(appData, filterWindow);
+  } else {
+    filteredData = null;
+  }
+
+  // Downsample
+  const inputForDownsample = (enableFilter && filteredData) ? filteredData : appData;
+  const algoParam = isRDP ? rdpEpsilon : targetPoints;
+  resultData = ALGORITHMS[algoKey].fn(inputForDownsample, algoParam);
+
+  // Update labels
+  document.getElementById('originalLabel').textContent =
+    `(${appData.length.toLocaleString()} 点)`;
+  document.getElementById('originalSubtitle').textContent =
+    enableFilter ? `低通滤波已启用 (窗口=${filterWindow}) — 图中青色虚线为滤波后信号` : '原始未滤波信号';
+
+  document.getElementById('resultLabel').textContent =
+    `— ${ALGORITHMS[algoKey].name} (${resultData.length} 点)`;
+  document.getElementById('resultSubtitle').textContent = isRDP
+    ? `算法: RDP | 容差 ε=${rdpEpsilon} | 自适应选出 ${resultData.length} 点`
+    : `算法: ${ALGORITHMS[algoKey].name} | 目标点数: ${targetPoints}`;
+
+  // Draw charts
+  const canvasOrig = document.getElementById('canvasOriginal');
+  const canvasRes = document.getElementById('canvasResult');
+
+  drawChart(canvasOrig, appData, filteredData, null, enableFilter, algoKey);
+  drawChart(canvasRes, appData, null, resultData, false, algoKey);
+
+  // Update stats
+  document.getElementById('statOriginal').textContent = appData.length.toLocaleString();
+  document.getElementById('statResult').textContent = resultData.length.toLocaleString();
+  const ratio = (appData.length / resultData.length).toFixed(1);
+  document.getElementById('statRatio').textContent = ratio + ':1';
+  const rmse = calculateRMSE(appData, resultData, algoKey);
+  document.getElementById('statRmse').textContent = isNaN(rmse) ? '—' : rmse.toFixed(4);
+
+  // Update info cards active state
+  document.querySelectorAll('.info-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.algo === algoKey);
+  });
+
+  // Update value displays (non-RDP)
+  if (!isRDP) {
+    document.getElementById('targetPointsVal').textContent = targetPoints;
+  }
+  document.getElementById('rdpEpsilonVal').textContent = isRDP ? rdpEpsilon.toFixed(3) : '—';
+  document.getElementById('sourcePointsVal').textContent = sourcePoints.toLocaleString();
+  document.getElementById('filterWindowVal').textContent = filterWindow;
+}
+
+// ╔══════════════════════════════════════════════╗
+// ║   Event Listeners                           ║
+// ╚══════════════════════════════════════════════╝
+
+document.getElementById('signalType').addEventListener('change', update);
+document.getElementById('algorithm').addEventListener('change', update);
+document.getElementById('targetPoints').addEventListener('input', () => {
+  document.getElementById('targetPointsVal').textContent = document.getElementById('targetPoints').value;
+  update();
+});
+document.getElementById('sourcePoints').addEventListener('input', () => {
+  document.getElementById('sourcePointsVal').textContent =
+    parseInt(document.getElementById('sourcePoints').value).toLocaleString();
+  update();
+});
+document.getElementById('enableFilter').addEventListener('change', function() {
+  const fg = document.getElementById('filterGroup');
+  if (this.checked) {
+    fg.style.opacity = '1';
+    fg.style.pointerEvents = 'auto';
+  } else {
+    fg.style.opacity = '0.4';
+    fg.style.pointerEvents = 'none';
+  }
+  update();
+});
+document.getElementById('filterWindow').addEventListener('input', () => {
+  document.getElementById('filterWindowVal').textContent = document.getElementById('filterWindow').value;
+  update();
+});
+document.getElementById('rdpEpsilon').addEventListener('input', () => {
+  document.getElementById('rdpEpsilonVal').textContent = parseFloat(document.getElementById('rdpEpsilon').value).toFixed(3);
+  update();
+});
+document.getElementById('regenerateBtn').addEventListener('click', update);
+
+// Handle window resize
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(update, 150);
+});
+
+// Click on info cards to select algorithm
+document.querySelectorAll('.info-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.getElementById('algorithm').value = card.dataset.algo;
+    update();
+  });
+  card.style.cursor = 'pointer';
+});
+
+// ╔══════════════════════════════════════════════╗
+// ║   Initial Render                            ║
+// ╚══════════════════════════════════════════════╝
+
+update();
+</script>
+
+<script>
+// 嵌入 iframe 时向父页面上报内容高度（.wrap 不受 body 的 min-height:100vh 影响）
+(() => {
+  const reportHeight = () => {
+    const content = document.querySelector('.wrap');
+    const height = content
+      ? content.getBoundingClientRect().height
+      : Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'u8g2-demo-height', height }, '*');
+    }
+  };
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'u8g2-demo-request-height') reportHeight();
+  });
+  window.addEventListener('resize', reportHeight);
+  if (window.ResizeObserver) new ResizeObserver(reportHeight).observe(document.body);
+  requestAnimationFrame(reportHeight);
+})();
+</script>
+
+</div>
+</body>
+</html>

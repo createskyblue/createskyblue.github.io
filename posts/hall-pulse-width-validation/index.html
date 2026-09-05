@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一种基于脉宽判定的电机霍尔反馈抗干扰方法 - CacheRivulet小记</title>
+  <meta name="description" content="霍尔脉宽校验过滤电机霍尔计数干扰">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="电机控制">
+  <meta property="article:tag" content="霍尔信号">
+  <meta property="article:tag" content="脉宽判定">
+  <meta property="article:tag" content="定时器">
+  <meta property="article:published_time" content="2026-05-05">
+  <meta property="og:title" content="一种基于脉宽判定的电机霍尔反馈抗干扰方法">
+  <meta property="og:description" content="霍尔脉宽校验过滤电机霍尔计数干扰">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/hall-pulse-width-validation/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/hall-pulse-width-validation/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "一种基于脉宽判定的电机霍尔反馈抗干扰方法",
+  "description": "霍尔脉宽校验过滤电机霍尔计数干扰",
+  "datePublished": "2026-05-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/hall-pulse-width-validation/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/hall-pulse-width-validation/"
+  },
+  "keywords": "嵌入式, 电机控制, 霍尔信号, 脉宽判定, 定时器"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">一种基于脉宽判定的电机霍尔反馈抗干扰方法</h1>
+  <article class="article-body">
+<h1>一种基于脉宽判定的电机霍尔反馈抗干扰方法</h1>
+<p>电机霍尔反馈线被干扰后，最直接的问题是计数乱跳。中断只看到边沿，不知道这个边沿来自真实霍尔信号，还是来自线束、电源、地弹噪声带来的窄毛刺。</p>
+<p>处理规则：边沿触发后先判断目标电平持续时间。脉宽合格再计数，脉宽太窄直接丢弃。</p>
+<h2>适用场景</h2>
+<p>定时器输入滤波适合通道少、引脚固定的场景。多电机项目里，一个电机可能有多路霍尔输入，几台电机加起来很快就超过定时器通道数量。还有一些 IO 映射不到定时器输入，定时器本身也可能已经用于 PWM、编码器或周期任务。</p>
+<p>这种情况下，可以把霍尔输入当普通 IO 处理，使用上下边沿中断，再配一个独立的微秒级时间基准。</p>
+<h2>实现思路</h2>
+<p>每一路霍尔输入只需要保存两类信息：当前状态，以及进入目标电平的时间。</p>
+<p>以低电平有效为例：下降沿记录时间，上升沿计算低电平持续时间。脉宽达标，计数加一；脉宽太窄，直接丢弃。</p>
+<p><img src="/posts/hall-pulse-width-validation/img/hall-pulse-width-timing.webp" alt="霍尔输入低电平脉宽判定时序图"></p>
+<p>不要只比较当前边沿和上一次有效边沿的间隔。两个窄干扰脉冲之间可能隔得很久，边沿间隔看起来合格，单个脉冲宽度仍然非法。要检查脉冲本身的宽度。</p>
+<p>多电机、多霍尔输入时，每一路独立判断。不同电机、不同输入可以使用不同的目标电平和阈值。</p>
+<h2>阈值设置原则</h2>
+<p>阈值按最高转速来定。电机转得越快，真实霍尔脉冲越窄。</p>
+<p>调试时先让电机跑到允许的最高转速，用示波器看霍尔反馈。把余晖开到较长时间或最大余晖，找真实霍尔脉冲里最短的低电平宽度。阈值要低于这个宽度，并留出余量，避免转速波动、负载变化和测量误差造成误判。</p>
+<p>阈值定完后，用示波器脉宽触发复查。触发条件设在阈值附近，观察是否还能抓到真实霍尔脉冲。还能抓到，阈值可能偏大；只抓到窄毛刺，阈值基本可用。</p>
+<p>软件里可以保留一个拒绝计数，只做调试诊断，不参与控制。</p>
+<h2>和硬件滤波配合</h2>
+<p>软件判定只是计数入口的保护。上拉、下拉、线束屏蔽、接口保护、RC 处理、施密特输入仍然要按硬件问题处理。</p>
+<p>硬件先减少干扰，软件再过滤非法计数。多电机、多路霍尔反馈、定时器资源紧张时，这个结构比较好扩展。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=hall-pulse-width-validation');
+  }
+  </script>
+</body>
+</html>

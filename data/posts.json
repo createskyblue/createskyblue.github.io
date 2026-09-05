@@ -1,0 +1,5115 @@
+{
+  "posts": [
+    {
+      "id": "esp32s3-fastcharger-repair",
+      "slug": "esp32s3-fastcharger-repair",
+      "title": "嘉立创实战派 S3 插快充头烧板 排查维修",
+      "coverText": "语音输入板插快充头烧了，限流上电 + 热成像定位",
+      "date": "2026-09-05",
+      "author": "createskyblue",
+      "category": "esp32s3-fastcharger-repair",
+      "categories": [
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP32-S3",
+        "故障诊断",
+        "工程调试",
+        "语音输入"
+      ],
+      "coverImage": "/posts/esp32s3-fastcharger-repair/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "nh50bat-bq40z50-unseal-debug",
+        "NanoVNA2_维修",
+        "par20-4h-ina228-wireless-sampler",
+        "wch-ch58x-stm32-gpio-low-power",
+        "py32f030-vrefint-gpio-overvoltage"
+      ]
+    },
+    {
+      "id": "sine-wavetable-bitmask",
+      "slug": "sine-wavetable-bitmask",
+      "title": "10 位正弦波表位屏蔽模拟：丢高位折叠失真，丢低位只降分辨率",
+      "coverText": "正弦波表屏蔽高位折叠失真，屏蔽低位只降分辨率",
+      "date": "2026-09-05",
+      "author": "createskyblue",
+      "category": "sine-wavetable-bitmask",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记",
+        "前端与可视化"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "信号处理",
+        "数据可视化",
+        "Canvas",
+        "波形渲染"
+      ],
+      "coverImage": "/posts/sine-wavetable-bitmask/cover.svg",
+      "featured": true,
+      "relatedSlugs": [
+        "downsampling-demo",
+        "skeuomorphic-instrument-panel",
+        "epaper-sensor-trend",
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-porting-guide"
+      ]
+    },
+    {
+      "id": "nh50bat-bq40z50-unseal-debug",
+      "slug": "nh50bat-bq40z50-unseal-debug",
+      "title": "电脑闲置两个月后电量 0% 充不进电：读取 BQ40Z50 状态并尝试解锁",
+      "coverText": "闲置后电量 0% 充不进电，先读 BQ40Z50 再决定换芯",
+      "date": "2026-09-03",
+      "author": "createskyblue",
+      "category": "nh50bat-bq40z50-unseal-debug",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "工程调试",
+        "故障诊断",
+        "STM32",
+        "I2C",
+        "复盘"
+      ],
+      "coverImage": "/posts/nh50bat-bq40z50-unseal-debug/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "NanoVNA2_维修",
+        "ble-provisioning-wifi-conflict",
+        "wch-ch58x-stm32-gpio-low-power",
+        "loxseq-intro",
+        "stm32-uart-ore-long-run"
+      ]
+    },
+    {
+      "id": "dot-matrix-watchface-expression",
+      "slug": "dot-matrix-watchface-expression",
+      "title": "复古点阵 LED 手环表盘：黄色表情与绿色日期",
+      "coverText": "复古点阵 LED，黄色表情与绿色日期",
+      "date": "2026-09-01",
+      "author": "createskyblue",
+      "category": "dot-matrix-watchface-expression",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "CSS",
+        "JavaScript",
+        "视觉设计"
+      ],
+      "coverImage": "/posts/dot-matrix-watchface-expression/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "dot-matrix-watchface-three-row",
+        "csv-time-series-annotator",
+        "epaper-sensor-trend",
+        "lvgl-web-screenshot",
+        "signal-analysis-lab"
+      ]
+    },
+    {
+      "id": "dot-matrix-watchface-three-row",
+      "slug": "dot-matrix-watchface-three-row",
+      "title": "复古点阵 LED 手环表盘：心形心率与三行时间",
+      "coverText": "复古点阵 LED，心形心率与三行时间",
+      "date": "2026-09-01",
+      "author": "createskyblue",
+      "category": "dot-matrix-watchface-three-row",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "CSS",
+        "JavaScript",
+        "视觉设计"
+      ],
+      "coverImage": "/posts/dot-matrix-watchface-three-row/cover.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "dot-matrix-watchface-expression",
+        "csv-time-series-annotator",
+        "signal-analysis-lab",
+        "epaper-sensor-trend",
+        "remote-input-board"
+      ]
+    },
+    {
+      "id": "rtthread-uart-dma-buffer-philosophy",
+      "slug": "rtthread-uart-dma-buffer-philosophy",
+      "title": "RT-Thread 两代串口驱动的设计分析",
+      "coverText": "RT-Thread串口驱动对比分析\nV1：DMA循环rb溢出覆盖,零拷贝\nV2：DMA循环乒乓buf,需要拷贝",
+      "date": "2026-09-01",
+      "author": "createskyblue",
+      "category": "rtthread-uart-dma-buffer-philosophy",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "RT-Thread",
+        "DMA",
+        "FIFO",
+        "嵌入式",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "uart-dma-idle-fifo",
+        "flashdb-tinyframe-ble-debugger",
+        "nanoModbus",
+        "esp32s3-web-upload-sd-psram-buffer",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "u8g2-horizontal-line-cache",
+      "slug": "u8g2-horizontal-line-cache",
+      "title": "U8g2 图形库文字渲染速度优化：同一行扫描线缓存后再写入",
+      "coverText": "U8g2文字渲染速度优化：同一行扫描线缓存再写入",
+      "date": "2026-09-01",
+      "author": "createskyblue",
+      "category": "u8g2-horizontal-line-cache",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "性能优化",
+        "DMA",
+        "缓存"
+      ],
+      "coverImage": "/posts/u8g2-horizontal-line-cache/PixPin_2026-09-01_19-46-05.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "epaper-sensor-trend",
+        "tiny-ml-vibration-tflm",
+        "lvgl-web-screenshot",
+        "flashdb-littlefs-storage-principles",
+        "esp32s3-web-upload-sd-psram-buffer"
+      ]
+    },
+    {
+      "id": "iot-go-backend",
+      "slug": "iot-go-backend",
+      "title": "Go 写的 MQTT 物联网后端：4 核 16GB 上 4000 设备并发，峰值 7.1 万条/秒",
+      "coverText": "Go + MQTT 物联网后端：4000 台设备并发上报，4 核 16GB 峰值 7.1 万条/秒，200 万条零丢失",
+      "date": "2026-08-31",
+      "author": "createskyblue",
+      "category": "iot-go-backend",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Go",
+        "物联网",
+        "MQTT",
+        "数据库",
+        "性能优化"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "vibration-monitor-system-architecture",
+        "wch-ch58x-stm32-gpio-low-power",
+        "n320a-modbus-gateway",
+        "uart-dma-idle-fifo",
+        "ble-mesh-overview-ch585"
+      ]
+    },
+    {
+      "id": "memory-leak-tool-analysis",
+      "slug": "memory-leak-tool-analysis",
+      "title": "内存泄露分析",
+      "coverText": "善用工具分析内存泄漏",
+      "date": "2026-08-31",
+      "author": "createskyblue",
+      "category": "memory-leak-tool-analysis",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "free",
+        "malloc",
+        "内存泄漏",
+        "valgrind"
+      ],
+      "coverImage": "/posts/memory-leak-tool-analysis/cover.svg",
+      "featured": true,
+      "relatedSlugs": [
+        "mcu-malloc-tracker",
+        "51-mcu-engineering-margin",
+        "cmbacktrace-cortexm-fault-debug",
+        "stack-watermark-and-struct-guards",
+        "microcbor-internals"
+      ]
+    },
+    {
+      "id": "perf-flamegraph-basics",
+      "slug": "perf-flamegraph-basics",
+      "title": "perf + FlameGraph：利用火焰图分析Linux程序性能瓶颈",
+      "coverText": "perf 输出上万行看不懂，四步命令链出火焰图，热点一眼定位",
+      "date": "2026-08-31",
+      "author": "createskyblue",
+      "category": "perf-flamegraph-basics",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "性能优化",
+        "Linux",
+        "数据可视化",
+        "C语言"
+      ],
+      "coverImage": "/posts/perf-flamegraph-basics/flame_demo_flamegraph.svg",
+      "featured": true,
+      "relatedSlugs": [
+        "tiny-ml-vibration-tflm",
+        "stack-watermark-and-struct-guards",
+        "microcbor-internals",
+        "cmbacktrace-cortexm-fault-debug",
+        "lvgl-web-screenshot"
+      ]
+    },
+    {
+      "id": "old-phone-cross-compile-sandbox",
+      "slug": "old-phone-cross-compile-sandbox",
+      "title": "旧手机给 AI 当沙盒：容器里编译单片机固件、跑 Web 后端",
+      "coverText": "旧安卓手机容器承载 AI 测试，单片机编译与 Web 后端不占主力机",
+      "date": "2026-08-30",
+      "author": "createskyblue",
+      "category": "old-phone-cross-compile-sandbox",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "构建系统",
+        "性能优化",
+        "交叉编译",
+        "数据库"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "loxdb-vs-flashdb",
+        "51-mcu-engineering-margin",
+        "tinyframe-footprint-py32f002a",
+        "rtthread-ble-ch585",
+        "tflite-mcu-gcc-port"
+      ]
+    },
+    {
+      "id": "dual-clock-rtc-fusion",
+      "slug": "dual-clock-rtc-fusion",
+      "title": "长时计时系统的双时钟误差融合与渐进式校时",
+      "coverText": "一个糟糕的硬件时钟架构，逼我用软件补偿 1 秒误差\n计时 0.1 秒，显示却跳了 1 秒\n外部高精度RTC：秒级颗粒度\n内部时钟振荡器：MCU时间不准\n最后只能让软件把误差慢慢吃掉",
+      "date": "2026-08-28",
+      "author": "createskyblue",
+      "category": "dual-clock-rtc-fusion",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "RTC",
+        "定时器",
+        "TCXO",
+        "频率融合",
+        "双时钟冗余切换"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "air001-light-sensing-mutation-switch-433rf",
+        "low-power-gps-tracker",
+        "dali-manchester-codec",
+        "software-dual-edge-pulse-filter",
+        "audio-triangulation-tdoa"
+      ]
+    },
+    {
+      "id": "esp-idf-task-iterator-stuck",
+      "slug": "esp-idf-task-iterator-stuck",
+      "title": "遍历中修改列表元素：xTaskGetNext 在任务增删时陷入无限循环",
+      "coverText": "ESP-IDF xTaskGetNext 在生产环境遍历任务列表的失效分析",
+      "date": "2026-08-28",
+      "author": "createskyblue",
+      "category": "esp-idf-task-iterator-stuck",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP-IDF",
+        "ESP32-S3",
+        "工程调试",
+        "RTOS"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "memory-dump-context-debugging",
+        "loxseq-intro",
+        "ble-adc-waveform-tinyframe",
+        "rtthread-ble-ch585",
+        "flashdb-littlefs-storage-principles"
+      ]
+    },
+    {
+      "id": "lvgl-web-screenshot",
+      "slug": "lvgl-web-screenshot",
+      "title": "ESP32-S3 网页截图 LVGL 界面，作为 AI 视觉闭环的实机入口",
+      "coverText": "ESP32 把 LVGL 界面截图到网页",
+      "date": "2026-08-28",
+      "author": "createskyblue",
+      "category": "lvgl-web-screenshot",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式GUI",
+        "LVGL",
+        "ESP32-S3",
+        "PSRAM",
+        "工程调试"
+      ],
+      "coverImage": "/posts/lvgl-web-screenshot/screenshot.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "epaper-sensor-trend",
+        "signal-analysis-lab",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "py32-sop8-swd-remap",
+        "remote-input-board"
+      ]
+    },
+    {
+      "id": "skeuomorphic-instrument-panel",
+      "slug": "skeuomorphic-instrument-panel",
+      "title": "点阵数码管与按键中央琥珀灯：一个 CSS 拟物粒子计数器面板",
+      "coverText": "点阵数码管用小圆点模拟发光读数，按键中央琥珀灯用明暗两态标记选中",
+      "date": "2026-08-27",
+      "author": "createskyblue",
+      "category": "skeuomorphic-instrument-panel",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "CSS",
+        "视觉设计",
+        "Web Audio API",
+        "音效"
+      ],
+      "coverImage": "/posts/skeuomorphic-instrument-panel/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "sine-wavetable-bitmask",
+        "downsampling-demo",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "tiny-ml-vibration-tflm",
+        "ch585m-tflite-micro-sin-demo"
+      ]
+    },
+    {
+      "id": "hall-power-cycle-counting-limit",
+      "slug": "hall-power-cycle-counting-limit",
+      "title": "单霍尔传感器低功耗断电前应先避开迟滞临界区",
+      "coverText": "单霍尔出厂用惩罚函数标定停靠区，降低断电计数偏移",
+      "date": "2026-08-26",
+      "author": "createskyblue",
+      "category": "hall-power-cycle-counting-limit",
+      "categories": [
+        "疑难杂症",
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "低功耗",
+        "电机",
+        "霍尔"
+      ],
+      "coverImage": "/posts/hall-power-cycle-counting-limit/hall-critical-zone-cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "hall-pulse-width-validation",
+        "mcu-low-power-io-interrupt-timing",
+        "low-power-gps-tracker",
+        "dali-manchester-codec",
+        "air001-light-sensing-mutation-switch-433rf"
+      ]
+    },
+    {
+      "id": "ble-provisioning-wifi-conflict",
+      "slug": "ble-provisioning-wifi-conflict",
+      "title": "一半是 WiFi 蓝牙仲裁打架，一半是 NimBLE 底层库 bug",
+      "coverText": "ESP32-S3 WiFi 重连时发不出蓝牙包",
+      "date": "2026-08-23",
+      "author": "createskyblue",
+      "category": "ble-provisioning-wifi-conflict",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "BLE",
+        "ESP32-S3",
+        "ESP-IDF",
+        "BluFi",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "rtthread-ble-ch585",
+        "iotspool-mqtt-spool",
+        "ble-mesh-overview-ch585",
+        "ble-throughput-conn-interval-mtu",
+        "stm32-uart-ore-long-run"
+      ]
+    },
+    {
+      "id": "flashdb-mqtt-outbox",
+      "slug": "flashdb-mqtt-outbox",
+      "title": "FlashDB将MQTT待发送消息落盘，设备掉电后从未完成记录继续发送",
+      "coverText": "FlashDB实现MQTT断电续传",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "flashdb-mqtt-outbox",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MQTT",
+        "FlashDB",
+        "Flash存储",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "iotspool-mqtt-spool",
+        "uart-dma-idle-fifo",
+        "iotspool-internals",
+        "ble-adc-waveform-tinyframe",
+        "flashdb-littlefs-storage-principles"
+      ]
+    },
+    {
+      "id": "iotspool-internals",
+      "slug": "iotspool-internals",
+      "title": "iotspool 原理：只追加、砍脏尾、重试打散",
+      "coverText": "不原地改，掉电只丢最后半截",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "iotspool-internals",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "物联网",
+        "Flash存储",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "iotspool-mqtt-spool",
+        "loxseq-intro",
+        "uart-dma-idle-fifo",
+        "flashdb-mqtt-outbox",
+        "flashdb-littlefs-storage-principles"
+      ]
+    },
+    {
+      "id": "iotspool-mqtt-spool",
+      "slug": "iotspool-mqtt-spool",
+      "title": "断电、断网、Broker 掉线：用 iotspool 给 MQTT 设备加一层掉电安全消息队列",
+      "coverText": "设备凌晨三点重启、WiFi 掉线，不丢一条遥测",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "iotspool-mqtt-spool",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "物联网",
+        "MQTT",
+        "数据上报",
+        "C语言"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "rtthread-ble-ch585",
+        "ble-mesh-overview-ch585",
+        "uart-dma-idle-fifo",
+        "tinyframe-protocol-frame",
+        "ble-provisioning-wifi-conflict"
+      ]
+    },
+    {
+      "id": "loxdb-vs-flashdb",
+      "slug": "loxdb-vs-flashdb",
+      "title": "FlasbDB足以应对大部分情况，LoxDB更强但资源占用更多",
+      "coverText": "嵌入式数据库\n FlashDB vs LoxDB",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "loxdb-vs-flashdb",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "数据库",
+        "FlashDB",
+        "loxdb",
+        "选型"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "tinyframe-footprint-py32f002a",
+        "tflite-mcu-gcc-port",
+        "ab-partition-vs-flashdb",
+        "flashstore-ab-partition"
+      ]
+    },
+    {
+      "id": "loxseq-intro",
+      "slug": "loxseq-intro",
+      "title": "断电、重启、断点续跑：嵌入式多步流程的检查点恢复设计",
+      "coverText": "断电、重启、断点续跑：恢复策略按步骤声明，安全场景除外",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "loxseq-intro",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "C语言",
+        "Flash存储",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "memory-dump-context-debugging",
+        "iotspool-mqtt-spool",
+        "51-mcu-engineering-margin",
+        "wch-ch58x-stm32-gpio-low-power",
+        "fault-injection-uart-parser"
+      ]
+    },
+    {
+      "id": "lwevt-core-design",
+      "slug": "lwevt-core-design",
+      "title": "lwevt 核心实现：两次 include 生成事件类型，一次遍历完成广播",
+      "coverText": "lwevt 实现思想：X-macro 生成类型、广播遍历分发",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "lwevt-core-design",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "C语言",
+        "Cortex-M",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "lwevt-getting-started",
+        "flashdb-porting-guide",
+        "ch585m-tflite-micro-sin-demo",
+        "microbus-vs-lwevt",
+        "microcbor-internals"
+      ]
+    },
+    {
+      "id": "lwevt-getting-started",
+      "slug": "lwevt-getting-started",
+      "title": "LwEVT 入门：注册回调，dispatch 广播事件",
+      "coverText": "LwEVT 广播分发器\n 最简入门与示例代码",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "lwevt-getting-started",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "C语言",
+        "Cortex-M"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "lwevt-core-design",
+        "microbus-vs-lwevt",
+        "flashdb-porting-guide",
+        "microbus-getting-started",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "mcu-malloc-tracker",
+      "slug": "mcu-malloc-tracker",
+      "title": "MCU-Malloc-Tracker 给每次 malloc 记账，崩溃后还能导出堆快照查泄漏",
+      "coverText": "MCU上每次malloc都被记进静态表，泄漏、热点、崩溃现场一查便知",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "mcu-malloc-tracker",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "C语言",
+        "Hook",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "memory-leak-tool-analysis",
+        "uart-dma-idle-fifo",
+        "microbus-core-design",
+        "cmbacktrace-cortexm-fault-debug",
+        "51-mcu-engineering-margin"
+      ]
+    },
+    {
+      "id": "microbus-core-design",
+      "slug": "microbus-core-design",
+      "title": "microbus 核心实现：分发快照让回调再入队也不失控",
+      "coverText": "microbus 实现思想：入口快照保证单次分发有界",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "microbus-core-design",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "C语言",
+        "Cortex-M",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "microbus-vs-lwevt",
+        "mcu-malloc-tracker",
+        "microbus-getting-started",
+        "lwevt-getting-started",
+        "uart-dma-idle-fifo"
+      ]
+    },
+    {
+      "id": "microbus-getting-started",
+      "slug": "microbus-getting-started",
+      "title": "MicroBus 入门：订阅话题，publish 发布事件",
+      "coverText": "MicroBus事件总线\n 最简入门与示例代码",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "microbus-getting-started",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "C语言",
+        "Cortex-M"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "microbus-vs-lwevt",
+        "microbus-core-design",
+        "ch585m-tflite-micro-sin-demo",
+        "lwevt-getting-started",
+        "microcbor-internals"
+      ]
+    },
+    {
+      "id": "microbus-vs-lwevt",
+      "slug": "microbus-vs-lwevt",
+      "title": "LwEVT轻量够用的广播分发器，microbus稍大但功能更全的事件总线",
+      "coverText": "嵌入式事件分发总线 \n microbus VS LwEVT",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "microbus-vs-lwevt",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "C语言",
+        "Cortex-M",
+        "选型"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "microbus-getting-started",
+        "microbus-core-design",
+        "lwevt-getting-started",
+        "ble-mesh-overview-ch585",
+        "loxdb-vs-flashdb"
+      ]
+    },
+    {
+      "id": "microcbor-internals",
+      "slug": "microcbor-internals",
+      "title": "microcbor 原理：头字节、sticky overflow 与迭代式 skip",
+      "coverText": "一个头字节同时带类型和长度，解码靠pending计数器避免递归",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "microcbor-internals",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "C语言",
+        "通信协议",
+        "物联网",
+        "编码"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "microcbor-quickstart",
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-porting-guide",
+        "tflite-mcu-gcc-port",
+        "tiny-ml-vibration-tflm"
+      ]
+    },
+    {
+      "id": "microcbor-quickstart",
+      "slug": "microcbor-quickstart",
+      "title": "microcbor 入门：MCU 上用 CBOR 编码遥测消息",
+      "coverText": "JSON在MCU上太重，microcbor用32位整数子集给遥测减负",
+      "date": "2026-08-22",
+      "author": "createskyblue",
+      "category": "microcbor-quickstart",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "C语言",
+        "通信协议",
+        "物联网",
+        "编码"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "microcbor-internals",
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-porting-guide",
+        "tflite-mcu-gcc-port",
+        "kcp-protocol"
+      ]
+    },
+    {
+      "id": "esp32s3-imu-gesture-recognition",
+      "slug": "esp32s3-imu-gesture-recognition",
+      "title": "边缘AI 姿态识别 振动故障诊断（异常检测、震动分类、传感器融合、回归标定）",
+      "coverText": "",
+      "date": "2026-08-18",
+      "author": "createskyblue",
+      "category": "esp32s3-imu-gesture-recognition",
+      "categories": [
+        "作品集"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP32",
+        "边缘AI",
+        "异常检测",
+        "震动检测",
+        "姿态识别",
+        "EdgeAI",
+        "TFLite",
+        "TFLM"
+      ],
+      "coverImage": "/posts/esp32s3-imu-gesture-recognition/img/PixPin_2026-08-18_20-22-59.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "vibration-monitor-system-architecture",
+        "stm32-edge-ai-scenarios",
+        "mcu-gas-sensor-nanoedgeai",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "eflesh-magnetic-touch-sensing"
+      ]
+    },
+    {
+      "id": "embedded_selection_guide",
+      "slug": "embedded_selection_guide",
+      "title": "嵌入式选型指南",
+      "coverText": "嵌入式选型指南",
+      "date": "2026-08-13",
+      "author": "createskyblue",
+      "category": "embedded_selection_guide",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "软件",
+        "选型"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "loxdb-vs-flashdb",
+        "tinyframe-footprint-py32f002a",
+        "stm32-edge-ai-scenarios",
+        "flashdb-porting-guide",
+        "microbus-vs-lwevt"
+      ]
+    },
+    {
+      "id": "byte-stream-fsm-frame-parser",
+      "slug": "byte-stream-fsm-frame-parser",
+      "title": "MCU 私有协议帧解析：FIFO 解耦与逐字节状态机",
+      "coverText": "半帧、粘包、断包：一个状态机把字节流拼成完整消息",
+      "date": "2026-08-12",
+      "author": "createskyblue",
+      "category": "byte-stream-fsm-frame-parser",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "通信协议",
+        "FIFO",
+        "中断"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "serial-stream-state-machine",
+        "streaming-frame-parser",
+        "uart-dma-idle-fifo",
+        "fault-injection-uart-parser",
+        "dali-manchester-codec"
+      ]
+    },
+    {
+      "id": "dual-adc-parallel-sampling",
+      "slug": "dual-adc-parallel-sampling",
+      "title": "一包要 25 个转换，ADC 规则组只有 16：双 ADC 并行采样",
+      "coverText": "一帧要 1 电压加 24 电流共 25 个转换，规则组上限 16 放不下，单 ADC 得切规则组，双 ADC 并行绕开",
+      "date": "2026-08-11",
+      "author": "createskyblue",
+      "category": "dual-adc-parallel-sampling",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "数据采集",
+        "系统设计",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "gear-switch-transient",
+        "serial-stream-state-machine",
+        "dali-manchester-codec",
+        "kcp-protocol",
+        "stm32-hal-spi-ws2812"
+      ]
+    },
+    {
+      "id": "fault-injection-uart-parser",
+      "slug": "fault-injection-uart-parser",
+      "title": "故障注入复现上位机丢字节失步",
+      "coverText": "注入按钮复现上位机丢字节失步：字节级故障注入、失步锁定",
+      "date": "2026-08-11",
+      "author": "createskyblue",
+      "category": "fault-injection-uart-parser",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "故障诊断",
+        "通信协议",
+        "工程调试",
+        "Windows",
+        "可观测性"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "serial-stream-state-machine",
+        "byte-stream-fsm-frame-parser",
+        "loxseq-intro",
+        "uart-dma-idle-fifo",
+        "stm32-uart-ore-long-run"
+      ]
+    },
+    {
+      "id": "gear-switch-transient",
+      "slug": "gear-switch-transient",
+      "title": "帧凑满一包 USB 是巧思，换档尖峰却没人处理",
+      "coverText": "自动换档靠 MOS 开关，米勒电容在切换瞬间注入电荷，上位机不丢弃尖峰就混进数据",
+      "date": "2026-08-11",
+      "author": "createskyblue",
+      "category": "gear-switch-transient",
+      "categories": [
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "信号处理",
+        "低功耗",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "dual-adc-parallel-sampling",
+        "serial-stream-state-machine",
+        "dali-manchester-codec",
+        "byte-stream-fsm-frame-parser",
+        "emk850-mcp-server"
+      ]
+    },
+    {
+      "id": "auto-ranging-hysteresis",
+      "slug": "auto-ranging-hysteresis",
+      "title": "升档降档共用一条阈值，中间再没留死区",
+      "coverText": "自动量程在阈值附近来回横跳",
+      "date": "2026-08-10",
+      "author": "createskyblue",
+      "category": "auto-ranging-hysteresis",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "系统设计",
+        "数据采集",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "gear-switch-transient",
+        "hall-power-cycle-counting-limit",
+        "dali-manchester-codec",
+        "dc-motor-p-pi-controller",
+        "mcu-low-power-io-interrupt-timing"
+      ]
+    },
+    {
+      "id": "emk850-mcp-server",
+      "slug": "emk850-mcp-server",
+      "title": "封装了 EMK850+ 功耗分析仪 MCP，AI可自主调用仪器",
+      "coverText": "原厂只有 Windows 上位机：逆向串口协议，把功耗分析仪做成 MCP 服务器接入 AI 自动化",
+      "date": "2026-08-10",
+      "author": "createskyblue",
+      "category": "emk850-mcp-server",
+      "categories": [
+        "开源库与工具",
+        "开源项目",
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "低功耗",
+        "数据采集",
+        "通信协议",
+        "MCP",
+        "Python"
+      ],
+      "coverImage": "/posts/emk850-mcp-server/emk850_photo.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "wch-ch58x-stm32-gpio-low-power",
+        "vibration-monitor-system-architecture",
+        "serial-stream-state-machine",
+        "tinyframe-protocol-frame",
+        "antenna-control-terminal"
+      ]
+    },
+    {
+      "id": "firmware-encryption-key-flaw",
+      "slug": "firmware-encryption-key-flaw",
+      "title": "固件加密形同虚设，解密密钥就写死在解密程序里",
+      "coverText": "固件包加密了，解密口令却写死在上位机里，拿到程序就能还原明文",
+      "date": "2026-08-10",
+      "author": "createskyblue",
+      "category": "firmware-encryption-key-flaw",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "系统设计",
+        "Crypto API",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ch58x-ble-pairing-flow",
+        "air001-chacha20-flashstore",
+        "loxseq-intro",
+        "51-mcu-engineering-margin",
+        "encrypted-blog-posts"
+      ]
+    },
+    {
+      "id": "serial-stream-state-machine",
+      "slug": "serial-stream-state-machine",
+      "title": "错位、丢尾、永久失步：三态状态机把串口字节流拼成完整帧",
+      "coverText": "低功耗分析仪上位机卡死溯源：64 字节整块读的缺陷与流式状态机替代方案",
+      "date": "2026-08-10",
+      "author": "createskyblue",
+      "category": "serial-stream-state-machine",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "通信协议",
+        "嵌入式调试",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "byte-stream-fsm-frame-parser",
+        "fault-injection-uart-parser",
+        "streaming-frame-parser",
+        "uart-dma-idle-fifo",
+        "stm32-uart-ore-long-run"
+      ]
+    },
+    {
+      "id": "pwm-carrier-frequency-power",
+      "slug": "pwm-carrier-frequency-power",
+      "title": "直流电机 PWM 载波频率优化：扫频寻找最低能耗点",
+      "coverText": "直流电机 PWM 载波频率优化：扫频寻找最低能耗点",
+      "date": "2026-08-09",
+      "author": "createskyblue",
+      "category": "pwm-carrier-frequency-power",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "低功耗",
+        "电机"
+      ],
+      "coverImage": "/posts/pwm-carrier-frequency-power/cover.svg",
+      "featured": true,
+      "relatedSlugs": [
+        "air001-light-sensing-mutation-switch-433rf",
+        "franklin-oscillator-lc-meter",
+        "low-power-gps-tracker",
+        "emk850-mcp-server",
+        "wch-ch58x-stm32-gpio-low-power"
+      ]
+    },
+    {
+      "id": "esp32c3-httpd-single-connection",
+      "slug": "esp32c3-httpd-single-connection",
+      "title": "ESP32-C3 httpd 并发请求第二个必被 ECONNRESET，前端串行队列根治",
+      "coverText": "并发 HTTP 第二个必被 ECONNRESET、刷新后状态不同步：请求队列串行化",
+      "date": "2026-08-08",
+      "author": "createskyblue",
+      "category": "esp32c3-httpd-single-connection",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP32",
+        "ESP-IDF",
+        "前端",
+        "性能优化"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ble-adc-waveform-tinyframe",
+        "tinyframe-protocol-frame",
+        "ble-throughput-conn-interval-mtu",
+        "ble-mesh-overview-ch585",
+        "kcp-protocol"
+      ]
+    },
+    {
+      "id": "esp32c3-soft-i2c-sampling-architecture",
+      "slug": "esp32c3-soft-i2c-sampling-architecture",
+      "title": "软件 I2C 采样：中断只发事件、任务做读取，2kHz 跑不起来的 CPU 边界",
+      "coverText": "位总线 I2C 读取移出中断：事件通知加高优先级任务，GPIO 寄存器直写提速读取",
+      "date": "2026-08-08",
+      "author": "createskyblue",
+      "category": "esp32c3-soft-i2c-sampling-architecture",
+      "categories": [],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP32",
+        "中断",
+        "传感器",
+        "性能优化"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "nanoModbus",
+        "rtthread-ble-ch585",
+        "n320a-modbus-gateway",
+        "dali-manchester-codec",
+        "mcu-timer-pulse-width-capture"
+      ]
+    },
+    {
+      "id": "eink-caster-high-refresh",
+      "slug": "eink-caster-high-refresh",
+      "title": "墨水屏高刷的秘密：Caster 给每个像素配独立计时器",
+      "coverText": "如何用 FPGA 实现墨水屏高刷",
+      "date": "2026-08-06",
+      "author": "createskyblue",
+      "category": "eink-caster-high-refresh",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "系统设计",
+        "性能优化"
+      ],
+      "coverImage": "/posts/eink-caster-high-refresh/cover.svg",
+      "featured": false,
+      "relatedSlugs": [
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "dali-manchester-codec",
+        "lvgl-web-screenshot",
+        "software-dual-edge-pulse-filter",
+        "wch-ch58x-stm32-gpio-low-power"
+      ]
+    },
+    {
+      "id": "epaper-sensor-trend",
+      "slug": "epaper-sensor-trend",
+      "title": "u8g2-js：打通单色屏开发 Web 仿真的最后一公里",
+      "coverText": "U8g2-Js 开发单色屏反复烧录太慢，我造浏览器仿真给 AI 闭环",
+      "date": "2026-08-06",
+      "author": "createskyblue",
+      "category": "epaper-sensor-trend",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "前端",
+        "嵌入式GUI",
+        "AI辅助开发",
+        "JavaScript",
+        "Canvas",
+        "数据可视化",
+        "传感器"
+      ],
+      "coverImage": "/posts/epaper-sensor-trend/co2-mode.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "lvgl-web-screenshot",
+        "flashdb-porting-guide",
+        "remote-input-board",
+        "tflite-mcu-gcc-port",
+        "sine-wavetable-bitmask"
+      ]
+    },
+    {
+      "id": "franklin-oscillator-lc-meter",
+      "slug": "franklin-oscillator-lc-meter",
+      "title": "低端 Arduino 用 74HCU04 振荡器把 LC 阻抗测量转为频率计数",
+      "coverText": "电子圈笑 AVR 是玩具。它却把 VNA 的阻抗测量做成频率计数",
+      "date": "2026-08-06",
+      "author": "createskyblue",
+      "category": "franklin-oscillator-lc-meter",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "信号处理",
+        "VNA"
+      ],
+      "coverImage": "/posts/franklin-oscillator-lc-meter/cover.svg",
+      "featured": false,
+      "relatedSlugs": [
+        "software-dual-edge-pulse-filter",
+        "tiny-ml-vibration-tflm",
+        "mcu-timer-pulse-width-capture",
+        "air001-light-sensing-mutation-switch-433rf",
+        "pwm-carrier-frequency-power"
+      ]
+    },
+    {
+      "id": "patent-disclosure-skill-review",
+      "slug": "patent-disclosure-skill-review",
+      "title": "花 20 元用 Patent Disclosure Skill 生成一份高质量专利交底书",
+      "coverText": "Patent Disclosure Skill 辅助生成专利技术交底书",
+      "date": "2026-08-06",
+      "author": "createskyblue",
+      "category": "patent-disclosure-skill-review",
+      "categories": [
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "AI",
+        "AI辅助开发",
+        "技术分享"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "stm32-edge-ai-scenarios",
+        "ch585m-tflite-micro-sin-demo",
+        "mcu-gas-sensor-nanoedgeai",
+        "tflite-mcu-gcc-port",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "web-serial-monitor",
+      "slug": "web-serial-monitor",
+      "title": "在线串口工具 支持关键词 染色 提取 三折叠",
+      "coverText": "在线串口 / 蓝牙 / WebSocket 调试工具",
+      "date": "2026-08-03",
+      "author": "createskyblue",
+      "category": "web-serial-monitor",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "WebSocket",
+        "Web Bluetooth",
+        "工程调试",
+        "React"
+      ],
+      "coverImage": "/posts/web-serial-monitor/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "esp32s3-idf-template",
+        "flashdb-porting-guide",
+        "ch585m-tflite-micro-sin-demo",
+        "remote-input-board",
+        "py32-sop8-swd-remap"
+      ]
+    },
+    {
+      "id": "stm32-exti-two-gates",
+      "slug": "stm32-exti-two-gates",
+      "title": "Stm32L4 开关GPIO中断误触发原理",
+      "coverText": "Stm32L4 开关GPIO中断误触发原理",
+      "date": "2026-08-02",
+      "author": "createskyblue",
+      "category": "stm32-exti-two-gates",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "STM32",
+        "STM32L496",
+        "中断",
+        "低功耗"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "mcu-low-power-io-interrupt-timing",
+        "stm32-uart-ore-long-run",
+        "ble-rtc-offset-note",
+        "NanoVNA2_维修",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "air001-chacha20-flashstore",
+      "slug": "air001-chacha20-flashstore",
+      "title": "PY32F002A 试用 ChaCha20 流密码加密 FlashStore 存储数据",
+      "coverText": "ChaCha20 加密 FlashStore，Cortex-M0+ 纯软件免 AES 硬件",
+      "date": "2026-07-31",
+      "author": "createskyblue",
+      "category": "air001-chacha20-flashstore",
+      "categories": [
+        "模板与示例",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "PY32F002A",
+        "Flash存储",
+        "ChaCha20",
+        "Cortex-M0+"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "ch58x-ble-pairing-flow",
+        "flashdb-porting-guide",
+        "ch585m-tflite-micro-sin-demo",
+        "flashstore-ab-partition",
+        "tflite-mcu-gcc-port"
+      ]
+    },
+    {
+      "id": "flashstore-ab-partition",
+      "slug": "flashstore-ab-partition",
+      "title": "FlashStore: A/B 双页 Flash 存储，面向小型 MCU。零依赖，28 bytes RAM。",
+      "coverText": "FlashStore: 极简 A/B 分区配置存储方案",
+      "date": "2026-07-31",
+      "author": "createskyblue",
+      "category": "flashstore-ab-partition",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "flash",
+        "flashdb",
+        "littlefs"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "ab-partition-vs-flashdb",
+        "tinyframe-footprint-py32f002a",
+        "loxdb-vs-flashdb",
+        "ch58x-ble-pairing-flow"
+      ]
+    },
+    {
+      "id": "pyocd-preserve-mcu-fault-site",
+      "slug": "pyocd-preserve-mcu-fault-site",
+      "title": "设备挂机异常后，用 pyOCD 与 Cortex-Debug 保留 MCU 现场",
+      "coverText": "MCU程序卡死后，怎样不重启就看到它停在哪个函数",
+      "date": "2026-07-30",
+      "author": "createskyblue",
+      "category": "pyocd-preserve-mcu-fault-site",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "工程调试",
+        "故障诊断",
+        "VSCode",
+        "pyocd"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "pyocd-cortex-debug-late-attach",
+        "vscode-cppdbg-pyocd-main-breakpoint",
+        "stm32-uart-ore-long-run",
+        "cmbacktrace-cortexm-fault-debug",
+        "iotspool-mqtt-spool"
+      ]
+    },
+    {
+      "id": "pyocd-cortex-debug-late-attach",
+      "slug": "pyocd-cortex-debug-late-attach",
+      "title": "用 pyOCD 与 Cortex-Debug 在挂机异常后连接 MCU 查看现场",
+      "coverText": "pyOCD配合Cortex-Debug在挂机异常后查看MCU现场",
+      "date": "2026-07-28",
+      "author": "createskyblue",
+      "category": "pyocd-cortex-debug-late-attach",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "断点调试",
+        "故障诊断",
+        "VSCode",
+        "pyocd",
+        "gdb",
+        "Cortex",
+        "halt",
+        "attach"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "pyocd-preserve-mcu-fault-site",
+        "vscode-cppdbg-pyocd-main-breakpoint",
+        "cortex-debug-pyocd-startup-timeout-regex",
+        "rtthread-ble-ch585",
+        "ble-provisioning-wifi-conflict"
+      ]
+    },
+    {
+      "id": "windows-copy-full-path-context-menu",
+      "slug": "windows-copy-full-path-context-menu",
+      "title": "用 PowerShell 为 Windows 文件和文件夹添加复制正斜杠完整路径菜单",
+      "coverText": "Windows右键复制完整路径，文件和文件夹统一输出正斜杠格式",
+      "date": "2026-07-28",
+      "author": "createskyblue",
+      "category": "windows-copy-full-path-context-menu",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Windows",
+        "系统编程",
+        "开发效率",
+        "测试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "git-bash-cmd-utf8-shim",
+        "blog-json-to-html-seo-upgrade",
+        "flashdb-porting-guide",
+        "py32-sop8-swd-remap",
+        "csv-time-series-annotator"
+      ]
+    },
+    {
+      "id": "ab-partition-flash-store",
+      "slug": "ab-partition-flash-store",
+      "title": "用 A/B 双页冗余保存 MCU 固定配置",
+      "coverText": "A/B 双页冗余用 CRC32 校验固定结构体配置",
+      "date": "2026-07-27",
+      "author": "createskyblue",
+      "category": "ab-partition-flash-store",
+      "categories": [
+        "存储与固件",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "Flash存储",
+        "A/B分区",
+        "C语言"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ab-partition-vs-flashdb",
+        "flashdb-littlefs-storage-principles",
+        "flashstore-ab-partition",
+        "flashdb-tinyframe-ble-debugger",
+        "flashdb-kv-vs-struct-config"
+      ]
+    },
+    {
+      "id": "ab-partition-vs-flashdb",
+      "slug": "ab-partition-vs-flashdb",
+      "title": "FlashDB 占用约 7KB Flash 时，固定配置可考虑 A/B 双页存储",
+      "coverText": "FlashDB KV 与 A/B 双页存储：按数据模型和 Flash 预算选型",
+      "date": "2026-07-27",
+      "author": "createskyblue",
+      "category": "ab-partition-vs-flashdb",
+      "categories": [
+        "存储与固件",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "FlashDB",
+        "Flash存储",
+        "嵌入式",
+        "Cortex-M0+",
+        "系统设计",
+        "A/B分区"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "ab-partition-flash-store",
+        "flashdb-littlefs-storage-principles",
+        "flashdb-kv-vs-struct-config",
+        "flashstore-ab-partition",
+        "flashdb-porting-guide"
+      ]
+    },
+    {
+      "id": "esp32s3-sensor-driver-decoupling",
+      "slug": "esp32s3-sensor-driver-decoupling",
+      "title": "传感器驱动框架设计：从 Linux IIO、RT-Thread 到 ESP32-S3 的统一设备表",
+      "coverText": "传感器各封独立库，换型号要大改代码，用统一接口屏蔽差异",
+      "date": "2026-07-27",
+      "author": "createskyblue",
+      "category": "esp32s3-sensor-driver-decoupling",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP32-S3",
+        "ESP-IDF",
+        "传感器",
+        "RT-Thread",
+        "Linux"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "vibration-monitor-system-architecture",
+        "51-mcu-engineering-margin",
+        "signal-analysis-lab",
+        "esp32s3-esp-nn-sin-demo"
+      ]
+    },
+    {
+      "id": "stm32-hal-spi-ws2812",
+      "slug": "stm32-hal-spi-ws2812",
+      "title": "用 SPI 的占空比编码驱动 WS2812 灯珠",
+      "coverText": "SPI占空比编码驱动WS2812",
+      "date": "2026-07-27",
+      "author": "createskyblue",
+      "category": "stm32-hal-spi-ws2812",
+      "categories": [
+        "模板与示例",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "STM32",
+        "DMA",
+        "SPI"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "dali-manchester-codec",
+        "mcu-timer-pulse-width-capture",
+        "kcp-protocol",
+        "ble-mesh-overview-ch585",
+        "tinyframe-protocol-frame"
+      ]
+    },
+    {
+      "id": "streaming-frame-parser",
+      "slug": "streaming-frame-parser",
+      "title": "半帧、粘包、断包：一个状态机把字节流拼成完整消息",
+      "coverText": "半帧、粘包、断包：一个状态机拼出完整消息",
+      "date": "2026-07-27",
+      "author": "createskyblue",
+      "category": "streaming-frame-parser",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "通信协议",
+        "TinyFrame",
+        "C语言",
+        "缓存"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "byte-stream-fsm-frame-parser",
+        "serial-stream-state-machine",
+        "uart-dma-idle-fifo",
+        "tinyframe-protocol-frame",
+        "ble-adc-waveform-tinyframe"
+      ]
+    },
+    {
+      "id": "py32f030-vrefint-gpio-overvoltage",
+      "slug": "py32f030-vrefint-gpio-overvoltage",
+      "title": "PY32F030 VREFINT 读到 4095 时检查 5 V 信号接入的 GPIO",
+      "coverText": "外部电路上电后，MCU 内部基准读数突然满量程",
+      "date": "2026-07-26",
+      "author": "createskyblue",
+      "category": "py32f030-vrefint-gpio-overvoltage",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "ADC",
+        "故障诊断",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "NanoVNA2_维修",
+        "nh50bat-bq40z50-unseal-debug",
+        "power-voltage-low-power-sampling",
+        "wch-ch58x-stm32-gpio-low-power",
+        "py32-sop8-swd-remap"
+      ]
+    },
+    {
+      "id": "kcp-protocol",
+      "slug": "kcp-protocol",
+      "title": "KCP 在 UDP 上做可靠传输：RTO 不翻倍、选择性重传与快速重传",
+      "coverText": "TCP 丢包延迟翻倍，KCP 用带宽换延迟做可靠传输",
+      "date": "2026-07-22",
+      "author": "createskyblue",
+      "category": "kcp-protocol",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "通信协议",
+        "KCP",
+        "C语言",
+        "性能优化"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ble-mesh-overview-ch585",
+        "tinyframe-protocol-frame",
+        "uart-dma-idle-fifo",
+        "ch58x-nfc-p2p-data-exchange",
+        "iotspool-mqtt-spool"
+      ]
+    },
+    {
+      "id": "air001-light-sensing-mutation-switch-433rf",
+      "slug": "air001-light-sensing-mutation-switch-433rf",
+      "title": "光感突变遥测设备的低功耗采样与射频时序取舍",
+      "coverText": "光感遥测设备：周期唤醒采样、射频脉宽修正",
+      "date": "2026-07-19",
+      "author": "createskyblue",
+      "category": "air001-light-sensing-mutation-switch-433rf",
+      "categories": [
+        "作品集",
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "PY32F002A",
+        "低功耗",
+        "ADC",
+        "433MHz",
+        "射频",
+        "传感器"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "low-power-gps-tracker",
+        "mcu-low-power-io-interrupt-timing",
+        "wch-ch58x-stm32-gpio-low-power",
+        "dali-manchester-codec",
+        "software-dual-edge-pulse-filter"
+      ]
+    },
+    {
+      "id": "batch-ack-fifo-cache",
+      "slug": "batch-ack-fifo-cache",
+      "title": "FIFO批量取出后无法原位放回，先进入暂存区等待下一次消费",
+      "coverText": "FIFO批量取出后写回会乱序，用暂存区等下次消费",
+      "date": "2026-07-19",
+      "author": "createskyblue",
+      "category": "batch-ack-fifo-cache",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "通信协议",
+        "FIFO",
+        "缓存"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "ble-adc-waveform-tinyframe",
+        "flashdb-mqtt-outbox",
+        "flashdb-littlefs-storage-principles",
+        "uart-dma-idle-fifo",
+        "iotspool-internals"
+      ]
+    },
+    {
+      "id": "sync-request-response-fifo-exchange",
+      "slug": "sync-request-response-fifo-exchange",
+      "title": "基于序号确认与超时重传的双向透传",
+      "coverText": "半双工链路下的可靠 FIFO 交换设计",
+      "date": "2026-07-19",
+      "author": "createskyblue",
+      "category": "sync-request-response-fifo-exchange",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "通信协议",
+        "FIFO",
+        "ACK",
+        "缓存"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "uart-dma-idle-fifo",
+        "i2c-slave",
+        "ch58x-nfc-p2p-data-exchange",
+        "n320a-modbus-gateway",
+        "nanoModbus"
+      ]
+    },
+    {
+      "id": "downsampling-demo",
+      "slug": "downsampling-demo",
+      "title": "7种降采样算法一站式交互对比，附在线演示",
+      "coverText": "7种降采样算法一站式对比，含低通滤波抗混叠演示",
+      "date": "2026-07-18",
+      "author": "createskyblue",
+      "category": "downsampling-demo",
+      "categories": [
+        "模板与示例",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "降采样",
+        "信号处理"
+      ],
+      "coverImage": "/posts/downsampling-demo/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "sine-wavetable-bitmask",
+        "tiny-ml-vibration-tflm",
+        "waveform-minmax-downsampling",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "epaper-sensor-trend"
+      ]
+    },
+    {
+      "id": "heart-rate-minmax-canvas-envelope",
+      "slug": "heart-rate-minmax-canvas-envelope",
+      "title": "Canvas 将 Min-Max 心率采样绘成连续包络波形",
+      "coverText": "Canvas Min-Max 波形渲染：每桶包络连接极值",
+      "date": "2026-07-17",
+      "author": "createskyblue",
+      "category": "heart-rate-minmax-canvas-envelope",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "BLE",
+        "Canvas",
+        "波形渲染",
+        "降采样",
+        "数据可视化"
+      ],
+      "coverImage": "/posts/heart-rate-minmax-canvas-envelope/PixPin_2026-07-17_23-03-25.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "waveform-minmax-downsampling",
+        "tiny-ml-vibration-tflm",
+        "signal-analysis-lab",
+        "ble-adc-waveform-tinyframe",
+        "dali-manchester-codec"
+      ]
+    },
+    {
+      "id": "cortex-debug-pyocd-startup-timeout-regex",
+      "slug": "cortex-debug-pyocd-startup-timeout-regex",
+      "title": "Cortex-Debug 1.12.1 无法识别 pyOCD 0.44.1 启动日志的修复",
+      "coverText": "Cortex-Debug启动pyOCD后仍然超时",
+      "date": "2026-07-15",
+      "author": "createskyblue",
+      "category": "cortex-debug-pyocd-startup-timeout-regex",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "工程调试",
+        "故障诊断",
+        "VSCode",
+        "Air001"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "vscode-cppdbg-pyocd-main-breakpoint",
+        "pyocd-cortex-debug-late-attach",
+        "esp-idf-vscode-openocd-second-board",
+        "rtthread-ble-ch585",
+        "git-bash-cmd-utf8-shim"
+      ]
+    },
+    {
+      "id": "vscode-cppdbg-pyocd-main-breakpoint",
+      "slug": "vscode-cppdbg-pyocd-main-breakpoint",
+      "title": "VS Code 连接 pyOCD 后未停在 main 的排查与修复",
+      "coverText": "VS Code远程调试启动后未停在main",
+      "date": "2026-07-15",
+      "author": "createskyblue",
+      "category": "vscode-cppdbg-pyocd-main-breakpoint",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "工程调试",
+        "故障诊断",
+        "VSCode",
+        "Air001"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "pyocd-cortex-debug-late-attach",
+        "cortex-debug-pyocd-startup-timeout-regex",
+        "pyocd-preserve-mcu-fault-site",
+        "rtthread-ble-ch585",
+        "cmbacktrace-cortexm-fault-debug"
+      ]
+    },
+    {
+      "id": "dc-motor-p-pi-controller",
+      "slug": "dc-motor-p-pi-controller",
+      "title": "在 PY32 上实现单向直流电机的级联 P-PI 定位控制",
+      "coverText": "单向直流电机用位置环、速度环与减速约束控制过冲，检测堵转后增加PWM补偿",
+      "date": "2026-07-14",
+      "author": "createskyblue",
+      "category": "dc-motor-p-pi-controller",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "电机控制",
+        "控制论",
+        "霍尔信号",
+        "AI辅助开发"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "air001-light-sensing-mutation-switch-433rf",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "heart-rate-migration-debugging",
+        "wch-ch58x-stm32-gpio-low-power",
+        "loxseq-intro"
+      ]
+    },
+    {
+      "id": "i2c-slave",
+      "slug": "i2c-slave",
+      "title": "I2C 从机开发：事务流程、数据组织与耗时应答",
+      "coverText": "I2C从机采用寄存器或命令模型，耗时任务通过状态应答",
+      "date": "2026-07-13",
+      "author": "createskyblue",
+      "category": "i2c-slave",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "通信协议",
+        "I2C"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "nanoModbus",
+        "n320a-modbus-gateway",
+        "rtthread-ble-ch585",
+        "tinyframe-protocol-frame",
+        "vibration-monitor-system-architecture"
+      ]
+    },
+    {
+      "id": "ai-code-human-value",
+      "slug": "ai-code-human-value",
+      "title": "AI取代执行后，人的价值在哪里",
+      "coverText": "AI取代执行后，人的价值在哪里",
+      "date": "2026-07-11",
+      "author": "createskyblue",
+      "category": "ai-code-human-value",
+      "categories": [
+        "说说"
+      ],
+      "softCategories": [],
+      "tags": [
+        "AI",
+        "AI辅助开发",
+        "嵌入式",
+        "系统设计",
+        "开发效率"
+      ],
+      "coverImage": "/posts/ai-code-human-value/cover.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "51-mcu-engineering-margin",
+        "tiny-ml-vibration-tflm",
+        "heart-rate-migration-debugging",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "tflite-mcu-gcc-port"
+      ]
+    },
+    {
+      "id": "ble-mesh-overview-ch585",
+      "slug": "ble-mesh-overview-ch585",
+      "title": "蓝牙Mesh基于广播泛洪组网，单包仅7字节可用，配网到通信须严格按序配置",
+      "coverText": "深入理解蓝牙 Mesh：流程、约束与实践，基于 WCH CH585 SDK",
+      "date": "2026-07-11",
+      "author": "createskyblue",
+      "category": "ble-mesh-overview-ch585",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "BLE",
+        "CH58x",
+        "通信协议",
+        "物联网"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "ch58x-ble-pairing-flow",
+        "rtthread-ble-ch585",
+        "kcp-protocol",
+        "tinyframe-protocol-frame",
+        "iotspool-mqtt-spool"
+      ]
+    },
+    {
+      "id": "ch58x-ble-pairing-flow",
+      "slug": "ch58x-ble-pairing-flow",
+      "title": "CH58X BLE 配对流程详解",
+      "coverText": "CH58X BLE 外设配对流程：从广播到加密",
+      "date": "2026-07-11",
+      "author": "createskyblue",
+      "category": "ch58x-ble-pairing-flow",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "BLE",
+        "CH58x",
+        "嵌入式",
+        "MCU"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "rtthread-ble-ch585",
+        "ble-mesh-overview-ch585",
+        "flashdb-porting-guide",
+        "tinyframe-footprint-py32f002a",
+        "ch585m-tflite-micro-sin-demo"
+      ]
+    },
+    {
+      "id": "ch58x-nfc-p2p-data-exchange",
+      "slug": "ch58x-nfc-p2p-data-exchange",
+      "title": "两个 CH58X 芯片通过 NFC-A 实现 FIFO 数据透传",
+      "coverText": "CH58X 间 NFC 透传：轮询帧双向捎带 FIFO 数据",
+      "date": "2026-07-11",
+      "author": "createskyblue",
+      "category": "ch58x-nfc-p2p-data-exchange",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "CH58x",
+        "嵌入式",
+        "MCU",
+        "通信协议",
+        "射频"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "tinyframe-protocol-frame",
+        "vibration-monitor-system-architecture",
+        "kcp-protocol",
+        "i2c-slave",
+        "ble-mesh-overview-ch585"
+      ]
+    },
+    {
+      "id": "flashdb-littlefs-storage-principles",
+      "slug": "flashdb-littlefs-storage-principles",
+      "title": "FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据",
+      "coverText": "FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据",
+      "date": "2026-07-11",
+      "author": "createskyblue",
+      "category": "flashdb-littlefs-storage-principles",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "Flash存储",
+        "FlashDB",
+        "LittleFS",
+        "文件系统"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "ab-partition-vs-flashdb",
+        "cmbacktrace-cortexm-fault-debug",
+        "ab-partition-flash-store",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "rtthread-ble-ch585",
+      "slug": "rtthread-ble-ch585",
+      "title": "CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐",
+      "coverText": "CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐",
+      "date": "2026-07-11",
+      "author": "createskyblue",
+      "category": "rtthread-ble-ch585",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "BLE",
+        "CH58x",
+        "RT-Thread",
+        "RTOS",
+        "中断"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ch58x-ble-pairing-flow",
+        "py32-sop8-swd-remap",
+        "ble-mesh-overview-ch585",
+        "flashdb-porting-guide",
+        "iotspool-mqtt-spool"
+      ]
+    },
+    {
+      "id": "esp32s3-idf-template",
+      "slug": "esp32s3-idf-template",
+      "title": "ESP32-S3 通用模板：WiFi 配网、OTA、文件管理开箱即用",
+      "coverText": "ESP32-S3 通用模板：WiFi 配网、OTA 升级、SD 卡日志、文件管理一站配齐",
+      "date": "2026-07-08",
+      "author": "createskyblue",
+      "category": "esp32s3-idf-template",
+      "categories": [
+        "模板与示例",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP32-S3",
+        "ESP-IDF",
+        "物联网",
+        "OTA"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "web-serial-monitor",
+        "flashdb-porting-guide",
+        "py32-sop8-swd-remap",
+        "ch58x-ble-pairing-flow",
+        "ble-mesh-overview-ch585"
+      ]
+    },
+    {
+      "id": "py32-sop8-swd-remap",
+      "slug": "py32-sop8-swd-remap",
+      "title": "PY32F002A SOP8 封装下 SWD 引脚复用的防砖指南",
+      "coverText": "SOP8 只有 8 个引脚，SWD、NRST、GPIO 抢着用。怎么开发时不砖、量产时省引脚",
+      "date": "2026-07-08",
+      "author": "createskyblue",
+      "category": "py32-sop8-swd-remap",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "PY32F002A",
+        "SWD",
+        "SOP8",
+        "工程调试",
+        "Cortex-M0+"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "rtthread-ble-ch585",
+        "flashdb-porting-guide",
+        "ch58x-ble-pairing-flow",
+        "wch-ch58x-stm32-gpio-low-power",
+        "ble-mesh-overview-ch585"
+      ]
+    },
+    {
+      "id": "tinyframe-footprint-py32f002a",
+      "slug": "tinyframe-footprint-py32f002a",
+      "title": "在 PY32F002A 上实测 TinyFrame 的 Flash 和 RAM 静态消耗",
+      "coverText": "TinyFrame 在 PY32F002A 上编译的 Flash 和 RAM 增量与可调开关",
+      "date": "2026-07-08",
+      "author": "createskyblue",
+      "category": "tinyframe-footprint-py32f002a",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "TinyFrame",
+        "PY32F002A",
+        "Cortex-M"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "loxdb-vs-flashdb",
+        "flashdb-porting-guide",
+        "flashstore-ab-partition",
+        "ch58x-ble-pairing-flow",
+        "tiny-ml-vibration-tflm"
+      ]
+    },
+    {
+      "id": "mcu-timer-pulse-width-capture",
+      "slug": "mcu-timer-pulse-width-capture",
+      "title": "MCU 定时器脉宽捕获：双边沿读引脚与 PWM 输入模式",
+      "coverText": "定时器双边沿捕获测量脉宽",
+      "date": "2026-07-07",
+      "author": "createskyblue",
+      "category": "mcu-timer-pulse-width-capture",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "定时器",
+        "脉宽判定",
+        "STM32",
+        "中断"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "software-dual-edge-pulse-filter",
+        "dali-manchester-codec",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "vibration-monitor-system-architecture",
+        "hall-pulse-width-validation"
+      ]
+    },
+    {
+      "id": "windows-display-idle-input",
+      "slug": "windows-display-idle-input",
+      "title": "Windows 熄屏后自动亮起时先检查空闲输入是否被重置",
+      "coverText": "Windows 1分钟熄屏后自动亮起，从空闲输入计时查起",
+      "date": "2026-07-07",
+      "author": "createskyblue",
+      "category": "windows-display-idle-input",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Windows",
+        "工程调试",
+        "故障诊断",
+        "远程输入"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "mcu-low-power-io-interrupt-timing",
+        "ble-rtc-offset-note",
+        "ch58x-sleep-gpio-remap",
+        "stm32-uart-ore-long-run",
+        "pyocd-preserve-mcu-fault-site"
+      ]
+    },
+    {
+      "id": "stm32-edge-ai-scenarios",
+      "slug": "stm32-edge-ai-scenarios",
+      "title": "从 STM32 Model Zoo 看边缘 AI 的 14 个落地场景",
+      "coverText": "43 个优化模型覆盖 14 类边缘 AI 场景，从视觉、音频到工业传感",
+      "date": "2026-07-06",
+      "author": "createskyblue",
+      "category": "stm32-edge-ai-scenarios",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "边缘AI",
+        "嵌入式",
+        "MCU",
+        "STM32",
+        "模型量化",
+        "AI"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "mcu-gas-sensor-nanoedgeai",
+        "tiny-ml-vibration-tflm",
+        "esp32s3-imu-gesture-recognition",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "vibration-monitor-system-architecture"
+      ]
+    },
+    {
+      "id": "ch585m-tflite-micro-sin-demo",
+      "slug": "ch585m-tflite-micro-sin-demo",
+      "title": "WCH CH585M 上的边缘AI、TFLite Micro 移植全过程",
+      "coverText": "边缘AI 移植 TFLite 到任意 MCU",
+      "date": "2026-07-05",
+      "author": "createskyblue",
+      "category": "ch585m-tflite-micro-sin-demo",
+      "categories": [
+        "模板与示例",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "TFLite Micro",
+        "TFLM",
+        "嵌入式",
+        "MCU",
+        "边缘AI",
+        "CH58x"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "tflite-mcu-gcc-port",
+        "flashdb-porting-guide",
+        "zephyr-stm32l496-rtos-skeleton",
+        "ch58x-ble-pairing-flow",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "tflite-int8-quantization-tf221",
+      "slug": "tflite-int8-quantization-tf221",
+      "title": "已有 .tflite 模型转 int8 量化",
+      "coverText": "提取 .tflite 权重 → Keras 重建 → 导出 int8",
+      "date": "2026-07-05",
+      "author": "createskyblue",
+      "category": "tflite-int8-quantization-tf221",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "TFLite",
+        "TFLM",
+        "模型量化",
+        "嵌入式",
+        "边缘AI",
+        "Python"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "tiny-ml-vibration-tflm",
+        "esp32s3-esp-nn-sin-demo",
+        "tflite-mcu-gcc-port",
+        "microcbor-internals",
+        "ch585m-tflite-micro-sin-demo"
+      ]
+    },
+    {
+      "id": "tflite-mcu-gcc-port",
+      "slug": "tflite-mcu-gcc-port",
+      "title": "TFLite Micro 的 GCC 模拟移植",
+      "coverText": "脱离 OS 和 malloc，用 GCC 把 TFLite Micro 跑起来",
+      "date": "2026-07-05",
+      "author": "createskyblue",
+      "category": "tflite-mcu-gcc-port",
+      "categories": [
+        "模板与示例",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "边缘AI",
+        "TFLite Micro",
+        "TFLM",
+        "构建系统",
+        "Windows"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-porting-guide",
+        "tiny-ml-vibration-tflm",
+        "esp32s3-esp-nn-sin-demo",
+        "zephyr-stm32l496-rtos-skeleton"
+      ]
+    },
+    {
+      "id": "tiny-ml-vibration-tflm",
+      "slug": "tiny-ml-vibration-tflm",
+      "title": "6000 点加速度数据 → 100 维特征 → 5KB int8 模型，完整部署到 MCU",
+      "coverText": "用 TFLite Micro 在 MCU 上跑震动异常分类：从训练到部署",
+      "date": "2026-07-05",
+      "author": "createskyblue",
+      "category": "tiny-ml-vibration-tflm",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "边缘AI",
+        "TFLite Micro",
+        "TFLM",
+        "模型量化",
+        "振动分析",
+        "信号处理"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "esp32s3-esp-nn-sin-demo",
+        "tflite-mcu-gcc-port",
+        "tflite-int8-quantization-tf221",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "tinyframe-footprint-py32f002a"
+      ]
+    },
+    {
+      "id": "masonry-waterfall-layout",
+      "slug": "masonry-waterfall-layout",
+      "title": "博客首页卡片瀑布流：让各列高度均匀分布",
+      "coverText": "卡片瀑布流最短列优先贪心算法",
+      "date": "2026-07-04",
+      "author": "createskyblue",
+      "category": "masonry-waterfall-layout",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "Vue",
+        "CSS Grid",
+        "瀑布流",
+        "布局算法",
+        "性能优化"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "mobile-chart-ui-design",
+        "waveform-minmax-downsampling",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "eink-caster-high-refresh",
+        "html-canvas-waveform-chart"
+      ]
+    },
+    {
+      "id": "wch-ch58x-stm32-gpio-low-power",
+      "slug": "wch-ch58x-stm32-gpio-low-power",
+      "title": "CH58x 心率项目 AI 移植功耗异常：GPIO 底层差异定位与自动化测试方法",
+      "coverText": "CH58x 与 STM32 GPIO 低功耗模式差异：AI 移植漏关数字通路，功耗超标十倍",
+      "date": "2026-07-04",
+      "author": "createskyblue",
+      "category": "wch-ch58x-stm32-gpio-low-power",
+      "categories": [
+        "疑难杂症",
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "BLE",
+        "低功耗",
+        "CH58x",
+        "AI辅助开发"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "emk850-mcp-server",
+        "vibration-monitor-system-architecture",
+        "mcu-low-power-io-interrupt-timing",
+        "py32-sop8-swd-remap",
+        "memory-dump-context-debugging"
+      ]
+    },
+    {
+      "id": "51-mcu-engineering-margin",
+      "slug": "51-mcu-engineering-margin",
+      "title": "51 单片机在 2026 年不应该还活着",
+      "coverText": "51单片机在2026年不应该还活着",
+      "date": "2026-07-03",
+      "author": "createskyblue",
+      "category": "51-mcu-engineering-margin",
+      "categories": [
+        "说说"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "单片机",
+        "STC",
+        "系统设计",
+        "工程调试",
+        "AI",
+        "控制论"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "software-dual-edge-pulse-filter",
+        "uart-dma-idle-fifo",
+        "tiny-ml-vibration-tflm",
+        "n320a-modbus-gateway",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "antenna-control-terminal",
+      "slug": "antenna-control-terminal",
+      "title": "RETAP 手持天线控制终端项目复盘",
+      "coverText": "RETAP手持终端：尾号扫描树、动态菜单",
+      "date": "2026-07-03",
+      "author": "createskyblue",
+      "category": "antenna-control-terminal",
+      "categories": [
+        "作品集"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "通信协议",
+        "系统设计",
+        "RTOS",
+        "单片机"
+      ],
+      "coverImage": "/posts/antenna-control-terminal/img/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "n320a-modbus-gateway",
+        "vibration-monitor-system-architecture",
+        "wch-ch58x-stm32-gpio-low-power",
+        "emk850-mcp-server",
+        "par20-4h-ina228-wireless-sampler"
+      ]
+    },
+    {
+      "id": "software-dual-edge-pulse-filter",
+      "slug": "software-dual-edge-pulse-filter",
+      "title": "在 51 单片机上用中断捕获 12 路微秒级脉宽，软件双边沿会碰到实时性边界",
+      "coverText": "12路微秒级脉宽软件捕获，实时性不足会误计数",
+      "date": "2026-07-03",
+      "author": "createskyblue",
+      "category": "software-dual-edge-pulse-filter",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "中断",
+        "MCU",
+        "脉宽判定",
+        "定时器"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "mcu-timer-pulse-width-capture",
+        "51-mcu-engineering-margin",
+        "dali-manchester-codec",
+        "wch-ch58x-stm32-gpio-low-power",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "stm32-bootloader-exflash",
+      "slug": "stm32-bootloader-exflash",
+      "title": "Bootloader 从外挂 Flash 选择固件并引导启动",
+      "coverText": "Bootloader引导外挂Flash固件启动，用启动选项选版本",
+      "date": "2026-07-03",
+      "author": "createskyblue",
+      "category": "stm32-bootloader-exflash",
+      "categories": [
+        "存储与固件",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "STM32",
+        "Bootloader",
+        "OTA",
+        "升级",
+        "Flash存储"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "py32-sop8-swd-remap",
+        "rtthread-ble-ch585",
+        "stm32-uart-ore-long-run",
+        "pyocd-preserve-mcu-fault-site",
+        "flashdb-littlefs-storage-principles"
+      ]
+    },
+    {
+      "id": "uart-dma-idle-fifo",
+      "slug": "uart-dma-idle-fifo",
+      "title": "串口接收为什么会丢数据：从轮询到循环缓冲的改造思路",
+      "coverText": "从轮询到循环缓冲，梳理串口接收稳定性的改造思路",
+      "date": "2026-07-03",
+      "author": "createskyblue",
+      "category": "uart-dma-idle-fifo",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "Cortex-M",
+        "中断",
+        "FIFO",
+        "DMA"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "nanoModbus",
+        "tinyframe-protocol-frame",
+        "stm32-uart-ore-long-run",
+        "kcp-protocol",
+        "iotspool-mqtt-spool"
+      ]
+    },
+    {
+      "id": "ch58x-sleep-gpio-remap",
+      "slug": "ch58x-sleep-gpio-remap",
+      "title": "CH58x 睡眠中 PB22/PB23 按键唤醒需要打开 RB_PIN_INTX",
+      "coverText": "RTC能醒按键不醒，从GPIO中断映射查起",
+      "date": "2026-07-02",
+      "author": "createskyblue",
+      "category": "ch58x-sleep-gpio-remap",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "低功耗",
+        "MCU",
+        "中断",
+        "寄存器映射",
+        "工程调试"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "mcu-low-power-io-interrupt-timing",
+        "py32-sop8-swd-remap",
+        "wch-ch58x-stm32-gpio-low-power",
+        "adc-key-low-power-wakeup",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "vibration-monitor-system-architecture",
+      "slug": "vibration-monitor-system-architecture",
+      "title": "异常振动监测终端系统架构：多任务协作与双通道遥测",
+      "coverText": "4G 物联网终端，震动检测，边缘 AI 实践",
+      "date": "2026-07-02",
+      "author": "createskyblue",
+      "category": "vibration-monitor-system-architecture",
+      "categories": [
+        "作品集"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "物联网",
+        "RTOS",
+        "RT-Thread",
+        "异常检测",
+        "边缘AI",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "wch-ch58x-stm32-gpio-low-power",
+        "esp32s3-imu-gesture-recognition",
+        "ch58x-nfc-p2p-data-exchange",
+        "mcu-gas-sensor-nanoedgeai",
+        "mcu-timer-pulse-width-capture"
+      ]
+    },
+    {
+      "id": "n320a-modbus-gateway",
+      "slug": "n320a-modbus-gateway",
+      "title": "量产 Modbus 数据重组网关项目复盘",
+      "coverText": "量产 Modbus 网关：多型号仪表排成一张寄存器表，换型号不改 PLC 程序",
+      "date": "2026-06-30",
+      "author": "createskyblue",
+      "category": "n320a-modbus-gateway",
+      "categories": [
+        "作品集"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "STM32",
+        "RT-Thread",
+        "Modbus",
+        "寄存器映射",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "nanoModbus",
+        "antenna-control-terminal",
+        "51-mcu-engineering-margin",
+        "i2c-slave",
+        "uart-dma-idle-fifo"
+      ]
+    },
+    {
+      "id": "memory-dump-context-debugging",
+      "slug": "memory-dump-context-debugging",
+      "title": "资源受限 MCU 长周期故障，用内存 Dump 定位并用故障注入验证",
+      "coverText": "资源受限MCU长周期故障，内存Dump定位+故障注入验证",
+      "date": "2026-06-29",
+      "author": "createskyblue",
+      "category": "memory-dump-context-debugging",
+      "categories": [
+        "疑难杂症",
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "低功耗",
+        "故障诊断",
+        "工程调试",
+        "可观测性"
+      ],
+      "coverImage": "/posts/memory-dump-context-debugging/dump-compare-demo.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "stm32-uart-ore-long-run",
+        "wch-ch58x-stm32-gpio-low-power",
+        "51-mcu-engineering-margin",
+        "loxseq-intro",
+        "mcu-low-power-io-interrupt-timing"
+      ]
+    },
+    {
+      "id": "signal-analysis-lab",
+      "slug": "signal-analysis-lab",
+      "title": "信号处理实验室用拖拽流程图完成浏览器端滤波和波形分析",
+      "coverText": "信号处理实验室拖拽流程图做浏览器端滤波和波形分析",
+      "date": "2026-06-29",
+      "author": "createskyblue",
+      "category": "signal-analysis-lab",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "Canvas",
+        "信号处理",
+        "数据可视化",
+        "信号处理实验室",
+        "Vite"
+      ],
+      "coverImage": "/posts/signal-analysis-lab/img/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "lvgl-web-screenshot",
+        "esp32s3-sensor-driver-decoupling",
+        "mcu-timer-pulse-width-capture",
+        "tinyframe-protocol-frame"
+      ]
+    },
+    {
+      "id": "使用VNA进行阻抗匹配",
+      "slug": "使用VNA进行阻抗匹配",
+      "title": "使用VNA检查PCB射频通路并完成天线PI匹配",
+      "coverText": "VNA板上校准、50Ω通路检查与PI天线匹配",
+      "date": "2026-06-29",
+      "author": "createskyblue",
+      "category": "使用VNA进行阻抗匹配",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "VNA",
+        "天线匹配",
+        "史密斯圆图",
+        "射频",
+        "嵌入式"
+      ],
+      "coverImage": "/posts/使用VNA进行阻抗匹配/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "wch-ch58x-stm32-gpio-low-power",
+        "NanoVNA2_维修",
+        "py32-sop8-swd-remap",
+        "par20-4h-ina228-wireless-sampler",
+        "mcu-timer-pulse-width-capture"
+      ]
+    },
+    {
+      "id": "stm32-uart-ore-long-run",
+      "slug": "stm32-uart-ore-long-run",
+      "title": "STM32 DMA 串口长时间运行后响应失效要检查 UART 错误状态",
+      "coverText": "串口长时间运行后突然失效",
+      "date": "2026-06-28",
+      "author": "createskyblue",
+      "category": "stm32-uart-ore-long-run",
+      "categories": [
+        "疑难杂症",
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "低功耗",
+        "MCU",
+        "中断",
+        "故障诊断"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "uart-dma-idle-fifo",
+        "mcu-low-power-io-interrupt-timing",
+        "memory-dump-context-debugging",
+        "NanoVNA2_维修",
+        "ble-adc-waveform-tinyframe"
+      ]
+    },
+    {
+      "id": "low-power-gps-tracker",
+      "slug": "low-power-gps-tracker",
+      "title": "一次性电池 GPS 定位设备的按需供电与分频上报",
+      "coverText": "一次性电池 GPS 定位：按需断电、定位上报分频",
+      "date": "2026-06-27",
+      "author": "createskyblue",
+      "category": "low-power-gps-tracker",
+      "categories": [
+        "作品集",
+        "低功耗",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "低功耗",
+        "一次性电池",
+        "GPS",
+        "数据上报"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "air001-light-sensing-mutation-switch-433rf",
+        "dali-manchester-codec",
+        "mcu-low-power-io-interrupt-timing",
+        "power-voltage-low-power-sampling",
+        "wch-ch58x-stm32-gpio-low-power"
+      ]
+    },
+    {
+      "id": "mcu-gas-sensor-nanoedgeai",
+      "slug": "mcu-gas-sensor-nanoedgeai",
+      "title": "MCU 边缘 AI 多气体传感器融合 异常分类",
+      "coverText": "多气体传感器融合、异常检测、NanoEdge AI、AutoML、MCU 边缘推理",
+      "date": "2026-06-27",
+      "author": "createskyblue",
+      "category": "mcu-gas-sensor-nanoedgeai",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "MCU",
+        "边缘AI",
+        "NanoEdge AI",
+        "TFLite",
+        "AutoML",
+        "异常检测"
+      ],
+      "coverImage": "/posts/mcu-gas-sensor-nanoedgeai/PixPin_2026-06-27_18-20-11.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "stm32-edge-ai-scenarios",
+        "vibration-monitor-system-architecture",
+        "tiny-ml-vibration-tflm",
+        "esp32s3-imu-gesture-recognition",
+        "wch-ch58x-stm32-gpio-low-power"
+      ]
+    },
+    {
+      "id": "adc-key-low-power-wakeup",
+      "slug": "adc-key-low-power-wakeup",
+      "title": "利用 IO 中断实现低功耗下使用 ADC 按键",
+      "coverText": "低功耗 ADC 按键扫描",
+      "date": "2026-06-26",
+      "author": "createskyblue",
+      "category": "adc-key-low-power-wakeup",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ADC",
+        "低功耗",
+        "MCU",
+        "按键"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "wch-ch58x-stm32-gpio-low-power",
+        "ch58x-sleep-gpio-remap",
+        "mcu-low-power-io-interrupt-timing",
+        "power-voltage-low-power-sampling",
+        "low-power-gps-tracker"
+      ]
+    },
+    {
+      "id": "fdm-cooling-shrinkage-groove",
+      "slug": "fdm-cooling-shrinkage-groove",
+      "title": "FDM打印防收缩槽：一条线消除散热孔槽冷却纹",
+      "coverText": "FDM散热孔冷却纹，用防收缩槽释放应力",
+      "date": "2026-06-26",
+      "author": "createskyblue",
+      "category": "fdm-cooling-shrinkage-groove",
+      "categories": [
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "3D打印",
+        "FDM",
+        "冷却纹",
+        "防收缩槽",
+        "打印技巧",
+        "表面质量"
+      ],
+      "coverImage": "/posts/fdm-cooling-shrinkage-groove/sketch-diagram.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "mobile-chart-ui-design",
+        "html-canvas-waveform-chart",
+        "waveform-minmax-downsampling",
+        "nonlinear-image-distortion-tool",
+        "perf-flamegraph-basics"
+      ]
+    },
+    {
+      "id": "mcu-low-power-io-interrupt-timing",
+      "slug": "mcu-low-power-io-interrupt-timing",
+      "title": "MCU 进入低功耗前后要防范 IO 和外设断电触发中断",
+      "coverText": "低功耗休眠时被非预期IO中断唤醒？",
+      "date": "2026-06-26",
+      "author": "createskyblue",
+      "category": "mcu-low-power-io-interrupt-timing",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "低功耗",
+        "MCU",
+        "单片机",
+        "中断"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "wch-ch58x-stm32-gpio-low-power",
+        "stm32-uart-ore-long-run",
+        "air001-light-sensing-mutation-switch-433rf",
+        "low-power-gps-tracker",
+        "ch58x-sleep-gpio-remap"
+      ]
+    },
+    {
+      "id": "power-voltage-low-power-sampling",
+      "slug": "power-voltage-low-power-sampling",
+      "title": "低功耗设备测量电池电压时要关断分压并控制 ADC 源阻抗",
+      "coverText": "低功耗下电池电压测量",
+      "date": "2026-06-26",
+      "author": "createskyblue",
+      "category": "power-voltage-low-power-sampling",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ADC",
+        "低功耗",
+        "MCU",
+        "数据采集"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "low-power-gps-tracker",
+        "py32f030-vrefint-gpio-overvoltage",
+        "par20-4h-ina228-wireless-sampler",
+        "air001-light-sensing-mutation-switch-433rf",
+        "nh50bat-bq40z50-unseal-debug"
+      ]
+    },
+    {
+      "id": "flashdb-kv-vs-struct-config",
+      "slug": "flashdb-kv-vs-struct-config",
+      "title": "嵌入式 Flash 配置应拆成独立键值对，而不是固耦合结构体",
+      "coverText": "FlashDB KV替代结构体配置",
+      "date": "2026-06-20",
+      "author": "createskyblue",
+      "category": "flashdb-kv-vs-struct-config",
+      "categories": [
+        "存储与固件",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "FlashDB",
+        "KVDB",
+        "嵌入式",
+        "Flash存储",
+        "键值对"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ab-partition-vs-flashdb",
+        "flashdb-porting-guide",
+        "rtthread-ble-ch585",
+        "flashdb-littlefs-storage-principles",
+        "stack-watermark-and-struct-guards"
+      ]
+    },
+    {
+      "id": "mobile-backspace-sentinel",
+      "slug": "mobile-backspace-sentinel",
+      "title": "用零宽哨兵字符捕获手机软键盘的连续删除",
+      "coverText": "零宽字符，实现移动网页端连续删除按钮检测",
+      "date": "2026-06-20",
+      "author": "createskyblue",
+      "category": "mobile-backspace-sentinel",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "移动端输入法",
+        "远程输入",
+        "JavaScript"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "remote-input-board",
+        "stack-watermark-and-struct-guards",
+        "flashdb-littlefs-storage-principles",
+        "ble-adc-waveform-tinyframe",
+        "flashdb-porting-guide"
+      ]
+    },
+    {
+      "id": "build-cache-design",
+      "slug": "build-cache-design",
+      "title": "内容指纹 + 输出复用：博客增量构建缓存的设计",
+      "coverText": "解决博客重复构建文章的问题",
+      "date": "2026-06-19",
+      "author": "createskyblue",
+      "category": "build-cache-design",
+      "categories": [
+        "存储与固件",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "构建系统",
+        "缓存",
+        "增量编译"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "blog-json-to-html-seo-upgrade",
+        "flashdb-littlefs-storage-principles",
+        "encrypted-blog-posts",
+        "memory-leak-tool-analysis",
+        "windows-copy-full-path-context-menu"
+      ]
+    },
+    {
+      "id": "dali-manchester-codec",
+      "slug": "dali-manchester-codec",
+      "title": "深入理解 DALI 协议：曼彻斯特编解码与 Input Capture 实现",
+      "coverText": "DALI照明总线：曼彻斯特编码 实现",
+      "date": "2026-06-19",
+      "author": "createskyblue",
+      "category": "dali-manchester-codec",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "DALI",
+        "Manchester",
+        "曼彻斯特编码",
+        "嵌入式",
+        "IEC 62386",
+        "Air001"
+      ],
+      "coverImage": "/posts/dali-manchester-codec/img/manchester-timing.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "mcu-timer-pulse-width-capture",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "software-dual-edge-pulse-filter",
+        "low-power-gps-tracker",
+        "stm32-hal-spi-ws2812"
+      ]
+    },
+    {
+      "id": "html-canvas-waveform-chart",
+      "slug": "html-canvas-waveform-chart",
+      "title": "右锚可信趋势卡片图：轻量化实时监测图表的设计理念",
+      "coverText": "分段着色折线图",
+      "date": "2026-06-19",
+      "author": "createskyblue",
+      "category": "html-canvas-waveform-chart",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "前端",
+        "Canvas",
+        "数据可视化",
+        "嵌入式",
+        "BLE"
+      ],
+      "coverImage": "/posts/html-canvas-waveform-chart/waveform-chart.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "mobile-chart-ui-design",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "waveform-minmax-downsampling",
+        "downsampling-demo",
+        "dali-manchester-codec"
+      ]
+    },
+    {
+      "id": "flashdb-porting-guide",
+      "slug": "flashdb-porting-guide",
+      "title": "FlashDB 嵌入式数据库从移植到上手：KVDB/TSDB 双模式基础操作指南",
+      "coverText": "FlashDB 移植与基础操作，嵌入式 Flash 磨损平衡与掉电保护实战",
+      "date": "2026-06-17",
+      "author": "createskyblue",
+      "category": "flashdb-porting-guide",
+      "categories": [
+        "存储与固件",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "FlashDB",
+        "嵌入式",
+        "数据库",
+        "KVDB",
+        "TSDB",
+        "Flash存储",
+        "FAL"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ch585m-tflite-micro-sin-demo",
+        "tflite-mcu-gcc-port",
+        "loxdb-vs-flashdb",
+        "flashstore-ab-partition",
+        "flashdb-littlefs-storage-principles"
+      ]
+    },
+    {
+      "id": "flashdb-tinyframe-ble-debugger",
+      "slug": "flashdb-tinyframe-ble-debugger",
+      "title": "一个面向 BLE 芯片的 FlashDB 持久化配置管理台",
+      "coverText": "一个面向 BLE 芯片的 FlashDB 持久化Web配置控制台",
+      "date": "2026-06-17",
+      "author": "createskyblue",
+      "category": "flashdb-tinyframe-ble-debugger",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "FlashDB",
+        "TinyFrame",
+        "BLE",
+        "嵌入式"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "ab-partition-vs-flashdb",
+        "nanoModbus",
+        "tinyframe-protocol-frame",
+        "ble-mesh-overview-ch585",
+        "flashdb-porting-guide"
+      ]
+    },
+    {
+      "id": "audio-triangulation-tdoa",
+      "slug": "audio-triangulation-tdoa",
+      "title": "Audio-Triangulation 用三麦克风做低成本声学相机",
+      "coverText": "三麦克风TDOA声源定位",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "audio-triangulation-tdoa",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "声音定位",
+        "TDOA",
+        "RP2040",
+        "信号处理"
+      ],
+      "coverImage": "/posts/audio-triangulation-tdoa/cover.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "dali-manchester-codec",
+        "software-dual-edge-pulse-filter",
+        "air001-light-sensing-mutation-switch-433rf",
+        "low-power-gps-tracker",
+        "mcu-timer-pulse-width-capture"
+      ]
+    },
+    {
+      "id": "ble-adc-waveform-tinyframe",
+      "slug": "ble-adc-waveform-tinyframe",
+      "title": "BLE 调试工具读取 ADC 波形时要同时处理确认和前端性能",
+      "coverText": "BLE透传+TinyFrame协议包装+Web上位机实现命令控制和波形传输",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "ble-adc-waveform-tinyframe",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "BLE",
+        "TinyFrame",
+        "ADC"
+      ],
+      "coverImage": "/posts/ble-adc-waveform-tinyframe/PixPin_2026-06-16_23-16-25.gif",
+      "featured": true,
+      "relatedSlugs": [
+        "ble-throughput-conn-interval-mtu",
+        "uart-dma-idle-fifo",
+        "stm32-uart-ore-long-run",
+        "iotspool-mqtt-spool",
+        "esp32c3-httpd-single-connection"
+      ]
+    },
+    {
+      "id": "ble-throughput-conn-interval-mtu",
+      "slug": "ble-throughput-conn-interval-mtu",
+      "title": "Web Bluetooth 测 BLE 吞吐时会卡在默认 MTU",
+      "coverText": "浏览器Web BLE默认MTU 20影响传输速度",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "ble-throughput-conn-interval-mtu",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "BLE",
+        "Web Bluetooth",
+        "连接参数",
+        "MTU"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ble-adc-waveform-tinyframe",
+        "rtthread-ble-ch585",
+        "ble-provisioning-wifi-conflict",
+        "ble-mesh-overview-ch585",
+        "uart-dma-idle-fifo"
+      ]
+    },
+    {
+      "id": "cmbacktrace-cortexm-fault-debug",
+      "slug": "cmbacktrace-cortexm-fault-debug",
+      "title": "CmBacktrace 可以把 Cortex-M 的 HardFault 现场打印出来",
+      "coverText": "CmBacktrace还原Cortex-M崩溃调用栈",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "cmbacktrace-cortexm-fault-debug",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "CmBacktrace",
+        "Cortex-M",
+        "HardFault",
+        "嵌入式调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "rtthread-ble-ch585",
+        "flashdb-littlefs-storage-principles",
+        "nanoModbus",
+        "flashdb-porting-guide",
+        "iotspool-mqtt-spool"
+      ]
+    },
+    {
+      "id": "eflesh-magnetic-touch-sensing",
+      "slug": "eflesh-magnetic-touch-sensing",
+      "title": "eFlesh 用磁场指纹把 3D 打印结构变成触觉皮肤",
+      "coverText": "eFlesh磁触觉 机器学习",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "eflesh-magnetic-touch-sensing",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "eFlesh",
+        "触觉传感",
+        "机器人",
+        "机器学习"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "tiny-ml-vibration-tflm",
+        "esp32s3-imu-gesture-recognition",
+        "esp32s3-esp-nn-sin-demo",
+        "mcu-gas-sensor-nanoedgeai",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "nanoModbus",
+      "slug": "nanoModbus",
+      "title": "nanoModbus 更适合放在嵌入式网关的协议边界",
+      "coverText": "nanoModbus应用",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "nanoModbus",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "nanoModbus",
+        "Modbus",
+        "DALI",
+        "嵌入式"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "tinyframe-protocol-frame",
+        "uart-dma-idle-fifo",
+        "cmbacktrace-cortexm-fault-debug",
+        "i2c-slave",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "nonlinear-image-distortion-tool",
+      "slug": "nonlinear-image-distortion-tool",
+      "title": "图片非线性扰动工具可以用参数码加扰和还原图片",
+      "coverText": "非线性图像扰动工具本地处理图片",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "nonlinear-image-distortion-tool",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "图像工具",
+        "非线性扰动",
+        "隐私保护",
+        "React"
+      ],
+      "coverImage": "/posts/nonlinear-image-distortion-tool/cover.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "mobile-chart-ui-design",
+        "lvgl-web-screenshot",
+        "html-canvas-waveform-chart",
+        "article-modal-subpixel-frame-debugging",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "tinyframe-protocol-frame",
+      "slug": "tinyframe-protocol-frame",
+      "title": "TinyFrame 可以给串口和 BLE 透传加一层可靠消息帧",
+      "coverText": "TinyFrame把串口字节流封成可校验消息帧",
+      "date": "2026-06-16",
+      "author": "createskyblue",
+      "category": "tinyframe-protocol-frame",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "TinyFrame",
+        "通信协议",
+        "嵌入式",
+        "BLE"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "nanoModbus",
+        "uart-dma-idle-fifo",
+        "ble-mesh-overview-ch585",
+        "ch58x-nfc-p2p-data-exchange",
+        "kcp-protocol"
+      ]
+    },
+    {
+      "id": "article-modal-subpixel-frame-debugging",
+      "slug": "article-modal-subpixel-frame-debugging",
+      "title": "弹窗动画停在半像素位置会让文章图片顶线消失",
+      "coverText": "弹窗边框出现细线，从布局和渲染精度排查",
+      "date": "2026-06-13",
+      "author": "createskyblue",
+      "category": "article-modal-subpixel-frame-debugging",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "CSS",
+        "Vue",
+        "渲染调试"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "mobile-chart-ui-design",
+        "lvgl-web-screenshot",
+        "nonlinear-image-distortion-tool",
+        "waveform-minmax-downsampling",
+        "epaper-sensor-trend"
+      ]
+    },
+    {
+      "id": "ble-low-power-data-upload",
+      "slug": "ble-low-power-data-upload",
+      "title": "手机不在场也不丢数：BLE 设备先落盘后同步，连接失败下次补传",
+      "coverText": "电池 BLE 非实时数据同步：定时唤醒、先存后传、失败补传",
+      "date": "2026-06-13",
+      "author": "createskyblue",
+      "category": "ble-low-power-data-upload",
+      "categories": [
+        "通信与协议",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "BLE",
+        "低功耗",
+        "一次性电池",
+        "蓝牙"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "ble-rtc-offset-note",
+        "ble-provisioning-wifi-conflict",
+        "low-power-gps-tracker",
+        "windows-display-idle-input",
+        "wch-ch58x-stm32-gpio-low-power"
+      ]
+    },
+    {
+      "id": "ble-rtc-offset-note",
+      "slug": "ble-rtc-offset-note",
+      "title": "BLE 连接中重置硬件 RTC 会导致链路断开",
+      "coverText": "WCH蓝牙芯片设置RTC时间导致蓝牙断连问题排查",
+      "date": "2026-06-13",
+      "author": "createskyblue",
+      "category": "ble-rtc-offset-note",
+      "categories": [
+        "通信与协议",
+        "工程笔记",
+        "低功耗"
+      ],
+      "softCategories": [],
+      "tags": [
+        "BLE",
+        "RTC",
+        "低功耗",
+        "嵌入式"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "stm32-uart-ore-long-run",
+        "rtthread-ble-ch585",
+        "mcu-low-power-io-interrupt-timing",
+        "nanoModbus",
+        "pyocd-preserve-mcu-fault-site"
+      ]
+    },
+    {
+      "id": "heart-rate-migration-debugging",
+      "slug": "heart-rate-migration-debugging",
+      "title": "用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片",
+      "coverText": "用 AI 把 ESP32 心率算法迁移到 WCH 蓝牙芯片",
+      "date": "2026-06-13",
+      "author": "createskyblue",
+      "category": "heart-rate-migration-debugging",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "算法迁移",
+        "性能优化",
+        "数据采集"
+      ],
+      "coverImage": "/posts/heart-rate-migration-debugging/PixPin_2026-06-13_00-35-13.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "wch-ch58x-stm32-gpio-low-power",
+        "51-mcu-engineering-margin",
+        "software-dual-edge-pulse-filter",
+        "tiny-ml-vibration-tflm",
+        "observability-before-control"
+      ]
+    },
+    {
+      "id": "mobile-chart-ui-design",
+      "slug": "mobile-chart-ui-design",
+      "title": "移动端实时图表应先安排绘图区再调整样式",
+      "coverText": "手机实时图表刻度和端点拥挤，先划分绘图区再调样式",
+      "date": "2026-06-10",
+      "author": "createskyblue",
+      "category": "mobile-chart-ui-design",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "移动端UI",
+        "图表设计",
+        "视觉设计"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "html-canvas-waveform-chart",
+        "waveform-minmax-downsampling",
+        "masonry-waterfall-layout",
+        "nonlinear-image-distortion-tool",
+        "article-modal-subpixel-frame-debugging"
+      ]
+    },
+    {
+      "id": "esp32-dns-hijack-captive-portal",
+      "slug": "esp32-dns-hijack-captive-portal",
+      "title": "ESP32 AP 模式下通过 DNS 劫持实现强制门户跳转",
+      "coverText": "实现连接ESP32热点后自动弹出网页",
+      "date": "2026-06-09",
+      "author": "createskyblue",
+      "category": "esp32-dns-hijack-captive-portal",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "ESP32",
+        "DNS劫持",
+        "强制门户",
+        "Captive Portal",
+        "FreeRTOS"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ble-mesh-overview-ch585",
+        "ch58x-ble-pairing-flow",
+        "py32-sop8-swd-remap",
+        "iotspool-mqtt-spool",
+        "ble-provisioning-wifi-conflict"
+      ]
+    },
+    {
+      "id": "observability-before-control",
+      "slug": "observability-before-control",
+      "title": "系统状态不可见时不要先急着调整控制参数",
+      "coverText": "排查概率性问题全靠猜？钱学森说要先搞定可观测性",
+      "date": "2026-06-09",
+      "author": "createskyblue",
+      "category": "observability-before-control",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "控制论",
+        "可观测性",
+        "工程调试",
+        "系统设计"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "51-mcu-engineering-margin",
+        "memory-dump-context-debugging",
+        "heart-rate-migration-debugging",
+        "loxseq-intro",
+        "stm32-uart-ore-long-run"
+      ]
+    },
+    {
+      "id": "quadtree-spatial-index",
+      "slug": "quadtree-spatial-index",
+      "title": "画布框选节点变慢时可以用四叉树先筛掉无关区域",
+      "coverText": "四叉树降低画布框选全量遍历",
+      "date": "2026-06-08",
+      "author": "createskyblue",
+      "category": "quadtree-spatial-index",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "四叉树",
+        "空间索引",
+        "碰撞检测",
+        "算法优化",
+        "信号处理实验室"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "astar-grid-path-planning-svg",
+        "tiny-ml-vibration-tflm",
+        "downsampling-demo",
+        "signal-analysis-lab",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "waveform-minmax-downsampling",
+      "slug": "waveform-minmax-downsampling",
+      "title": "网页波形降采样要同时保留极值和边沿",
+      "coverText": "示波器波形图MinMax降采样",
+      "date": "2026-06-07",
+      "author": "createskyblue",
+      "category": "waveform-minmax-downsampling",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "波形渲染",
+        "降采样",
+        "Canvas",
+        "JavaScript",
+        "信号处理"
+      ],
+      "coverImage": "/posts/waveform-minmax-downsampling/PixPin_2026-06-07_13-52-51.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "heart-rate-minmax-canvas-envelope",
+        "downsampling-demo",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "tiny-ml-vibration-tflm",
+        "dali-manchester-codec"
+      ]
+    },
+    {
+      "id": "blog-json-to-html-seo-upgrade",
+      "slug": "blog-json-to-html-seo-upgrade",
+      "title": "Vue SPA 博客改为静态 HTML 输出解决爬虫无法索引文章内容",
+      "coverText": "静态博客生成HTML详情页，让搜索引擎能读正文",
+      "date": "2026-06-03",
+      "author": "createskyblue",
+      "category": "blog-json-to-html-seo-upgrade",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Vue",
+        "Vite",
+        "SEO",
+        "博客",
+        "静态站点生成"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "build-cache-design",
+        "encrypted-blog-posts",
+        "ch585m-tflite-micro-sin-demo",
+        "windows-copy-full-path-context-menu",
+        "flashdb-porting-guide"
+      ]
+    },
+    {
+      "id": "esp-idf-vscode-openocd-second-board",
+      "slug": "esp-idf-vscode-openocd-second-board",
+      "title": "ESP-IDF VS Code 插件缓存 JTAG 序列号导致第二块开发板 OpenOCD 启动失败的排查与解决",
+      "coverText": "ESP-IDF换板后OpenOCD启动失败排查",
+      "date": "2026-06-03",
+      "author": "createskyblue",
+      "category": "esp-idf-vscode-openocd-second-board",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "ESP32",
+        "ESP-IDF",
+        "VSCode",
+        "OpenOCD",
+        "USB-JTAG"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "py32-sop8-swd-remap",
+        "cortex-debug-pyocd-startup-timeout-regex",
+        "ch58x-ble-pairing-flow",
+        "claude-code-esp-idf-build",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "esp32s3-esp-nn-sin-demo",
+      "slug": "esp32s3-esp-nn-sin-demo",
+      "title": "用ESP-NN在ESP32-S3上部署一个学过sin的神经网络",
+      "coverText": "ESP32-S3运行ESP-NN量化正弦模型",
+      "date": "2026-06-02",
+      "author": "createskyblue",
+      "category": "esp32s3-esp-nn-sin-demo",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "ESP32-S3",
+        "ESP-NN",
+        "TFLite Micro",
+        "模型量化",
+        "边缘AI"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "tiny-ml-vibration-tflm",
+        "tflite-mcu-gcc-port",
+        "tflite-int8-quantization-tf221",
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-porting-guide"
+      ]
+    },
+    {
+      "id": "astar-grid-path-planning-svg",
+      "slug": "astar-grid-path-planning-svg",
+      "title": "A* 在栅格地图上搜索低代价路径的工程解释",
+      "coverText": "A*栅格路径规划可视化",
+      "date": "2026-05-31",
+      "author": "createskyblue",
+      "category": "astar-grid-path-planning-svg",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "A*",
+        "路径规划",
+        "栅格地图",
+        "机器人导航",
+        "算法"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "tiny-ml-vibration-tflm",
+        "quadtree-spatial-index",
+        "signal-analysis-lab",
+        "51-mcu-engineering-margin"
+      ]
+    },
+    {
+      "id": "dirty-region-lvgl-arm2d",
+      "slug": "dirty-region-lvgl-arm2d",
+      "title": "嵌入式 GUI 脏区域局部刷新机制：LVGL 与 ARM-2D 源码级实现对比",
+      "coverText": "LVGL脏区域+ARM-2D提高帧率，减少刷新数据量",
+      "date": "2026-05-31",
+      "author": "createskyblue",
+      "category": "dirty-region-lvgl-arm2d",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式GUI",
+        "LVGL",
+        "ARM-2D",
+        "脏区域",
+        "局部刷新",
+        "MCU"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "flashstore-ab-partition",
+        "tflite-mcu-gcc-port",
+        "tinyframe-footprint-py32f002a",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "gaussian-distribution",
+      "slug": "gaussian-distribution",
+      "title": "高斯分布（正态分布）的性质与工程应用",
+      "coverText": "高斯分布 正态分布 滤波",
+      "date": "2026-05-31",
+      "author": "createskyblue",
+      "category": "gaussian-distribution",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "正态分布",
+        "高斯分布",
+        "统计学",
+        "概率密度",
+        "传感器"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "hampel-filter-algorithm",
+        "tiny-ml-vibration-tflm",
+        "skeuomorphic-instrument-panel",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "html-canvas-waveform-chart"
+      ]
+    },
+    {
+      "id": "hampel-filter-algorithm",
+      "slug": "hampel-filter-algorithm",
+      "title": "Hampel Filter 算法原理与 C 语言实现",
+      "coverText": "Hampel滤波器用中位数识别尖刺，只替换离群点",
+      "date": "2026-05-31",
+      "author": "createskyblue",
+      "category": "hampel-filter-algorithm",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Hampel Filter",
+        "中值滤波",
+        "异常检测",
+        "嵌入式",
+        "C语言"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "gaussian-distribution",
+        "tiny-ml-vibration-tflm",
+        "skeuomorphic-instrument-panel",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "downsampling-demo"
+      ]
+    },
+    {
+      "id": "noeticmaze-stm32-lidar-slam-navigation",
+      "slug": "noeticmaze-stm32-lidar-slam-navigation",
+      "title": "NoeticMaze 在 STM32 上实现激光雷达 SLAM 与自主导航的工程拆解",
+      "coverText": "STM32激光雷达SLAM",
+      "date": "2026-05-31",
+      "author": "createskyblue",
+      "category": "noeticmaze-stm32-lidar-slam-navigation",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "STM32",
+        "SLAM",
+        "激光雷达",
+        "FreeRTOS",
+        "A*"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "tiny-ml-vibration-tflm",
+        "astar-grid-path-planning-svg",
+        "mcu-timer-pulse-width-capture",
+        "dali-manchester-codec",
+        "vibration-monitor-system-architecture"
+      ]
+    },
+    {
+      "id": "claude-code-esp-idf-build",
+      "slug": "claude-code-esp-idf-build",
+      "title": "Claude Code在Windows下无法执行ESP-IDF编译的问题分析与绕过方案",
+      "coverText": "Claude Code自动编译ESP-IDF",
+      "date": "2026-05-26",
+      "author": "createskyblue",
+      "category": "claude-code-esp-idf-build",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Claude Code",
+        "ESP-IDF",
+        "Windows",
+        "MSYS"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ch585m-tflite-micro-sin-demo",
+        "git-bash-cmd-utf8-shim",
+        "esp-idf-offline-install",
+        "ch58x-ble-pairing-flow",
+        "zephyr-stm32l496-rtos-skeleton"
+      ]
+    },
+    {
+      "id": "esp-idf-offline-install",
+      "slug": "esp-idf-offline-install",
+      "title": "ESP-IDF 离线安装：绕过在线安装工具的正确方式",
+      "coverText": "ESP-IDF离线安装",
+      "date": "2026-05-26",
+      "author": "createskyblue",
+      "category": "esp-idf-offline-install",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "ESP-IDF",
+        "ESP32",
+        "离线安装",
+        "嵌入式开发"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "claude-code-esp-idf-build",
+        "py32-sop8-swd-remap",
+        "rtthread-ble-ch585",
+        "web-serial-monitor",
+        "windows-copy-full-path-context-menu"
+      ]
+    },
+    {
+      "id": "esp32s3-web-upload-sd-psram-buffer",
+      "slug": "esp32s3-web-upload-sd-psram-buffer",
+      "title": "ESP32-S3 Web 上传 SD 卡慢：1KB 小块写入瓶颈与 PSRAM 大块缓冲解决",
+      "coverText": "PSRAM优化ESP32在线SD卡文件管理器速度慢",
+      "date": "2026-05-26",
+      "author": "createskyblue",
+      "category": "esp32s3-web-upload-sd-psram-buffer",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "ESP32-S3",
+        "PSRAM",
+        "文件上传",
+        "性能优化",
+        "SD 卡"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "tflite-mcu-gcc-port",
+        "ch58x-nfc-p2p-data-exchange",
+        "kcp-protocol",
+        "ab-partition-vs-flashdb"
+      ]
+    },
+    {
+      "id": "claude-code-sound-hook",
+      "slug": "claude-code-sound-hook",
+      "title": "如何让 Claude Code 每轮对话结束播放提示音通知你",
+      "coverText": "加个声音钩子，Claude完工自动通知你",
+      "date": "2026-05-22",
+      "author": "createskyblue",
+      "category": "claude-code-sound-hook",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Claude Code",
+        "Hook",
+        "开发效率",
+        "Windows"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "git-bash-cmd-utf8-shim",
+        "web-audio-success-sound",
+        "claude-code-esp-idf-build",
+        "pyocd-cortex-debug-late-attach",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "web-audio-success-sound",
+      "slug": "web-audio-success-sound",
+      "title": "使用 Web Audio API 实现浏览器插件的成功提示音效",
+      "coverText": "Web Audio合成清脆的电子提示音",
+      "date": "2026-05-21",
+      "author": "createskyblue",
+      "category": "web-audio-success-sound",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Web Audio API",
+        "浏览器插件",
+        "音效",
+        "前端"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "tiny-ml-vibration-tflm",
+        "ble-mesh-overview-ch585",
+        "claude-code-sound-hook",
+        "tinyframe-footprint-py32f002a",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "zephyr-stm32l496-rtos-skeleton",
+      "slug": "zephyr-stm32l496-rtos-skeleton",
+      "title": "自制 STM32L496 板移植 Zephyr 要先搭好最小工程",
+      "coverText": "Zephyr在STM32L496上搭RTOS最小工程",
+      "date": "2026-05-20",
+      "author": "createskyblue",
+      "category": "zephyr-stm32l496-rtos-skeleton",
+      "categories": [
+        "模板与示例",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Zephyr",
+        "STM32",
+        "STM32L496",
+        "RTOS",
+        "嵌入式"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "tflite-mcu-gcc-port",
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-porting-guide",
+        "tiny-ml-vibration-tflm",
+        "rtthread-ble-ch585"
+      ]
+    },
+    {
+      "id": "fft-vs-wavelet",
+      "slug": "fft-vs-wavelet",
+      "title": "瞬态冲击信号更适合用小波查看发生位置",
+      "coverText": "FFT看频谱，小波看时间变化",
+      "date": "2026-05-17",
+      "author": "createskyblue",
+      "category": "fft-vs-wavelet",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "FFT",
+        "小波变换",
+        "信号处理",
+        "振动分析",
+        "故障诊断"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "长序列音频分类任务思路",
+        "air001-light-sensing-mutation-switch-433rf",
+        "software-dual-edge-pulse-filter",
+        "audio-triangulation-tdoa",
+        "mcu-timer-pulse-width-capture"
+      ]
+    },
+    {
+      "id": "git-bash-cmd-utf8-shim",
+      "slug": "git-bash-cmd-utf8-shim",
+      "title": "用 PATH shim 从源头修复 Git Bash 调用 cmd.exe 的中文乱码",
+      "coverText": "Git Bash调用cmd前切UTF-8避免乱码",
+      "date": "2026-05-17",
+      "author": "createskyblue",
+      "category": "git-bash-cmd-utf8-shim",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Git Bash",
+        "cmd.exe",
+        "UTF-8",
+        "编码",
+        "Windows",
+        "MSYS"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "claude-code-esp-idf-build",
+        "windows-copy-full-path-context-menu",
+        "flashdb-porting-guide",
+        "py32-sop8-swd-remap",
+        "vscode-cppdbg-pyocd-main-breakpoint"
+      ]
+    },
+    {
+      "id": "key-debounce-shift-register",
+      "slug": "key-debounce-shift-register",
+      "title": "按键消抖可以用滑动窗口或积分法过滤抖动",
+      "coverText": "按键消抖 积分阈值 or 寄存器滑动窗口",
+      "date": "2026-05-17",
+      "author": "createskyblue",
+      "category": "key-debounce-shift-register",
+      "categories": [
+        "MCU与驱动",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "按键消抖",
+        "嵌入式",
+        "滑动窗口",
+        "积分消抖",
+        "单片机"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "dali-manchester-codec",
+        "software-dual-edge-pulse-filter",
+        "tiny-ml-vibration-tflm",
+        "noeticmaze-stm32-lidar-slam-navigation",
+        "mcu-timer-pulse-width-capture"
+      ]
+    },
+    {
+      "id": "stack-watermark-and-struct-guards",
+      "slug": "stack-watermark-and-struct-guards",
+      "title": "用栈水位线与结构体哨兵检测内存损坏",
+      "coverText": "栈水位线+结构体哨兵检测内存损坏",
+      "date": "2026-05-17",
+      "author": "createskyblue",
+      "category": "stack-watermark-and-struct-guards",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "51-mcu-engineering-margin",
+        "tiny-ml-vibration-tflm",
+        "rtthread-ble-ch585",
+        "microcbor-internals",
+        "flashdb-kv-vs-struct-config"
+      ]
+    },
+    {
+      "id": "NanoVNA2_维修",
+      "slug": "NanoVNA2_维修",
+      "title": "NanoVNA2 高频扫频乱线 排查 ADF4350 锁定状态",
+      "coverText": "NanoVNA2高频乱跳，发现ADF4350失锁",
+      "date": "2026-05-10",
+      "author": "createskyblue",
+      "category": "NanoVNA2_维修",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "NanoVNA2",
+        "ADF4350",
+        "SI5351",
+        "PLL",
+        "射频维修",
+        "LoRa"
+      ],
+      "coverImage": "/posts/NanoVNA2_维修/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "stm32-uart-ore-long-run",
+        "nh50bat-bq40z50-unseal-debug",
+        "py32f030-vrefint-gpio-overvoltage",
+        "mcu-low-power-io-interrupt-timing",
+        "wch-ch58x-stm32-gpio-low-power"
+      ]
+    },
+    {
+      "id": "stm32l4-hezhou-4g-telemetry-crc32-spike",
+      "slug": "stm32l4-hezhou-4g-telemetry-crc32-spike",
+      "title": "加速度计波形上传到云端后出现尖峰，设备端逐点检查却无异常",
+      "coverText": "加速度计遥测数据经 4G 模块上传后出现极端值的排查记录",
+      "date": "2026-05-10",
+      "author": "createskyblue",
+      "category": "stm32l4-hezhou-4g-telemetry-crc32-spike",
+      "categories": [
+        "通信与协议",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "STM32L4",
+        "合宙4G模块",
+        "CRC32",
+        "遥测数据",
+        "边缘AI",
+        "数据上报"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "vibration-monitor-system-architecture",
+        "software-dual-edge-pulse-filter",
+        "mcu-gas-sensor-nanoedgeai",
+        "ble-adc-waveform-tinyframe",
+        "51-mcu-engineering-margin"
+      ]
+    },
+    {
+      "id": "长序列音频分类任务思路",
+      "slug": "长序列音频分类任务思路",
+      "title": "长录音分类可以先切片再把频谱拼成特征图",
+      "coverText": "长录音先分段提频谱再聚合分类",
+      "date": "2026-05-08",
+      "author": "createskyblue",
+      "category": "长序列音频分类任务思路",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "声音分类",
+        "FFT",
+        "特征工程",
+        "边缘AI",
+        "异常检测"
+      ],
+      "coverImage": "/posts/长序列音频分类任务思路/cover.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "audio-triangulation-tdoa",
+        "software-dual-edge-pulse-filter",
+        "51-mcu-engineering-margin",
+        "mcu-gas-sensor-nanoedgeai",
+        "esp32s3-imu-gesture-recognition"
+      ]
+    },
+    {
+      "id": "af-alg-crypto-api",
+      "slug": "af-alg-crypto-api",
+      "title": "用户态程序可以通过 AF_ALG 调用 Linux 内核加密",
+      "coverText": "AF_ALG通过socket调用内核加密",
+      "date": "2026-05-05",
+      "author": "createskyblue",
+      "category": "af-alg-crypto-api",
+      "categories": [
+        "工具链与调试",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Linux",
+        "AF_ALG",
+        "Crypto API",
+        "系统编程"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "tflite-mcu-gcc-port",
+        "tinyframe-protocol-frame",
+        "ch58x-ble-pairing-flow",
+        "ble-mesh-overview-ch585",
+        "splice-zero-copy"
+      ]
+    },
+    {
+      "id": "encrypted-blog-posts",
+      "slug": "encrypted-blog-posts",
+      "title": "静态博客用构建期加密发布受保护文章",
+      "coverText": "密文发布保护私密文章",
+      "date": "2026-05-05",
+      "author": "createskyblue",
+      "category": "encrypted-blog-posts",
+      "categories": [
+        "前端与可视化",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "静态博客",
+        "AES-GCM",
+        "Web Crypto",
+        "内容安全"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "blog-json-to-html-seo-upgrade",
+        "build-cache-design",
+        "windows-copy-full-path-context-menu",
+        "air001-chacha20-flashstore",
+        "flashdb-littlefs-storage-principles"
+      ]
+    },
+    {
+      "id": "hall-pulse-width-validation",
+      "slug": "hall-pulse-width-validation",
+      "title": "一种基于脉宽判定的电机霍尔反馈抗干扰方法",
+      "coverText": "霍尔脉宽校验过滤电机霍尔计数干扰",
+      "date": "2026-05-05",
+      "author": "createskyblue",
+      "category": "hall-pulse-width-validation",
+      "categories": [
+        "疑难杂症"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "电机控制",
+        "霍尔信号",
+        "脉宽判定",
+        "定时器"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "mcu-timer-pulse-width-capture",
+        "software-dual-edge-pulse-filter",
+        "air001-light-sensing-mutation-switch-433rf",
+        "hall-power-cycle-counting-limit",
+        "mcu-low-power-io-interrupt-timing"
+      ]
+    },
+    {
+      "id": "pipe-ipc-stream",
+      "slug": "pipe-ipc-stream",
+      "title": "fork 后父子进程可以用 pipe 传递字节流",
+      "coverText": "fork后进程要交换数据，用pipe建立单向字节流",
+      "date": "2026-05-05",
+      "author": "createskyblue",
+      "category": "pipe-ipc-stream",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Linux",
+        "pipe",
+        "IPC",
+        "系统编程"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "splice-zero-copy",
+        "nanoModbus",
+        "tinyframe-protocol-frame",
+        "kcp-protocol",
+        "uart-dma-idle-fifo"
+      ]
+    },
+    {
+      "id": "splice-zero-copy",
+      "slug": "splice-zero-copy",
+      "title": "Linux splice 可以在内核态搬运文件和 socket 数据",
+      "coverText": "splice让文件到socket少一次拷贝",
+      "date": "2026-05-05",
+      "author": "createskyblue",
+      "category": "splice-zero-copy",
+      "categories": [
+        "学习笔记",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Linux",
+        "splice",
+        "零拷贝",
+        "系统编程"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "pipe-ipc-stream",
+        "cmbacktrace-cortexm-fault-debug",
+        "flashdb-porting-guide",
+        "af-alg-crypto-api",
+        "tinyframe-protocol-frame"
+      ]
+    },
+    {
+      "id": "chroma-vector-database-demo",
+      "slug": "chroma-vector-database-demo",
+      "title": "用 Chroma 跑通文本向量检索的最小流程",
+      "coverText": "Chroma向量数据库做相似文本检索",
+      "date": "2026-05-02",
+      "author": "createskyblue",
+      "category": "chroma-vector-database-demo",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "Chroma",
+        "向量数据库",
+        "Python",
+        "AI",
+        "RAG"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "esp32s3-esp-nn-sin-demo",
+        "tflite-mcu-gcc-port",
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-littlefs-storage-principles"
+      ]
+    },
+    {
+      "id": "remote-input-board",
+      "slug": "remote-input-board",
+      "title": "把手机浏览器变成电脑的远程输入终端，语音、触控板、常用按键都行",
+      "coverText": "电脑长文输入与躺平操控两难，手机页面语音触控常用按键一站式解决",
+      "date": "2026-04-29",
+      "author": "createskyblue",
+      "category": "remote-input-board",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "豆包输入法",
+        "语音输入",
+        "触控板",
+        "远程输入",
+        "Python",
+        "Windows",
+        "WebSocket"
+      ],
+      "coverImage": "/posts/remote-input-board/img/输入界面带键盘.webp",
+      "featured": false,
+      "relatedSlugs": [
+        "web-serial-monitor",
+        "flashdb-porting-guide",
+        "mobile-backspace-sentinel",
+        "epaper-sensor-trend",
+        "lvgl-web-screenshot"
+      ]
+    },
+    {
+      "id": "卡扣设计",
+      "slug": "卡扣设计",
+      "title": "3D建模PCB卡扣设计",
+      "coverText": "3D打印PCB外壳卡扣结构",
+      "date": "2026-03-15",
+      "author": "createskyblue",
+      "category": "卡扣设计",
+      "categories": [
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "3D建模",
+        "卡扣",
+        "fusion360"
+      ],
+      "coverImage": "/posts/卡扣设计/PixPin_2026-09-05_09-35-10.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "flashstore-ab-partition",
+        "tinyframe-footprint-py32f002a",
+        "skeuomorphic-instrument-panel",
+        "ch585m-tflite-micro-sin-demo",
+        "dirty-region-lvgl-arm2d"
+      ]
+    },
+    {
+      "id": "csv-time-series-annotator",
+      "slug": "csv-time-series-annotator",
+      "title": "专为 NanoEdgeAI 设计的 CSV 时间序列标注工具 | A CSV time-series annotation tool tailored for NanoEdge AI Studio",
+      "coverText": "CSV时间序列标注工具",
+      "date": "2026-03-02",
+      "author": "createskyblue",
+      "category": "csv-time-series-annotator",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "csv",
+        "time-series",
+        "annotation",
+        "nanoedgeai"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "flashdb-porting-guide",
+        "windows-copy-full-path-context-menu",
+        "web-serial-monitor",
+        "remote-input-board",
+        "noeticmaze-stm32-lidar-slam-navigation"
+      ]
+    },
+    {
+      "id": "embedded-battery-lifetime-calculator",
+      "slug": "embedded-battery-lifetime-calculator",
+      "title": "物联网 iot 低功耗 电池寿命计算器 物联网设备电池寿命估算工具 - 根据电池容量、待机电流和周期性负载计算设备续航时间",
+      "coverText": "电池寿命计算器 - 计算电池物联网设备续航时间",
+      "date": "2026-03-02",
+      "author": "createskyblue",
+      "category": "embedded-battery-lifetime-calculator",
+      "categories": [
+        "开源库与工具",
+        "开源项目"
+      ],
+      "softCategories": [],
+      "tags": [
+        "iot",
+        "low-power"
+      ],
+      "coverImage": "",
+      "featured": true,
+      "relatedSlugs": [
+        "ble-mesh-overview-ch585",
+        "par20-4h-ina228-wireless-sampler",
+        "i2c-slave",
+        "wch-ch58x-stm32-gpio-low-power",
+        "ch58x-ble-pairing-flow"
+      ]
+    },
+    {
+      "id": "LLM调用原理",
+      "slug": "LLM调用原理",
+      "title": "LLM智能体工具调用原理",
+      "coverText": "LLM智能体工具调用原理",
+      "date": "2026-02-26",
+      "author": "createskyblue",
+      "category": "LLM调用原理",
+      "categories": [
+        "算法与信号处理",
+        "工程笔记"
+      ],
+      "softCategories": [],
+      "tags": [
+        "LLM",
+        "AGENT"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "ch585m-tflite-micro-sin-demo",
+        "flashdb-porting-guide",
+        "blog-json-to-html-seo-upgrade",
+        "air001-chacha20-flashstore",
+        "microcbor-quickstart"
+      ]
+    },
+    {
+      "id": "about",
+      "slug": "about",
+      "title": "关于",
+      "coverText": "关于 & 联系我",
+      "date": "2026-02-24",
+      "author": "createskyblue",
+      "category": "about",
+      "categories": [
+        "说说"
+      ],
+      "softCategories": [],
+      "tags": [
+        "about",
+        "contact"
+      ],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "web-serial-monitor",
+        "ch585m-tflite-micro-sin-demo",
+        "blog-json-to-html-seo-upgrade",
+        "esp-idf-vscode-openocd-second-board",
+        "csv-time-series-annotator"
+      ]
+    },
+    {
+      "id": "par20-4h-ina228-wireless-sampler",
+      "slug": "par20-4h-ina228-wireless-sampler",
+      "title": "ESP32-C3 + INA228：给 PAR20-4H 线性电源加上网页控制台与微安级无线采样",
+      "coverText": "PAR20-4H 控制板加 INA228 无线采样：网页控制台、微安精度回显",
+      "date": "2025-07-20",
+      "author": "createskyblue",
+      "category": "par20-4h-ina228-wireless-sampler",
+      "categories": [
+        "作品集"
+      ],
+      "softCategories": [],
+      "tags": [
+        "嵌入式",
+        "ESP32",
+        "物联网",
+        "传感器",
+        "数据采集"
+      ],
+      "coverImage": "/posts/par20-4h-ina228-wireless-sampler/cover.webp",
+      "featured": true,
+      "relatedSlugs": [
+        "wch-ch58x-stm32-gpio-low-power",
+        "py32-sop8-swd-remap",
+        "vibration-monitor-system-architecture",
+        "antenna-control-terminal",
+        "lvgl-web-screenshot"
+      ]
+    },
+    {
+      "id": "stm32-cdc-64byte-packet-boundary",
+      "slug": "stm32-cdc-64byte-packet-boundary",
+      "title": "STM32 虚拟串口固定发 64 字节，电脑端能正好收到 64 字节吗",
+      "coverText": "",
+      "date": "",
+      "author": "匿名",
+      "category": "stm32-cdc-64byte-packet-boundary",
+      "categories": [],
+      "softCategories": [],
+      "tags": [],
+      "coverImage": "",
+      "featured": false,
+      "relatedSlugs": [
+        "serial-stream-state-machine",
+        "uart-dma-idle-fifo",
+        "tinyframe-protocol-frame",
+        "kcp-protocol",
+        "streaming-frame-parser"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "工程笔记",
+      "name": "工程笔记",
+      "icon": null,
+      "count": 109
+    },
+    {
+      "id": "通信与协议",
+      "name": "通信与协议",
+      "icon": null,
+      "count": 18
+    },
+    {
+      "id": "低功耗",
+      "name": "低功耗",
+      "icon": null,
+      "count": 16
+    },
+    {
+      "id": "开源项目",
+      "name": "开源项目",
+      "icon": null,
+      "count": 16
+    },
+    {
+      "id": "算法与信号处理",
+      "name": "算法与信号处理",
+      "icon": null,
+      "count": 16
+    },
+    {
+      "id": "疑难杂症",
+      "name": "疑难杂症",
+      "icon": null,
+      "count": 16
+    },
+    {
+      "id": "MCU与驱动",
+      "name": "MCU与驱动",
+      "icon": null,
+      "count": 16
+    },
+    {
+      "id": "工具链与调试",
+      "name": "工具链与调试",
+      "icon": null,
+      "count": 15
+    },
+    {
+      "id": "前端与可视化",
+      "name": "前端与可视化",
+      "icon": null,
+      "count": 15
+    },
+    {
+      "id": "学习笔记",
+      "name": "学习笔记",
+      "icon": null,
+      "count": 12
+    },
+    {
+      "id": "开源库与工具",
+      "name": "开源库与工具",
+      "icon": null,
+      "count": 9
+    },
+    {
+      "id": "模板与示例",
+      "name": "模板与示例",
+      "icon": null,
+      "count": 7
+    },
+    {
+      "id": "作品集",
+      "name": "作品集",
+      "icon": null,
+      "count": 7
+    },
+    {
+      "id": "存储与固件",
+      "name": "存储与固件",
+      "icon": null,
+      "count": 6
+    }
+  ],
+  "tree": [
+    {
+      "id": "工程笔记",
+      "name": "工程笔记",
+      "parentId": null,
+      "order": 0,
+      "desc": "正向的设计与实现记录：我怎么做出来一个东西。按技术领域分了子类，未归类的零散记录留在本页",
+      "count": 109,
+      "showInSidebar": true,
+      "x": 234,
+      "y": 541
+    },
+    {
+      "id": "其他",
+      "name": "说说",
+      "parentId": null,
+      "order": 2,
+      "desc": "生活随笔与零散杂谈",
+      "count": 3,
+      "showInSidebar": false,
+      "x": 814,
+      "y": 393
+    },
+    {
+      "id": "学习笔记",
+      "name": "学习笔记",
+      "parentId": "工程笔记",
+      "order": 5,
+      "desc": "理解既有知识与原理：协议、算法、系统机制是怎么工作的",
+      "count": 12,
+      "showInSidebar": true,
+      "x": 945,
+      "y": 727
+    },
+    {
+      "id": "aa979cb5-3e22-422a-b98d-58f59e81547b",
+      "name": "疑难杂症",
+      "parentId": null,
+      "order": 5,
+      "desc": "有明确症状的逆向排障记录：现象 → 定位 → 根因 → 解法",
+      "count": 16,
+      "showInSidebar": true,
+      "x": 7,
+      "y": 542
+    },
+    {
+      "id": "97e53f10-4334-4ec2-8724-e1a163f51b62",
+      "name": "作品集",
+      "parentId": null,
+      "order": 6,
+      "desc": "完整做过的项目，含需求、方案与落地结果。想看这人做成过什么，点这里",
+      "count": 7,
+      "showInSidebar": true,
+      "x": -202,
+      "y": 540
+    },
+    {
+      "id": "1a812e88-82c1-4b12-822d-d05ccd82ff9a",
+      "name": "开源库与工具",
+      "parentId": "980bfa11-0894-4330-84cb-4e8a38bc09c8",
+      "order": 7,
+      "desc": "可直接拿去用的独立工具与代码库，附用法与实现说明",
+      "count": 9,
+      "showInSidebar": true,
+      "x": 1424,
+      "y": 679
+    },
+    {
+      "id": "8ab293fd-256e-4016-afbb-9e02141168ea",
+      "name": "模板与示例",
+      "parentId": "980bfa11-0894-4330-84cb-4e8a38bc09c8",
+      "order": 8,
+      "desc": "工程骨架与最小可运行示例——起点代码，抄走就能改",
+      "count": 7,
+      "showInSidebar": true,
+      "x": 1657,
+      "y": 680
+    },
+    {
+      "id": "9dbe5048-be16-4639-b0c9-ca5142519d37",
+      "name": "MCU与驱动",
+      "parentId": "工程笔记",
+      "order": 0,
+      "desc": "芯片外设、低功耗时序、GPIO 与驱动解耦，以及电机/PWM 等实时控制",
+      "count": 16,
+      "showInSidebar": true,
+      "x": -254,
+      "y": 721
+    },
+    {
+      "id": "db0b3105-e975-464c-ab9d-8cb237713d11",
+      "name": "存储与固件",
+      "parentId": "工程笔记",
+      "order": 1,
+      "desc": "FlashDB、AB 分区、Bootloader 与构建缓存——掉电不丢数据、升级不变砖",
+      "count": 6,
+      "showInSidebar": true,
+      "x": -54,
+      "y": 721
+    },
+    {
+      "id": "fcfe62ee-08ff-4d9a-8273-f185c27d2361",
+      "name": "通信与协议",
+      "parentId": "工程笔记",
+      "order": 2,
+      "desc": "BLE / NFC / 4G / MQTT / Modbus 与各类串口帧协议，以及数据怎么可靠送达",
+      "count": 18,
+      "showInSidebar": true,
+      "x": 146,
+      "y": 721
+    },
+    {
+      "id": "20f1c1fc-569c-4ca5-841a-0bc935732004",
+      "name": "算法与信号处理",
+      "parentId": "工程笔记",
+      "order": 3,
+      "desc": "滤波、变换、量化、TinyML 与空间索引——把噪声变成结论",
+      "count": 16,
+      "showInSidebar": true,
+      "x": 346,
+      "y": 721
+    },
+    {
+      "id": "f8de6c3e-9f11-45db-91bd-0a5eee0647e5",
+      "name": "前端与可视化",
+      "parentId": "工程笔记",
+      "order": 4,
+      "desc": "Canvas、移动端 UI 与交互、嵌入式 GUI，以及博客前端本身",
+      "count": 15,
+      "showInSidebar": true,
+      "x": 546,
+      "y": 721
+    },
+    {
+      "id": "2b930c11-f665-4b5a-b0f0-9e480ef1e8b0",
+      "name": "工具链与调试",
+      "parentId": "工程笔记",
+      "order": 5,
+      "desc": "环境搭建、故障定位、性能剖析与日常效率工具",
+      "count": 15,
+      "showInSidebar": true,
+      "x": 746,
+      "y": 721
+    },
+    {
+      "id": "980bfa11-0894-4330-84cb-4e8a38bc09c8",
+      "name": "开源项目",
+      "parentId": null,
+      "order": 13,
+      "desc": "",
+      "count": 16,
+      "showInSidebar": true,
+      "x": 1421,
+      "y": 538
+    },
+    {
+      "id": "185ec9b7-e3a8-415e-a3ea-c3e1f0408026",
+      "name": "低功耗",
+      "parentId": "工程笔记",
+      "order": 8,
+      "desc": "",
+      "count": 16,
+      "showInSidebar": true,
+      "x": -460,
+      "y": 735
+    }
+  ],
+  "skillPreset": "p_5d65250d"
+}

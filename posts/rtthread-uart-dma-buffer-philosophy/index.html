@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RT-Thread 两代串口驱动的设计分析 - CacheRivulet小记</title>
+  <meta name="description" content="RT-Thread串口驱动对比分析 V1：DMA循环rb溢出覆盖,零拷贝 V2：DMA循环乒乓buf,需要拷贝">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="RT-Thread">
+  <meta property="article:tag" content="DMA">
+  <meta property="article:tag" content="FIFO">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:published_time" content="2026-09-01">
+  <meta property="og:title" content="RT-Thread 两代串口驱动的设计分析">
+  <meta property="og:description" content="RT-Thread串口驱动对比分析 V1：DMA循环rb溢出覆盖,零拷贝 V2：DMA循环乒乓buf,需要拷贝">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/rtthread-uart-dma-buffer-philosophy/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/rtthread-uart-dma-buffer-philosophy/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "RT-Thread 两代串口驱动的设计分析",
+  "description": "RT-Thread串口驱动对比分析\nV1：DMA循环rb溢出覆盖,零拷贝\nV2：DMA循环乒乓buf,需要拷贝",
+  "datePublished": "2026-09-01",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/rtthread-uart-dma-buffer-philosophy/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/rtthread-uart-dma-buffer-philosophy/"
+  },
+  "keywords": "RT-Thread, DMA, FIFO, 嵌入式, 系统设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">RT-Thread 两代串口驱动的设计分析</h1>
+  <article class="article-body">
+<h1>RT-Thread 两代串口 DMA 驱动的缓冲边界取舍</h1>
+<p>项目仓库：<a href="https://github.com/RT-Thread/rt-thread" target="_blank" rel="noopener noreferrer">github.com/RT-Thread/rt-thread</a>（实时操作系统及设备驱动项目）</p>
+<p>串口 DMA 接收只有一个核心取舍：接收缓冲是否直接承担 FIFO 职责。RT-Thread 的两代驱动给出了两种答案。</p>
+<p><img src="/posts/rtthread-uart-dma-buffer-philosophy/dma-buffer-philosophy.svg" alt="RT-Thread 两代串口 DMA 缓冲结构对比"></p>
+<h2>经典驱动的 DMA 缓冲即 FIFO</h2>
+<p>经典驱动把 DMA 缓冲区直接当作串口环形队列使用。DMA 写入数据，应用从同一块缓冲区读取，中间没有额外拷贝。</p>
+<p>缓冲区写满后，DMA 继续前进并覆盖旧数据。这套方案不追求保存全部历史数据，优先保证接收路径持续运行。</p>
+<p>它的哲学很直接：用最少的内存和最短的数据路径换取性能，溢出时接受旧数据损失。</p>
+<h2>V2 驱动的 DMA 缓冲与 FIFO 分离</h2>
+<p>V2 驱动使用一块连续的循环 DMA 缓冲区。HT 表示前半区写完，TC 表示后半区写完，软件按两个半区交替处理，形成软件意义上的 ping-pong；DMA 控制器配置的仍是一块连续内存。</p>
+<p>处理完成的数据再交给下方的应用 FIFO。DMA 接收和应用读取各自拥有缓冲边界，应用 FIFO 可以选择丢弃新数据或覆盖旧数据。</p>
+<p>它的哲学是把接收动作和数据管理分开，用额外内存和一次搬运换取更清晰的边界与恢复方式。</p>
+<h2>取舍</h2>
+<p>两种方案都无法让有限缓冲区承受无限输入。差别是资源优先级：</p>
+<ul>
+<li>资源紧张、输入可控、允许覆盖旧数据：DMA 缓冲即 FIFO。</li>
+<li>数据完整性优先、需要明确处理溢出：连续 DMA 缓冲与应用 FIFO 分离。</li>
+</ul>
+<p>RT-Thread 的实现说明，串口 DMA 的关键决策是明确溢出发生时由系统保留什么、放弃什么，再选择 DMA 直写 FIFO 或连续 DMA 缓冲加软件 FIFO。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-01 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=rtthread-uart-dma-buffer-philosophy');
+  }
+  </script>
+</body>
+</html>

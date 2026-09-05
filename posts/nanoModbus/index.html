@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nanoModbus 更适合放在嵌入式网关的协议边界 - CacheRivulet小记</title>
+  <meta name="description" content="nanoModbus应用">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="nanoModbus">
+  <meta property="article:tag" content="Modbus">
+  <meta property="article:tag" content="DALI">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="nanoModbus 更适合放在嵌入式网关的协议边界">
+  <meta property="og:description" content="nanoModbus应用">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/nanoModbus/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/nanoModbus/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "nanoModbus 更适合放在嵌入式网关的协议边界",
+  "description": "nanoModbus应用",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/nanoModbus/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/nanoModbus/"
+  },
+  "keywords": "nanoModbus, Modbus, DALI, 嵌入式"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">nanoModbus 更适合放在嵌入式网关的协议边界</h1>
+  <article class="article-body">
+<h1>nanoModbus 更适合放在嵌入式网关的协议边界</h1>
+<p>在 DALI 转 Modbus 网关里，nanoModbus 的职责是处理 Modbus RTU 从站协议，并把业务逻辑留给应用层。</p>
+<p>项目硬件是 AIR001，DALI 侧负责照明总线的发送、接收和解析，RS485 侧对外暴露 Modbus RTU。从上位机看，它就是一组 holding register；从固件看，Modbus 写寄存器会触发 DALI 发送，DALI 接收结果会回填到寄存器里。</p>
+<p><img src="/posts/nanoModbus/img/dali-gateway-pcb.webp" alt="DALI 转 Modbus 网关硬件"></p>
+<h2>先把 Modbus 当成入口层</h2>
+<p>nanoModbus 只需要平台读写函数和回调表。串口、DMA、队列、业务状态都留在应用层，不塞进库里。</p>
+<p>这个项目里，串口接收使用 DMA 环形缓冲和 idle 中断，再转存到一个字节队列。nanoModbus 的 <code>read</code> 回调只从这个队列里按超时时间取字节，<code>write</code> 回调只负责把响应发回 UART。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int32_t</span><span style="color:#DCDCAA"> nanoModbus_read_serial</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">buf</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                      uint16_t</span><span style="color:#9CDCFE"> count</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                      int32_t</span><span style="color:#9CDCFE"> byte_timeout_ms</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                      void</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">  uint32_t</span><span style="color:#D4D4D4"> tick_start = </span><span style="color:#DCDCAA">HAL_GetTick</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#569CD6">  uint16_t</span><span style="color:#D4D4D4"> realReadCount = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">  do</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4"> rx_data;</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (realReadCount &#x3C; count &#x26;&#x26;</span></span>
+<span class="line"><span style="color:#DCDCAA">           USART_read</span><span style="color:#D4D4D4">(&#x26;USART1_DMA_Context, &#x26;rx_data)) {</span></span>
+<span class="line"><span style="color:#9CDCFE">      buf</span><span style="color:#D4D4D4">[realReadCount++] = rx_data;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  } </span><span style="color:#C586C0">while</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">HAL_GetTick</span><span style="color:#D4D4D4">() - tick_start &#x3C; byte_timeout_ms &#x26;&#x26;</span></span>
+<span class="line"><span style="color:#D4D4D4">           realReadCount &#x3C; count);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> realReadCount;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int32_t</span><span style="color:#DCDCAA"> nanoModbus_write_serial</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">buf</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                       uint16_t</span><span style="color:#9CDCFE"> count</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                       int32_t</span><span style="color:#9CDCFE"> byte_timeout_ms</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                       void</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#DCDCAA"> USART_write</span><span style="color:#D4D4D4">(&#x26;USART1_DMA_Context, (</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4">*)buf, count);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这样做的好处是边界清楚：nanoModbus 不关心 UART 是轮询、中断还是 DMA；应用层也不需要解析 Modbus 帧、CRC 和异常响应。</p>
+<h2>寄存器表要表达业务动作</h2>
+<p>DALI 网关只开放 holding register。部分寄存器是状态，例如运行时间、接收长度、接收数据；部分寄存器是配置，例如控制器模式、是否监听自身发送；还有一个寄存器是动作触发：写入发送使能后，把前面两个消息字节发到 DALI 总线。</p>
+<p>这个设计比另起一套私有命令更容易测试。Modbus Poll 直接读写寄存器，就能验证网关的主要行为。</p>
+<p><img src="/posts/nanoModbus/img/modbus-poll-registers.webp" alt="Modbus Poll 中的寄存器视图"></p>
+<p>寄存器地址不要散落在业务代码里。项目里用枚举固定寄存器顺序，读写回调统一检查范围和权限：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> enum</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_IS_MILLIS_0 = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_IS_MILLIS_1,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_IS_CONTROLER,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_TX_MSG_BOX_0,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_TX_MSG_BOX_1,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_TX_EN,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_RX_LEN,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_RX_MSG_BOX_0,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_RX_MSG_BOX_1,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_DEMO_SENDING_RESTRICTIONS,</span></span>
+<span class="line"><span style="color:#D4D4D4">  MODBUS_HOLDING_REG_DEMO_IS_MONITOR_SELF_TX,</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p>读回调适合做轻量的状态整理。这个项目在读取时刷新运行时间，并在上位机读取接收消息后释放 IRQ 提示信号：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">nmbs_error </span><span style="color:#DCDCAA">handler_read_holding_registers</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint16_t</span><span style="color:#9CDCFE"> address</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                          uint16_t</span><span style="color:#9CDCFE"> quantity</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                          uint16_t</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">registers_out</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                          uint8_t</span><span style="color:#9CDCFE"> unit_id</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                          void</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (address + quantity > HOLDING_REGISTERS_COUNT)</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> NMBS_EXCEPTION_ILLEGAL_DATA_ADDRESS;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (address &#x3C;= MODBUS_HOLDING_REG_RX_MSG_BOX_0 &#x26;&#x26;</span></span>
+<span class="line"><span style="color:#D4D4D4">      address + quantity >= MODBUS_HOLDING_REG_RX_MSG_BOX_1) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_GPIO_WritePin</span><span style="color:#D4D4D4">(RX_IRQ_GPIO_Port, RX_IRQ_Pin, GPIO_PIN_SET);</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">  *((</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4">*)modbus_holding_registers) = </span><span style="color:#DCDCAA">HAL_GetTick</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">  memcpy</span><span style="color:#D4D4D4">(registers_out,</span></span>
+<span class="line"><span style="color:#D4D4D4">         modbus_holding_registers + address,</span></span>
+<span class="line"><span style="color:#569CD6">         sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint16_t</span><span style="color:#D4D4D4">) * quantity);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> NMBS_ERROR_NONE;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>写回调要区分“写状态”和“触发动作”。接收结果、演示限制计数这类寄存器由固件维护，上位机写入应该返回非法地址。发送使能寄存器不能简单保存值，写入时要读出消息寄存器并启动 DALI 发送。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">nmbs_error </span><span style="color:#DCDCAA">handler_write_single_register</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint16_t</span><span style="color:#9CDCFE"> address</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                         uint16_t</span><span style="color:#9CDCFE"> value</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                         uint8_t</span><span style="color:#9CDCFE"> unit_id</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                         void</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (address >= HOLDING_REGISTERS_COUNT)</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> NMBS_EXCEPTION_ILLEGAL_DATA_ADDRESS;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">  switch</span><span style="color:#D4D4D4"> (address) {</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> MODBUS_HOLDING_REG_RX_LEN:</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> MODBUS_HOLDING_REG_RX_MSG_BOX_0:</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> MODBUS_HOLDING_REG_RX_MSG_BOX_1:</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> MODBUS_HOLDING_REG_DEMO_SENDING_RESTRICTIONS:</span></span>
+<span class="line"><span style="color:#C586C0">      return</span><span style="color:#D4D4D4"> NMBS_EXCEPTION_ILLEGAL_DATA_ADDRESS;</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">  switch</span><span style="color:#D4D4D4"> (address) {</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> MODBUS_HOLDING_REG_IS_CONTROLER:</span></span>
+<span class="line"><span style="color:#9CDCFE">      dali_ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">tx_isControler</span><span style="color:#D4D4D4"> = value;</span></span>
+<span class="line"><span style="color:#C586C0">      break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> MODBUS_HOLDING_REG_DEMO_IS_MONITOR_SELF_TX:</span></span>
+<span class="line"><span style="color:#9CDCFE">      dali_ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">rx_isMonitorSelfTx</span><span style="color:#D4D4D4"> = value;</span></span>
+<span class="line"><span style="color:#C586C0">      break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> MODBUS_HOLDING_REG_TX_EN: {</span></span>
+<span class="line"><span style="color:#569CD6">      uint8_t</span><span style="color:#9CDCFE"> sendData</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">] = {</span></span>
+<span class="line"><span style="color:#9CDCFE">        modbus_holding_registers</span><span style="color:#D4D4D4">[MODBUS_HOLDING_REG_TX_MSG_BOX_0] &#x26; </span><span style="color:#B5CEA8">0xFF</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        modbus_holding_registers</span><span style="color:#D4D4D4">[MODBUS_HOLDING_REG_TX_MSG_BOX_1] &#x26; </span><span style="color:#B5CEA8">0xFF</span></span>
+<span class="line"><span style="color:#D4D4D4">      };</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">      DALI_start_tx_interrupt</span><span style="color:#D4D4D4">(&#x26;dali_ctx, sendData);</span></span>
+<span class="line"><span style="color:#C586C0">      return</span><span style="color:#D4D4D4"> NMBS_ERROR_NONE;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">  modbus_holding_registers</span><span style="color:#D4D4D4">[address] = value;</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> NMBS_ERROR_NONE;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>触发型寄存器如果被当成普通状态保存，后面维护时很容易误判设备状态。例如 <code>TX_EN</code> 的意义是“这次写入触发发送”，不能表示“设备当前处于发送使能状态”。这类寄存器最好在写回调里立即消费掉。</p>
+<h2>DALI 侧只通过状态和事件接入</h2>
+<p>DALI 接收完成后，不需要直接参与 Modbus 协议处理。它只把解析结果写进 holding register，并拉低 IRQ 引脚通知外部设备有新数据。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> rx_interrupt_callback</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4">* </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint8_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">  modbus_holding_registers</span><span style="color:#D4D4D4">[MODBUS_HOLDING_REG_RX_LEN] = len;</span></span>
+<span class="line"><span style="color:#9CDCFE">  modbus_holding_registers</span><span style="color:#D4D4D4">[MODBUS_HOLDING_REG_RX_MSG_BOX_0] = </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#9CDCFE">  modbus_holding_registers</span><span style="color:#D4D4D4">[MODBUS_HOLDING_REG_RX_MSG_BOX_1] = </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#DCDCAA">  HAL_GPIO_WritePin</span><span style="color:#D4D4D4">(RX_IRQ_GPIO_Port, RX_IRQ_Pin, GPIO_PIN_RESET);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这个边界让系统更容易排查。DALI 定时器、中断解析、曼彻斯特编码可以单独调；Modbus Poll 读写寄存器也可以单独调。两边通过一张小寄存器表连接。</p>
+<p><img src="/posts/nanoModbus/img/dali-waveform.png" alt="DALI 总线波形"></p>
+<h2>主循环里不要空跑协议栈</h2>
+<p>工程里还有一个细节：只有串口队列不为空时才调用 <code>nmbs_server_poll()</code>。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (!</span><span style="color:#DCDCAA">isQueueEmpty</span><span style="color:#D4D4D4">(&#x26;USART1_DMA_Context.queue) &#x26;&#x26;</span></span>
+<span class="line"><span style="color:#DCDCAA">    nmbs_server_poll</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">nmbs</span><span style="color:#D4D4D4">) == NMBS_ERROR_TRANSPORT) {</span></span>
+<span class="line"><span style="color:#DCDCAA">  Error_Handler</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">DALI_Update</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">dali_ctx</span><span style="color:#D4D4D4">);</span></span></code></pre><p>这样做可以避免主循环长期卡在无意义的 Modbus 读取等待里。DALI 侧还需要持续处理接收超时和帧解析，协议入口不能抢走整个主循环。</p>
+<p>超时也要按串口接收方式理解。<code>byte_timeout_ms</code> 是 nanoModbus 等待下一个字节的边界，不代表 DALI 业务超时。DMA idle 中断已经负责把收到的数据搬到队列里，read 回调只要在这个边界内尽量取满即可。</p>
+<h2>这类项目的移植结论</h2>
+<p>nanoModbus 适合承担协议边界，不适合承担业务模型。嵌入式网关里最稳的用法是：</p>
+<ul>
+<li>串口收发封装成平台 <code>read</code> 和 <code>write</code>。</li>
+<li>业务能力整理成 holding register。</li>
+<li>只读寄存器在写回调里明确拒绝。</li>
+<li>触发型寄存器在写回调里立即消费。</li>
+<li>异步总线事件只更新寄存器和通知引脚。</li>
+<li>主循环避免因为 Modbus 等待阻塞其他实时任务。</li>
+</ul>
+<p>这样移植后，nanoModbus 负责协议正确性，应用代码负责设备行为。两边边界清楚，后续换串口驱动、扩寄存器、接入新的现场总线时都更容易维护。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=nanoModbus');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PY32F002A 试用 ChaCha20 流密码加密 FlashStore 存储数据 - CacheRivulet小记</title>
+  <meta name="description" content="ChaCha20 加密 FlashStore，Cortex-M0+ 纯软件免 AES 硬件">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="PY32F002A">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:tag" content="ChaCha20">
+  <meta property="article:tag" content="Cortex-M0+">
+  <meta property="article:published_time" content="2026-07-31">
+  <meta property="og:title" content="PY32F002A 试用 ChaCha20 流密码加密 FlashStore 存储数据">
+  <meta property="og:description" content="ChaCha20 加密 FlashStore，Cortex-M0+ 纯软件免 AES 硬件">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/air001-chacha20-flashstore/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/air001-chacha20-flashstore/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "PY32F002A 试用 ChaCha20 流密码加密 FlashStore 存储数据",
+  "description": "ChaCha20 加密 FlashStore，Cortex-M0+ 纯软件免 AES 硬件",
+  "datePublished": "2026-07-31",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/air001-chacha20-flashstore/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/air001-chacha20-flashstore/"
+  },
+  "keywords": "嵌入式, PY32F002A, Flash存储, ChaCha20, Cortex-M0+"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">PY32F002A 试用 ChaCha20 流密码加密 FlashStore 存储数据</h1>
+  <article class="article-body">
+<h1>PY32F002A 试用 ChaCha20 流密码加密 FlashStore 存储数据</h1>
+<h2>ChaCha20 是什么</h2>
+<p>ChaCha20 是一种流密码（stream cipher），RFC 8439 标准。它是 TLS 1.3、QUIC、WireGuard 等新一代协议的默认加密算法之一，Google 在移动端全面用它替代 AES。和 AES 不同，它不需要硬件加速器，纯软件就能在 MCU 上高效运行。</p>
+<p>核心特性：</p>
+<ul>
+<li><strong>对称加密</strong>：加密和解密是同一个操作（XOR 密钥流），调用同一个函数</li>
+<li><strong>无对齐要求</strong>：数据不需要 4 字节对齐，任意长度都能处理</li>
+<li><strong>资源友好</strong>：Cortex-M0+ 上 <code>-Os</code> 编译仅占约 <strong>700 字节 Flash</strong>，约 <strong>200 字节栈</strong></li>
+<li><strong>输入参数</strong>：32 字节密钥 + 12 字节 nonce（同一密钥下 nonce 不能重复）</li>
+</ul>
+<h2>在 PY32F002A 上的用法</h2>
+<p>结合之前移植的 FlashStore A/B 分区存储，把 ChaCha20 作为加密层叠加在上面：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>保存: 明文 → ChaCha20 加密 → FlashStore_Save → 写入 Flash</span></span>
+<span class="line"><span>加载: FlashStore_Load → 密文 → ChaCha20 解密 → 明文</span></span></code></pre><p>核心代码三行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">chacha20_crypt</span><span style="color:#D4D4D4">(data, size, key, nonce);</span><span style="color:#6A9955">   // 加密（或解密，同一函数）</span></span>
+<span class="line"><span style="color:#DCDCAA">FlashStore_Save</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">cfg</span><span style="color:#D4D4D4">, data, size);</span><span style="color:#6A9955">        // 存到闪存</span></span>
+<span class="line"><span style="color:#DCDCAA">FlashStore_Load</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">cfg</span><span style="color:#D4D4D4">, data, size);</span><span style="color:#6A9955">        // 读回</span></span>
+<span class="line"><span style="color:#DCDCAA">chacha20_crypt</span><span style="color:#D4D4D4">(data, size, key, nonce);</span><span style="color:#6A9955">   // 解密</span></span></code></pre><h2>实测：加密一句名言</h2>
+<p>用 &quot;Stay hungry, stay foolish.&quot; 做测试，32 字节密钥 + 12 字节 nonce。</p>
+<p>明文：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>53 74 61 79 20 68 75 6e 67 72 79 2c 20 73 74 61  │Stay hungry, sta</span></span>
+<span class="line"><span>79 20 66 6f 6f 6c 69 73 68 2e 00 00 00 00 00 00  │y foolish.......</span></span></code></pre><p>加密后 — 完全不可读：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>3a 28 1d a0 11 62 cd 14 4a 03 07 03 93 67 63 73  │:(...b..J....gcs</span></span>
+<span class="line"><span>69 d1 59 2f a1 dd 95 06 2d 14 b5 28 29 ee 9f 0a  │i.Y/....-..()...</span></span></code></pre><p>FlashStore 存盘再读回，解密还原 — 一字不差。</p>
+<h2>资源占用</h2>
+<p>PY32F002A（Cortex-M0+，48MHz，<code>-Os</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>Flash</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>flash_store</td>
+<td>594 B</td>
+<td>A/B 分区核心</td>
+</tr>
+<tr>
+<td>flash_store_port</td>
+<td>230 B</td>
+<td>HAL 适配</td>
+</tr>
+<tr>
+<td>chacha20</td>
+<td>~700 B</td>
+<td>加密/解密</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td><strong>~1.5 KB</strong></td>
+<td>含加密的可靠闪存存储</td>
+</tr>
+</tbody></table>
+<p>如果只需要存储不需要加密，去掉 ChaCha20 即可，约 800 字节搞定。</p>
+<h2>完整源码</h2>
+<p>只有 100 行，零依赖，复制到任何 MCU 项目即可使用。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "chacha20.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> QR(</span><span style="color:#9CDCFE">a</span><span style="color:#569CD6">, </span><span style="color:#9CDCFE">b</span><span style="color:#569CD6">, </span><span style="color:#9CDCFE">c</span><span style="color:#569CD6">, </span><span style="color:#9CDCFE">d</span><span style="color:#569CD6">) </span><span style="color:#C586C0">do</span><span style="color:#569CD6"> {          </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (a) </span><span style="color:#D4D4D4">+=</span><span style="color:#569CD6"> (b); (d) </span><span style="color:#D4D4D4">^=</span><span style="color:#569CD6"> (a);           </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (d) </span><span style="color:#D4D4D4">=</span><span style="color:#569CD6"> ((d) </span><span style="color:#D4D4D4">&#x3C;&#x3C;</span><span style="color:#B5CEA8"> 16</span><span style="color:#569CD6">) </span><span style="color:#D4D4D4">|</span><span style="color:#569CD6"> ((d) </span><span style="color:#D4D4D4">>></span><span style="color:#B5CEA8"> 16</span><span style="color:#569CD6">);  </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (c) </span><span style="color:#D4D4D4">+=</span><span style="color:#569CD6"> (d); (b) </span><span style="color:#D4D4D4">^=</span><span style="color:#569CD6"> (c);           </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (b) </span><span style="color:#D4D4D4">=</span><span style="color:#569CD6"> ((b) </span><span style="color:#D4D4D4">&#x3C;&#x3C;</span><span style="color:#B5CEA8"> 12</span><span style="color:#569CD6">) </span><span style="color:#D4D4D4">|</span><span style="color:#569CD6"> ((b) </span><span style="color:#D4D4D4">>></span><span style="color:#B5CEA8"> 20</span><span style="color:#569CD6">);  </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (a) </span><span style="color:#D4D4D4">+=</span><span style="color:#569CD6"> (b); (d) </span><span style="color:#D4D4D4">^=</span><span style="color:#569CD6"> (a);           </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (d) </span><span style="color:#D4D4D4">=</span><span style="color:#569CD6"> ((d) </span><span style="color:#D4D4D4">&#x3C;&#x3C;</span><span style="color:#B5CEA8"> 8</span><span style="color:#569CD6">)  </span><span style="color:#D4D4D4">|</span><span style="color:#569CD6"> ((d) </span><span style="color:#D4D4D4">>></span><span style="color:#B5CEA8"> 24</span><span style="color:#569CD6">);  </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (c) </span><span style="color:#D4D4D4">+=</span><span style="color:#569CD6"> (d); (b) </span><span style="color:#D4D4D4">^=</span><span style="color:#569CD6"> (c);           </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    (b) </span><span style="color:#D4D4D4">=</span><span style="color:#569CD6"> ((b) </span><span style="color:#D4D4D4">&#x3C;&#x3C;</span><span style="color:#B5CEA8"> 7</span><span style="color:#569CD6">)  </span><span style="color:#D4D4D4">|</span><span style="color:#569CD6"> ((b) </span><span style="color:#D4D4D4">>></span><span style="color:#B5CEA8"> 25</span><span style="color:#569CD6">);  </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">} </span><span style="color:#C586C0">while</span><span style="color:#569CD6"> (</span><span style="color:#B5CEA8">0</span><span style="color:#569CD6">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint32_t</span><span style="color:#DCDCAA"> ld32</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">p</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> v;</span></span>
+<span class="line"><span style="color:#DCDCAA">    memcpy</span><span style="color:#D4D4D4">(&#x26;v, p, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(v));</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> v;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> st32</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">p</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> v</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    memcpy</span><span style="color:#D4D4D4">(p, &#x26;v, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(v));</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> chacha20_block</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#9CDCFE"> out</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint32_t</span><span style="color:#9CDCFE"> init</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">]) {</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#9CDCFE"> x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#DCDCAA">    memcpy</span><span style="color:#D4D4D4">(x, init, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(x));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">; i++) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[ </span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[ </span><span style="color:#B5CEA8">9</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">13</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">6</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">14</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">7</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">11</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">15</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">15</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">6</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">11</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">7</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[ </span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">13</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">        QR</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[ </span><span style="color:#B5CEA8">9</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">14</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">; i++)</span></span>
+<span class="line"><span style="color:#DCDCAA">        st32</span><span style="color:#D4D4D4">(out + i * </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">[i] + </span><span style="color:#9CDCFE">init</span><span style="color:#D4D4D4">[i]);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> chacha20_crypt</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> size</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                    const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> key</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">32</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> nonce</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">]) {</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (size == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#9CDCFE"> state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#9CDCFE">    state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">0x61707865u</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">0x3320646eu</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">0x79622d32u</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">0x6b206574u</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">; i++)</span></span>
+<span class="line"><span style="color:#9CDCFE">        state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4"> + i] = </span><span style="color:#DCDCAA">ld32</span><span style="color:#D4D4D4">(key + i * </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">    state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">; i++)</span></span>
+<span class="line"><span style="color:#9CDCFE">        state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">13</span><span style="color:#D4D4D4"> + i] = </span><span style="color:#DCDCAA">ld32</span><span style="color:#D4D4D4">(nonce + i * </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#9CDCFE"> keystream</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">    size_t</span><span style="color:#D4D4D4"> offset = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (offset &#x3C; size) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        chacha20_block</span><span style="color:#D4D4D4">(keystream, state);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">        size_t</span><span style="color:#D4D4D4"> chunk = size - offset;</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (chunk > </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">) chunk = </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">        for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; chunk; i++)</span></span>
+<span class="line"><span style="color:#9CDCFE">            data</span><span style="color:#D4D4D4">[offset + i] ^= </span><span style="color:#9CDCFE">keystream</span><span style="color:#D4D4D4">[i];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">        offset += chunk;</span></span>
+<span class="line"><span style="color:#9CDCFE">        state</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">]++;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>头文件：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#ifndef</span><span style="color:#569CD6"> CHACHA20_H</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> CHACHA20_H</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stddef.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdint.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> chacha20_crypt</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> size</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                    const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> key</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">32</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> nonce</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#endif</span></span></code></pre>
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-31 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=air001-chacha20-flashstore');
+  }
+  </script>
+</body>
+</html>

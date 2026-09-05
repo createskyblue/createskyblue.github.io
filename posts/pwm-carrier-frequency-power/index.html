@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>直流电机 PWM 载波频率优化：扫频寻找最低能耗点 - CacheRivulet小记</title>
+  <meta name="description" content="直流电机 PWM 载波频率优化：扫频寻找最低能耗点">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="电机">
+  <meta property="article:published_time" content="2026-08-09">
+  <meta property="og:title" content="直流电机 PWM 载波频率优化：扫频寻找最低能耗点">
+  <meta property="og:description" content="直流电机 PWM 载波频率优化：扫频寻找最低能耗点">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/pwm-carrier-frequency-power/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/pwm-carrier-frequency-power/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "直流电机 PWM 载波频率优化：扫频寻找最低能耗点",
+  "description": "直流电机 PWM 载波频率优化：扫频寻找最低能耗点",
+  "datePublished": "2026-08-09",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/pwm-carrier-frequency-power/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/pwm-carrier-frequency-power/"
+  },
+  "keywords": "嵌入式, MCU, 低功耗, 电机"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">直流电机 PWM 载波频率优化：扫频寻找最低能耗点</h1>
+  <article class="article-body">
+<h1>直流电机 PWM 载波频率优化：通过扫频实验寻找最低输入能耗点</h1>
+<h2>背景</h2>
+<p>电池供电的直流电机执行器经霍尔脉冲反馈位置/转速，并借零点霍尔信号回零；控制器以&quot;位置外环 + 速度 PI 内环 + 速度前馈&quot;完成定行程运动。鉴于续航与噪声约束，PWM 载波频率需权衡开关损耗、绕组纹波及噪声，因此对载波频率做了系统性扫频寻优。</p>
+<h2>工作内容与成果</h2>
+<ul>
+<li><strong>搭建 AI 驱动的自动化测试环境</strong>：逆向低功耗分析仪的通信协议，将其封装为 MCP（Model Context Protocol）工具，打通固件烧录与串口指令下发链路，使 AI 能够自主完成固件烧录、运动控制指令发送和能耗数据采集。人工仅负责初始环境搭建与早期联调监督，之后由 AI 无人值守自动完成全频带扫频测试。</li>
+<li><strong>固定行程测量能耗</strong>：由低功耗分析仪同步采集固定行程内的输入电压与输入电流，对瞬时输入功率积分得到行程输入能耗；每频点重复 10 次，被测机全程常唤醒以消除低功耗睡眠唤醒干扰。</li>
+<li><strong>扫频寻求最优参数</strong>：实测固定行程输入能耗随载波频率呈 U 型曲线，定位本机最低能耗点，其测量中心值较原设定频点降低约 <strong>11.5%</strong>；高频端能耗明显抬升，与频率相关损耗增加的趋势一致。</li>
+</ul>
+<h2>实测扫频结果</h2>
+<p><img src="/posts/pwm-carrier-frequency-power/ucurve.svg" alt="直流电机 PWM 载波频率 vs 固定行程能耗"></p>
+<h2>损耗机理</h2>
+<p>在电流连续、平均电流近似不变，且 PWM 周期远小于电机电气时间常数 <code>τe = L/R</code> 的近似下，电流纹波满足 <code>ΔI ∝ 1/f</code>，由纹波引入的额外绕组铜损可写成 <code>P_ripple ≈ k₂/f²</code>。当单次开关能量近似不变时，驱动器开关损耗可写成 <code>P_sw ≈ k₁f</code>。加上与载波频率近似无关的基线损耗 <code>P₀</code>，总损耗可近似表示为 <code>P_total ≈ P₀ + k₁f + k₂/f²</code>；该模型用于解释 U 型趋势，不代表本次扫频完成了各项损耗的独立测量。本文以扫频实测结果为准，不将损耗分解为独立项进行数学拟合。</p>
+<p><img src="/posts/pwm-carrier-frequency-power/loss-model.svg" alt="开关损耗与纹波损耗叠加的 U 型总损耗（理想化）"></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-09 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=pwm-carrier-frequency-power');
+  }
+  </script>
+</body>
+</html>

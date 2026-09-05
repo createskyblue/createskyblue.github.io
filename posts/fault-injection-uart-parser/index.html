@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>故障注入复现上位机丢字节失步 - CacheRivulet小记</title>
+  <meta name="description" content="注入按钮复现上位机丢字节失步：字节级故障注入、失步锁定">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="Windows">
+  <meta property="article:tag" content="可观测性">
+  <meta property="article:published_time" content="2026-08-11">
+  <meta property="og:title" content="故障注入复现上位机丢字节失步">
+  <meta property="og:description" content="注入按钮复现上位机丢字节失步：字节级故障注入、失步锁定">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/fault-injection-uart-parser/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/fault-injection-uart-parser/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "故障注入复现上位机丢字节失步",
+  "description": "注入按钮复现上位机丢字节失步：字节级故障注入、失步锁定",
+  "datePublished": "2026-08-11",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/fault-injection-uart-parser/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/fault-injection-uart-parser/"
+  },
+  "keywords": "故障诊断, 通信协议, 工程调试, Windows, 可观测性"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">故障注入复现上位机丢字节失步</h1>
+  <article class="article-body">
+<h1>故障注入复现上位机丢字节失步</h1>
+<p>一台低功耗分析仪的上位机（Windows 闭源软件）有个隐患：串口链路只要丢 1 个字节，数据解析就永久错位。反馈给厂家后，他们的技术人员没意识到问题，认为代码本就会丢弃错误包，不至于失步。口说无凭，我设计了一个实验：在厂家自己的软件里加一个「模拟丢字节」按钮，当着他们的面按下去，让失步自己发生。缺陷是怎么查出来的、为什么会永久错位，见 <a href="http://localhost:5173/posts/serial-stream-state-machine">错位、丢尾、永久失步：三态状态机把串口字节流拼成完整帧</a>，本文不重复，只讲这个实验怎么设计、结果怎么样。</p>
+<h2>一、实验前要知道的三个事实</h2>
+<p>这款上位机的接收逻辑有三个特点，实验设计全建立在这上面：</p>
+<ul>
+<li>软件每次固定读 64 字节，从不检查帧头，错位了也没有自己找回来的机制；</li>
+<li>末尾不足 64 字节的零碎数据会被直接扔掉。这看似保护措施，其实防不住真正的风险：软件读之前先确认缓冲区够 64 字节，读取永远成功，数据流中间丢字节造成的错位照样发生，扔残段只会再白丢一笔数据。这个丢弃还会挪动对齐位置，直接影响实验效果（见第三节）；</li>
+<li>解析出错时软件既不报警也不提示，界面只是波形卡住不动，看起来像是偶发卡死。</li>
+</ul>
+<p>前两点决定了失步一旦发生就不会自己恢复，第三点决定了必须靠外部手段让失步「看得见」。</p>
+<p><img src="/posts/fault-injection-uart-parser/align.svg" alt="丢字节前后解析窗口对齐对比"></p>
+<h2>二、实验设计：一个「模拟丢 1 字节」按钮</h2>
+<p>在厂家的软件里加了三个小改动：</p>
+<ol>
+<li>界面上多一个按钮和一行状态文字；</li>
+<li>按钮按下后，抢在软件读取之前，从串口缓冲里提前取走 1 个字节。软件照样读满 64 字节，但读到的内容整体错开了一位，从此每一帧都是错位的，效果和真实链路丢字节完全一样；</li>
+<li>每收到一帧数据检查一次帧头，对齐正常显示绿色，错位显示红色。</li>
+</ol>
+<p>按钮只是触发器，缺陷不是我们注入的，这一点必须说死。有人会问：USB 有校验和重传，丢也是整包丢，一帧正好一个包，怎么会错位？问得对，整包丢失确实不造成错位。但要分清契约和现象：虚拟串口对应用层就是字节流管道，驱动从不承诺按 64 的倍数交付，&quot;缓冲区总是整包倍数&quot;只是当前链路上观察到的行为，不是任何一层的保证。何况字节流脱离整帧网格有两条现实路径：设备侧，复位瞬间吐杂讯、固件发送缓冲溢出截断，丢的就不是整帧；主机侧更讽刺，这个软件收到设备报错会在接收线程里直接弹对话框，弹窗没人点，接收循环堵死，几秒后驱动缓冲溢出，溢出丢多少字节就不受控制了。也就是说它不需要任何外力，自己就能把自己逼到错位。而原厂代码没有从错位中恢复的任何能力：数据主路径从不检查帧头，认不出的帧静默丢弃，既发现不了也找不回来。公允地说：正常链路、正常固件下它确实不会出错，对齐是传输层免费提供的；但低概率不等于零，长时间挂机总会撞上扰动，而它对异常零防御、零感知。所以就算完全不碰这个软件，同样的失步也会发生，区别只是等多久。实验做的只是把&quot;等一次随机扰动&quot;变成&quot;按一下按钮&quot;。</p>
+<h2>三、第一次失败：失步竟然自己恢复了</h2>
+<p>第一版实验有个意外：丢了 1 字节后，软件有时过一会儿自己恢复了。查清楚原因：这台设备一帧正好 64 字节，经 USB 送达时缓冲区通常按 64 的倍数累积，读完没有剩余。被拿走 1 字节后，缓冲区总数永远差 1 才凑整，每次读完都会剩 63 字节零头被扔掉，而扔 63 等于读取位置多跳 63 位，正好把之前错的 1 位凑回来，对齐恢复。</p>
+<p>修正办法：丢字节之后，让软件不再扔末尾数据，偏移就永远补不回来，失步确定持续。实验要证明的是「软件无法自愈」，就不能留下这条偶然自愈的路。</p>
+<p>这里要主动交代：禁用末尾丢弃确实动了原程序的行为，但动的不是它「找回对齐」的能力，因为它从来没有这种能力。末尾丢弃从不检查帧头，恢复与否只看扔掉的字节数凑不凑巧，是运气不是机制。就算偶尔凑巧恢复，恢复之前数据已经错了很久，用户毫无察觉；真实使用中丢字节反复发生，靠巧合对齐等于把正确性交给运气。禁用它只是把随机性拿掉，让失步确定地摆在台面上。</p>
+<h2>四、实验结果：按下按钮之后</h2>
+<p>点击按钮：状态文字立刻变红「帧失步」，此后一直不恢复；波形卡住不动，其他操作也没有反应；而软件自己全程没有任何报错。必须断开连接再重连才恢复正常。整个改动只有 4 处，软件原有逻辑一行没动。</p>
+<p><img src="/posts/fault-injection-uart-parser/demo-shot.webp" alt="现场复现：点击「模拟丢1字节」后，状态变红「帧失步! MAGIC=132 cmd(错)=60」"></p>
+<h2>五、一条铁律：不能碰原程序的行为</h2>
+<p>改动有一条铁律：不能改变软件原来的解析逻辑，否则厂家可以说「这是你改坏的」。全程唯一的例外是第三节交代过的尾部丢弃守卫，它禁掉的是巧合自愈，不是任何有意的恢复机制。实践中踩过一个坑：注入时改错了程序内部的引用，导致软件启动握手直接失败，后来手工修正才解决。全程没有厂家源码，也没有他们的开发环境，用的是 Windows 自带工具加开源库完成全部改动。</p>
+<h2>六、这个实验的价值</h2>
+<p>两个关键取舍：故障要像自然发生的错误，不能像人为破坏；观测手段不能碰业务逻辑。这样演示才站得住。</p>
+<p>丢字节是传输链路的事故，失步是软件自己的缺陷，这个实验把两件事分开了，厂家无法再用「链路问题」搪塞。反编译中还看到另一个模块里有一模一样的接收写法：凑满 64 字节盲读、不找帧头，说明这不是某个函数的疏忽，而是习惯性的设计模式。这套「加观测点 + 加故障点」的方法对任何闭源上位机都通用：把软件自己察觉不到的缺陷，变成对方无法否认的证据。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-11 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=fault-injection-uart-parser');
+  }
+  </script>
+</body>
+</html>

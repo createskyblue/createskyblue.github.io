@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用 PATH shim 从源头修复 Git Bash 调用 cmd.exe 的中文乱码 - CacheRivulet小记</title>
+  <meta name="description" content="Git Bash调用cmd前切UTF-8避免乱码">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Git Bash">
+  <meta property="article:tag" content="cmd.exe">
+  <meta property="article:tag" content="UTF-8">
+  <meta property="article:tag" content="编码">
+  <meta property="article:tag" content="Windows">
+  <meta property="article:tag" content="MSYS">
+  <meta property="article:published_time" content="2026-05-17">
+  <meta property="og:title" content="用 PATH shim 从源头修复 Git Bash 调用 cmd.exe 的中文乱码">
+  <meta property="og:description" content="Git Bash调用cmd前切UTF-8避免乱码">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/git-bash-cmd-utf8-shim/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/git-bash-cmd-utf8-shim/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用 PATH shim 从源头修复 Git Bash 调用 cmd.exe 的中文乱码",
+  "description": "Git Bash调用cmd前切UTF-8避免乱码",
+  "datePublished": "2026-05-17",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/git-bash-cmd-utf8-shim/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/git-bash-cmd-utf8-shim/"
+  },
+  "keywords": "Git Bash, cmd.exe, UTF-8, 编码, Windows, MSYS"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用 PATH shim 从源头修复 Git Bash 调用 cmd.exe 的中文乱码</h1>
+  <article class="article-body">
+<h1>用 PATH shim 从源头修复 Git Bash 调用 cmd.exe 的中文乱码</h1>
+<h2>现象</h2>
+<p>在 zh-CN Windows 上的 Git Bash 中执行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">cmd</span><span style="color:#CE9178"> /c</span><span style="color:#CE9178"> "echo 中文测试"</span></span></code></pre><p>输出是 cmd 启动横幅加一行乱码，而且 echo 命令根本没执行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Microsoft Windows [�汾 10.0.19045.6466]</span></span>
+<span class="line"><span>(c) Microsoft Corporation����������Ȩ����</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>C:\Users\lhw></span></span></code></pre><p>PowerShell 中调用同一条命令则正常。问题只出现在 Git Bash 启动 cmd.exe 时。</p>
+<h2>两个根因，不是一个</h2>
+<p>逐项隔离测试后，定位到两个互相独立的问题：</p>
+<h3>根因 1：MSYS 自动把 <code>/c</code> 转成 <code>C:\</code></h3>
+<p>MSYS 在调用原生 Windows 可执行文件时，会把看起来像 POSIX 路径的参数自动转换成 Windows 路径。<code>/c</code> 被识别为 C: 盘根目录，转换成 <code>C:\</code>。</p>
+<p>cmd.exe 实际收到的命令行是 <code>cmd.exe C:\ &quot;echo 中文测试&quot;</code>，既没有 <code>/c</code> 标志，第一个参数也不是可识别的命令，cmd 直接进入交互模式，打印横幅，然后退出。这就是为什么 echo 永远不会执行。</p>
+<p>验证方法 —— 用双斜杠绕过转换：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">cmd</span><span style="color:#CE9178"> //c</span><span style="color:#CE9178"> "chcp &#x26; echo 中文测试"</span></span></code></pre><p>输出：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>活动代码页: 936</span></span>
+<span class="line"><span>���Ĳ���</span></span></code></pre><p>这次 <code>/c</code> 没被转换，cmd 正常执行了命令。但又遇到了根因 2。</p>
+<h3>根因 2：cmd.exe 管道输出使用 OEM 代码页</h3>
+<p>cmd.exe 输出到管道（不是控制台）时，会用系统 OEM 代码页编码字节。zh-CN 系统是 936/GBK。Git Bash 期望读到 UTF-8，所以 GBK 字节被当作 UTF-8 解析就成了乱码。</p>
+<p>直觉的修复方式是在命令里加 <code>chcp 65001</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">cmd</span><span style="color:#CE9178"> //c</span><span style="color:#CE9178"> "chcp 65001 >nul &#x26;&#x26; echo 中文测试"</span></span></code></pre><p>5 次重复运行的实际结果：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Run 1: ������� hello 1</span></span>
+<span class="line"><span>Run 2: 你好世界 hello 2</span></span>
+<span class="line"><span>Run 3: 你好世界 hello 3</span></span>
+<span class="line"><span>Run 4: 你好世界 hello 4</span></span>
+<span class="line"><span>Run 5: 你好世界 hello 5</span></span></code></pre><p>第一次仍然乱码。<code>chcp 65001</code> 对同一进程内紧接着的 echo 输出有竞态：代码页切换和管道输出缓冲的时机不一致，首次调用经常拿不到新代码页。<strong>这意味着 chcp 不是可靠的修复手段。</strong></p>
+<h2>修复方案：PATH shim + iconv</h2>
+<p>在 PATH 里放一个名为 <code>cmd</code> 的 bash 脚本拦截 cmd.exe 调用，避免在每个调用处手动加补丁。</p>
+<h3>选型理由</h3>
+<p>Bash 工具实际运行的是 <code>bash -c &lt;command&gt;</code>，是非交互非登录 shell，<strong>不会加载 <code>~/.bashrc</code></strong>。所以函数、别名、<code>~/.bashrc</code> 配置都无效。能稳定生效的只有 PATH 拦截。</p>
+<p>Git Bash 默认 PATH：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>/c/Users/lhw/bin       ← 第一位，用户可写</span></span>
+<span class="line"><span>/mingw64/bin</span></span>
+<span class="line"><span>/usr/local/bin</span></span>
+<span class="line"><span>/usr/bin</span></span>
+<span class="line"><span>/bin</span></span>
+<span class="line"><span>...</span></span>
+<span class="line"><span>/c/Windows/system32    ← cmd.exe 在这里</span></span></code></pre><p>在 <code>C:\Users\lhw\bin\</code> 放一个名为 <code>cmd</code>（无 <code>.exe</code> 扩展名）的 bash 脚本，MSYS bash 解析命令时会优先命中它。<strong>Windows 本身只识别 <code>.exe</code> / <code>.bat</code> / <code>.cmd</code>，没有扩展名的 <code>cmd</code> 文件对 PowerShell、Run 对话框、其他 Windows 程序都不可见</strong>，所以拦截范围严格限定在 Git Bash 内部。</p>
+<h3>脚本内容</h3>
+<p><code>C:\Users\lhw\bin\cmd</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">#!/usr/bin/env bash</span></span>
+<span class="line"><span style="color:#569CD6">export</span><span style="color:#9CDCFE"> MSYS_NO_PATHCONV</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">1</span></span>
+<span class="line"><span style="color:#569CD6">export</span><span style="color:#9CDCFE"> MSYS2_ARG_CONV_EXCL</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'*'</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">REAL_CMD</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"/c/Windows/System32/cmd.exe"</span></span>
+<span class="line"><span style="color:#9CDCFE">SOURCE_CP</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"${</span><span style="color:#9CDCFE">CMD_SHIM_SOURCE_CP</span><span style="color:#D4D4D4">:-</span><span style="color:#9CDCFE">CP936</span><span style="color:#CE9178">}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">run_command_mode</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> [[ </span><span style="color:#CE9178">"${</span><span style="color:#9CDCFE">CMD_SHIM_PASSTHROUGH</span><span style="color:#D4D4D4">:-</span><span style="color:#9CDCFE">0</span><span style="color:#CE9178">}"</span><span style="color:#D4D4D4"> == </span><span style="color:#CE9178">"1"</span><span style="color:#D4D4D4"> ]]; </span><span style="color:#C586C0">then</span></span>
+<span class="line"><span style="color:#DCDCAA">        exec</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$REAL_CMD</span><span style="color:#CE9178">"</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$@</span><span style="color:#CE9178">"</span></span>
+<span class="line"><span style="color:#C586C0">    fi</span></span>
+<span class="line"><span style="color:#DCDCAA">    "</span><span style="color:#9CDCFE">$REAL_CMD</span><span style="color:#DCDCAA">"</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$@</span><span style="color:#CE9178">"</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#D4D4D4">        2> </span><span style="color:#CE9178">>(</span><span style="color:#DCDCAA">iconv</span><span style="color:#569CD6"> -f</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$SOURCE_CP</span><span style="color:#CE9178">" </span><span style="color:#569CD6">-t</span><span style="color:#CE9178"> UTF-8 </span><span style="color:#569CD6">-c</span><span style="color:#D4D4D4"> >&#x26;2</span><span style="color:#CE9178">)</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#D4D4D4">        | </span><span style="color:#DCDCAA">iconv</span><span style="color:#569CD6"> -f</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$SOURCE_CP</span><span style="color:#CE9178">"</span><span style="color:#569CD6"> -t</span><span style="color:#CE9178"> UTF-8</span><span style="color:#569CD6"> -c</span></span>
+<span class="line"><span style="color:#DCDCAA">    exit</span><span style="color:#CE9178"> "${</span><span style="color:#9CDCFE">PIPESTATUS</span><span style="color:#CE9178">[0]}"</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> [[ -t </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4"> &#x26;&#x26; -t </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4"> ]]; </span><span style="color:#C586C0">then</span></span>
+<span class="line"><span style="color:#DCDCAA">    exec</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$REAL_CMD</span><span style="color:#CE9178">"</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$@</span><span style="color:#CE9178">"</span></span>
+<span class="line"><span style="color:#C586C0">else</span></span>
+<span class="line"><span style="color:#DCDCAA">    run_command_mode</span><span style="color:#CE9178"> "</span><span style="color:#9CDCFE">$@</span><span style="color:#CE9178">"</span></span>
+<span class="line"><span style="color:#C586C0">fi</span></span></code></pre><h3>关键设计点</h3>
+<ul>
+<li><code>MSYS_NO_PATHCONV=1</code> + <code>MSYS2_ARG_CONV_EXCL=&#39;*&#39;</code>：彻底禁用 MSYS 对参数的路径转换，<code>/c</code>、<code>/k</code> 等开关原样传给 cmd.exe</li>
+<li><code>REAL_CMD</code> 使用绝对路径，避免脚本递归调用自己</li>
+<li>用 <code>iconv -f CP936 -t UTF-8 -c</code> 转换 stdout 和 stderr，而不是依赖 <code>chcp 65001</code>。<strong>iconv 是无状态的字节转换，没有竞态</strong></li>
+<li><code>-c</code> 让 iconv 静默丢弃源编码中无效的字节，避免遇到二进制数据时报错退出</li>
+<li><code>2&gt; &gt;(iconv ... &gt;&amp;2)</code> 使用 bash 进程替换分别转换两条流，stderr 不会被合并到 stdout</li>
+<li><code>PIPESTATUS[0]</code> 保留 cmd.exe 的真实退出码，否则会被 iconv 的退出码覆盖</li>
+<li>TTY 检测：stdin 和 stdout 都是终端时直接 passthrough，避免破坏交互式 cmd（虽然 MinTTY 下交互式 cmd 体验本来就差）</li>
+<li><code>CMD_SHIM_PASSTHROUGH=1</code> 作为应急开关，需要捕获二进制输出时可临时绕过转换</li>
+</ul>
+<h2>安装步骤</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">mkdir</span><span style="color:#569CD6"> -p</span><span style="color:#CE9178"> ~/bin</span></span>
+<span class="line"><span style="color:#6A9955"># 把上面的脚本保存为 ~/bin/cmd</span></span>
+<span class="line"><span style="color:#DCDCAA">chmod</span><span style="color:#CE9178"> +x</span><span style="color:#CE9178"> ~/bin/cmd</span></span></code></pre><p>确认 PATH 顺序正确：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">$</span><span style="color:#CE9178"> type</span><span style="color:#CE9178"> cmd</span></span>
+<span class="line"><span style="color:#DCDCAA">cmd</span><span style="color:#CE9178"> is</span><span style="color:#CE9178"> /c/Users/lhw/bin/cmd</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">$</span><span style="color:#CE9178"> which</span><span style="color:#569CD6"> -a</span><span style="color:#CE9178"> cmd</span></span>
+<span class="line"><span style="color:#DCDCAA">/c/Users/lhw/bin/cmd</span></span>
+<span class="line"><span style="color:#DCDCAA">/c/Windows/system32/cmd</span></span></code></pre><p>第一行命中 shim，下层 cmd.exe 仍可通过绝对路径访问。</p>
+<h2>验证</h2>
+<p>5 次冷启动稳定性：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">$</span><span style="color:#CE9178"> for</span><span style="color:#CE9178"> i</span><span style="color:#CE9178"> in</span><span style="color:#B5CEA8"> 1</span><span style="color:#B5CEA8"> 2</span><span style="color:#B5CEA8"> 3</span><span style="color:#B5CEA8"> 4</span><span style="color:#B5CEA8"> 5</span><span style="color:#D4D4D4">; </span><span style="color:#C586C0">do</span><span style="color:#DCDCAA"> echo</span><span style="color:#569CD6"> -n</span><span style="color:#CE9178"> "Run </span><span style="color:#9CDCFE">$i</span><span style="color:#CE9178">: "</span><span style="color:#D4D4D4">; </span><span style="color:#DCDCAA">cmd</span><span style="color:#CE9178"> /c</span><span style="color:#CE9178"> "echo 你好世界 测试</span><span style="color:#9CDCFE">$i</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">; </span><span style="color:#C586C0">done</span></span>
+<span class="line"><span style="color:#DCDCAA">Run</span><span style="color:#CE9178"> 1:</span><span style="color:#CE9178"> 你好世界</span><span style="color:#CE9178"> 测试1</span></span>
+<span class="line"><span style="color:#DCDCAA">Run</span><span style="color:#CE9178"> 2:</span><span style="color:#CE9178"> 你好世界</span><span style="color:#CE9178"> 测试2</span></span>
+<span class="line"><span style="color:#DCDCAA">Run</span><span style="color:#CE9178"> 3:</span><span style="color:#CE9178"> 你好世界</span><span style="color:#CE9178"> 测试3</span></span>
+<span class="line"><span style="color:#DCDCAA">Run</span><span style="color:#CE9178"> 4:</span><span style="color:#CE9178"> 你好世界</span><span style="color:#CE9178"> 测试4</span></span>
+<span class="line"><span style="color:#DCDCAA">Run</span><span style="color:#CE9178"> 5:</span><span style="color:#CE9178"> 你好世界</span><span style="color:#CE9178"> 测试5</span></span></code></pre><p>字节级验证：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">$</span><span style="color:#CE9178"> cmd</span><span style="color:#CE9178"> /c</span><span style="color:#CE9178"> "echo 你好"</span><span style="color:#D4D4D4"> | </span><span style="color:#DCDCAA">xxd</span></span>
+<span class="line"><span style="color:#DCDCAA">00000000:</span><span style="color:#CE9178"> e4bd</span><span style="color:#CE9178"> a0e5</span><span style="color:#CE9178"> a5bd</span><span style="color:#CE9178"> 0d0a</span><span style="color:#CE9178">   ........</span></span></code></pre><p><code>e4 bd a0</code> = 你，<code>e5 a5 bd</code> = 好，完全是 UTF-8。</p>
+<p>退出码、stderr、管道、<code>cmd /?</code> 中文帮助、<code>ver</code> 输出 <code>[版本 10.0.19045.6466]</code> 全部正常。</p>
+<h2>为什么写规则没用</h2>
+<p>第一直觉是&quot;写进规则让模型避开 <code>cmd /c</code>，改用 PowerShell&quot;。这条路有两个问题：</p>
+<p>第一，规则只对会读规则的模型生效。换一个模型、换一个 agent，规则就丢了。
+第二，cmd.exe 调用在很多场景下是无法避免的：第三方脚本里写死了 <code>cmd /c</code>，CI 工具链里嵌入了 bat 文件，Windows API 调用也可能间接走 cmd。</p>
+<p>从环境层面解决，让 <code>cmd</code> 这个命令本身就吐 UTF-8，比写&quot;不要用 cmd&quot;的规则可靠得多。</p>
+<h2>替代方案对比</h2>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>可行性</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>命令内 <code>chcp 65001</code></td>
+<td>部分可行</td>
+<td>首次调用有竞态，不可靠</td>
+</tr>
+<tr>
+<td>Windows Beta UTF-8 系统设置</td>
+<td>真正彻底</td>
+<td>需要管理员权限 + 重启，会影响所有应用</td>
+</tr>
+<tr>
+<td>修改 <code>~/.bashrc</code> 定义函数</td>
+<td>不可行</td>
+<td><code>bash -c</code> 非交互模式不加载 rc 文件</td>
+</tr>
+<tr>
+<td><strong>PATH shim + iconv</strong></td>
+<td><strong>采用</strong></td>
+<td>仅在 Git Bash 内生效，二进制输出需开环境变量</td>
+</tr>
+<tr>
+<td>Wrapper 命令 <code>cmdu</code> 等新名字</td>
+<td>可行</td>
+<td>需要修改所有调用方，无法拦截已有代码</td>
+</tr>
+</tbody></table>
+<h2>回滚方式</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">rm</span><span style="color:#CE9178"> ~/bin/cmd</span></span></code></pre><p>PATH 解析自动落回 <code>/c/Windows/system32/cmd</code>，恢复原始行为。无任何注册表、系统设置或全局环境变量改动。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-17 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=git-bash-cmd-utf8-shim');
+  }
+  </script>
+</body>
+</html>

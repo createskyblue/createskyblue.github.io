@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCU-Malloc-Tracker 给每次 malloc 记账，崩溃后还能导出堆快照查泄漏 - CacheRivulet小记</title>
+  <meta name="description" content="MCU上每次malloc都被记进静态表，泄漏、热点、崩溃现场一查便知">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="Hook">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="MCU-Malloc-Tracker 给每次 malloc 记账，崩溃后还能导出堆快照查泄漏">
+  <meta property="og:description" content="MCU上每次malloc都被记进静态表，泄漏、热点、崩溃现场一查便知">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/mcu-malloc-tracker/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/mcu-malloc-tracker/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "MCU-Malloc-Tracker 给每次 malloc 记账，崩溃后还能导出堆快照查泄漏",
+  "description": "MCU上每次malloc都被记进静态表，泄漏、热点、崩溃现场一查便知",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/mcu-malloc-tracker/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/mcu-malloc-tracker/"
+  },
+  "keywords": "嵌入式, MCU, C语言, Hook, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">MCU-Malloc-Tracker 给每次 malloc 记账，崩溃后还能导出堆快照查泄漏</h1>
+  <article class="article-body">
+<h1>MCU-Malloc-Tracker 给每次 malloc 记账，崩溃后还能导出堆快照查泄漏</h1>
+<blockquote>
+<p><strong>声明：</strong> MCU-Malloc-Tracker 是一个开源项目，作者为 Vanderhell（<a href="https://github.com/Vanderhell/MCU-Malloc-Tracker">项目仓库</a>）。本文是阅读该项目源码和文档后整理的学习笔记，用于理解 MCU 堆内存追踪的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/MCU-Malloc-Tracker" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/MCU-Malloc-Tracker</a>（面向裸机 MCU 的 malloc/free 追踪库，查泄漏、找分配热点、导出崩溃快照）</p>
+<p><img src="/posts/mcu-malloc-tracker/flow.svg" alt="追踪器整体流程"></p>
+<p>malloc 是从堆里动态申请内存的标准接口，配套的 free 负责归还。MCU 上的动态内存很有限，用错一点，问题要跑几天才暴露。</p>
+<h2>场景：设备随机崩溃，泄漏查不到</h2>
+<p>最常见的故障链条：某模块反复 malloc 却忘记 free，堆被悄悄吃光，之后某次分配失败，或者写穿边界，系统随机复位。排查的难点在现场留不住：设备不能随便接仿真器，故障后自动复位，等连上调试器时堆的状态已经没了。</p>
+<p>这个库的思路是平时就把堆的账记下来：谁在哪个文件第几行分配了多大一块，分配顺序如何。出了事翻账本，泄漏点、分配热点、崩溃时的堆现场全部可查。</p>
+<h2>拦截：宏替换把 malloc 换成记账版</h2>
+<p>要拦下每一次 malloc，用的是 C 预处理器宏替换：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> malloc(</span><span style="color:#9CDCFE">x</span><span style="color:#569CD6">) </span><span style="color:#DCDCAA">mt_malloc</span><span style="color:#569CD6">((x), __FILE__, __LINE__)</span></span></code></pre><p>代码里的 malloc(256) 在编译期变成 mt_malloc(256, &quot;driver.c&quot;, 42)，文件路径和行号由编译器自动填好，业务代码一行不用改。库内部先调真实分配器拿到指针，再写一条记录。</p>
+<p>宏拦截最怕递归：mt_malloc 内部调用真实 malloc，真实分配器若再触发宏展开，就会无限嵌套。库用一个 g_inside 标志做递归保护，进入追踪逻辑时置位，置位状态下直接放行到真实分配器。</p>
+<h2>账本：静态哈希表记下每次分配</h2>
+<p>记账表是一张静态数组，容量编译期固定（默认 512 项，必须是 2 的幂）。定位槽位用指针哈希：idx = hash(ptr) &amp; (N-1)。用位与代替取模，MCU 上省掉除法开销，分配和释放都是平均 O(1)。每条记录包含指针、大小、文件哈希、行号、序号五样信息。</p>
+<p>释放时不能把记录直接清空。哈希表靠连续探测找槽位，清空会打断探测链，后面的分配可能找不到。库把释放的槽位标记成墓碑（tombstone）：查找时跳过，下次插入优先复用，代价是探测距离缓慢变长。表满时采用丢记录策略，真实分配照常成功，只是不记账，损失由 table_drops 计数如实暴露。</p>
+<h2>快照：确定性二进制带回 PC 解码</h2>
+<p>MCU 上通常没有可靠时钟，库不用时间戳，改用单调递增的序号记录分配顺序。同一段分配序列必然产生同一个内部状态，快照逐字节可复现，方便对比和回归验证。</p>
+<p>mt_snapshot_write() 把当前所有存活记录导出成 MTS1 二进制：36 字节头加每条 24 字节记录，记录按指针升序排序，CRC32/IEEE 覆盖整份数据。文件名不存字符串，存 FNV1a-32 哈希，快照体积小、跨编译稳定；PC 端解码时用 <code>--filemap</code> 把哈希映射回源码路径。仓库自带的 demo 在本地编译运行后，解码器输出的 CRC 校验通过。</p>
+<h2>三条设计底线：确定性、零 malloc、诚实</h2>
+<table>
+<thead>
+<tr>
+<th>底线</th>
+<th>落实方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>确定性</td>
+<td>序号代替时间戳，同一序列得到同一快照</td>
+</tr>
+<tr>
+<td>零 malloc</td>
+<td>全部静态表，追踪器自身从不申请内存</td>
+</tr>
+<tr>
+<td>诚实</td>
+<td>算不出的指标标 N/A，不编造数字</td>
+</tr>
+</tbody></table>
+<p>三条底线互相支撑：追踪器不申请内存，才有固定可预测的开销，能在任何 MCU 上稳定跑；状态完全确定，快照才可比对。碎片率是最典型的诚实案例：没有平台堆遍历钩子时，库直接报告 N/A；想要真实值，自己实现两个平台钩子即可，库只负责展示。</p>
+<h2>适用边界</h2>
+<ul>
+<li>活跃分配数超过表容量时丢记录，默认 512 项，table_drops 可查。</li>
+<li>ISR 里调用 malloc 时，需要自己定义 MT_LOCK / MT_UNLOCK（例如关中断）。</li>
+<li><strong>FILE</strong> 路径跨编译不稳定时，用 -fmacro-prefix-map 固定前缀，保证文件哈希能映射回源码。</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=mcu-malloc-tracker');
+  }
+  </script>
+</body>
+</html>

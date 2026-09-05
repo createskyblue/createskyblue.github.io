@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="960" height="500" fill="#f8fafc"/>
+
+  <!-- 设备端 -->
+  <rect x="24" y="190" width="140" height="110" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="94" y="228" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">海量设备</text>
+  <text x="94" y="250" text-anchor="middle" font-size="12" fill="#475569">Go bench 压测</text>
+  <text x="94" y="270" text-anchor="middle" font-size="12" fill="#475569">goroutine 模拟</text>
+
+  <!-- Broker -->
+  <rect x="210" y="190" width="150" height="110" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="285" y="224" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">mosquitto</text>
+  <text x="285" y="246" text-anchor="middle" font-size="12" fill="#475569">2.1.2 单线程</text>
+  <text x="285" y="266" text-anchor="middle" font-size="12" fill="#475569">MQTT broker</text>
+
+  <!-- iotd 容器 -->
+  <rect x="400" y="30" width="536" height="440" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="424" y="56" font-size="13" font-weight="700" fill="#2563eb">iotd（Go 静态二进制，RSS 稳定 60MB）</text>
+
+  <!-- 回调 -->
+  <rect x="424" y="70" width="230" height="56" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="539" y="94" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a8a">MQTT 回调</text>
+  <text x="539" y="113" text-anchor="middle" font-size="11" fill="#3b5bdb">只拷贝 payload 入队，不解析</text>
+
+  <!-- rawCh -->
+  <rect x="424" y="146" width="230" height="44" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="539" y="173" text-anchor="middle" font-size="12" font-weight="600" fill="#334155">rawCh channel（缓冲 100,000）</text>
+
+  <!-- workers -->
+  <rect x="424" y="210" width="230" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="539" y="236" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a8a">4 × parseWorker 并行</text>
+  <text x="539" y="255" text-anchor="middle" font-size="11" fill="#3b5bdb">JSON 解析 + 内存统计</text>
+
+  <!-- stats -->
+  <rect x="686" y="210" width="226" height="64" rx="8" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="799" y="236" text-anchor="middle" font-size="13" font-weight="600" fill="#065f46">内存统计</text>
+  <text x="799" y="255" text-anchor="middle" font-size="11" fill="#047857">原子计数 + 16 分片锁，零全局锁</text>
+
+  <!-- 写队列 -->
+  <rect x="424" y="294" width="230" height="44" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="539" y="321" text-anchor="middle" font-size="12" font-weight="600" fill="#334155">写队列 ch（缓冲 100,000）</text>
+
+  <!-- writer -->
+  <rect x="424" y="358" width="230" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="539" y="384" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a8a">SQLite writer</text>
+  <text x="539" y="403" text-anchor="middle" font-size="11" fill="#3b5bdb">1000 行/事务 + WAL</text>
+
+  <!-- SQLite -->
+  <rect x="686" y="358" width="226" height="64" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="799" y="384" text-anchor="middle" font-size="13" font-weight="600" fill="#9a3412">SQLite（WAL）</text>
+  <text x="799" y="403" text-anchor="middle" font-size="11" fill="#c2410c">遥测落库归档，不建索引</text>
+
+  <!-- HTTP -->
+  <rect x="686" y="70" width="226" height="56" rx="8" fill="#fdf4ff" stroke="#d8b4fe" stroke-width="1.5"/>
+  <text x="799" y="94" text-anchor="middle" font-size="13" font-weight="600" fill="#7e22ce">HTTP :8080</text>
+  <text x="799" y="113" text-anchor="middle" font-size="11" fill="#a21caf">/api/stats + ECharts 面板</text>
+
+  <!-- 箭头 -->
+  <line x1="164" y1="245" x2="204" y2="245" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <polyline points="360,245 384,245 384,98 418,98" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="539" y1="126" x2="539" y2="140" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="539" y1="190" x2="539" y2="204" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="654" y1="242" x2="680" y2="242" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="539" y1="274" x2="539" y2="288" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="539" y1="338" x2="539" y2="352" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="654" y1="390" x2="680" y2="390" stroke="#2563eb" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="799" y1="210" x2="799" y2="132" stroke="#7e22ce" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="808" y="175" font-size="11" fill="#7e22ce">API 零 DB 查询</text>
+
+  <!-- 底部注释 -->
+  <text x="424" y="452" font-size="11" fill="#64748b">优雅关闭：停收 → 排空解析队列 → flush 落库，实测积压 49.6 万条零丢失</text>
+</svg>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stm32L4 开关GPIO中断误触发原理 - CacheRivulet小记</title>
+  <meta name="description" content="Stm32L4 开关GPIO中断误触发原理">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="STM32L496">
+  <meta property="article:tag" content="中断">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:published_time" content="2026-08-02">
+  <meta property="og:title" content="Stm32L4 开关GPIO中断误触发原理">
+  <meta property="og:description" content="Stm32L4 开关GPIO中断误触发原理">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32-exti-two-gates/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32-exti-two-gates/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Stm32L4 开关GPIO中断误触发原理",
+  "description": "Stm32L4 开关GPIO中断误触发原理",
+  "datePublished": "2026-08-02",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32-exti-two-gates/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32-exti-two-gates/"
+  },
+  "keywords": "嵌入式, STM32, STM32L496, 中断, 低功耗"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Stm32L4 开关GPIO中断误触发原理</h1>
+  <article class="article-body">
+<h1>Stm32L4 开关GPIO中断误触发的底层原理</h1>
+<h2>背景</h2>
+<p>STM32L4低功耗开发中，临时关闭再重启GPIO中断时，常会出现无外部信号却自动触发中断的问题，会导致设备误唤醒、计数异常、低功耗逻辑出错。</p>
+<h2>IO中断传递链路</h2>
+<p>STM32L4中断传递链路：<code>GPIO电平变化 → EXTI_IMR源头过滤 → 置位EXTI_PR挂起标志 → NVIC_ISER总开关放行 → CPU响应中断</code></p>
+<p>其中<code>PR标志</code>置位后不会自动清零，会持续保存中断记录</p>
+<p><img src="/posts/stm32-exti-two-gates/gpio-exti-flow.svg" alt="GPIO/EXTI 中断流程与事件路径"></p>
+<h2>误触发原因</h2>
+<ol>
+<li>HAL库关闭GPIO中断仅关闭<code>NVIC_ISER</code>内核总开关，只屏蔽中断上报，不会停止EXTI信号检测、不会清空<code>PR</code>挂起标志</li>
+<li>中断关闭期间，引脚电平抖动、电源瞬变产生的信号会留存<code>PR</code>残留标志</li>
+<li>重启中断开关后，残留标志会立即触发一次无效中断</li>
+</ol>
+<h2>解决方案</h2>
+<ol>
+<li>重启NVIC中断前手动清空<code>EXTI_PR挂起位</code>，可消除历史残留，适配所有STM32芯片，兼容性最优；</li>
+<li>直接关闭<code>EXTI_IMR</code>屏蔽位，依托STM32L4芯片<code>IMR</code>前置、<code>PR</code>后置的硬件特性，从源头拦截信号，避免产生挂起残留。</li>
+</ol>
+<blockquote>
+<p>部分STM32芯片链路为<code>PR</code>前置、<code>IMR</code>后置，仅关闭<code>IMR</code>无法清除已有残留，仍会出现误触发。因此代码跨芯片移植时，优先采用清PR挂起位的通用方案</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-02 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32-exti-two-gates');
+  }
+  </script>
+</body>
+</html>

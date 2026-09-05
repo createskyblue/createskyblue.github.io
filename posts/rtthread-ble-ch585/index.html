@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐 - CacheRivulet小记</title>
+  <meta name="description" content="CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="CH58x">
+  <meta property="article:tag" content="RT-Thread">
+  <meta property="article:tag" content="RTOS">
+  <meta property="article:tag" content="中断">
+  <meta property="article:published_time" content="2026-07-11">
+  <meta property="og:title" content="CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐">
+  <meta property="og:description" content="CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/rtthread-ble-ch585/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/rtthread-ble-ch585/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐",
+  "description": "CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐",
+  "datePublished": "2026-07-11",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/rtthread-ble-ch585/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/rtthread-ble-ch585/"
+  },
+  "keywords": "嵌入式, BLE, CH58x, RT-Thread, RTOS, 中断"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐</h1>
+  <article class="article-body">
+<h1>CH585 上强行同时跑 RT-Thread 和 BLE：能跑，但官方不推荐</h1>
+<blockquote>
+<p><strong>先说结论：沁恒官方不推荐在 CH58x 系列上同时使用 RTOS 和 BLE。</strong> BLE 协议栈是闭源库，深度绑定 TMOS 调度系统，无法剥离。RT-Thread 移植 readme 第 8 条明确写了「不建议使用蓝牙」，EVT 包里也找不到任何一个 RTOS + BLE 的例程。低功耗模式更是彻底不兼容（官方论坛明确回应「FreeRTOS + BLE low power consumption cannot coexist」）。</p>
+<p>本文记录的是社区摸索出来的 workaround——在 RT-Thread 里创建一个低优先级任务循环调用 <code>TMOS_SystemProcess()</code>，配合一系列补丁让两个调度器勉强共存。技术上社区有成功的移植案例（如 MX-WCH-RTOS-SDK），但这不是官方支持的使用方式，生产环境需自行评估风险。</p>
+</blockquote>
+<hr>
+<h2>坑一：SysTick 被 BLE 初始化覆盖</h2>
+<p><strong>现象</strong>：BLE 初始化完成后，RT-Thread 的 <code>rt_tick</code> 不再增长，系统调度停止；或者反过来，BLE 连接立即断开。</p>
+<p><strong>原因</strong>：RT-Thread 启动时会配置 SysTick 作为系统心跳，通常 1ms 一次中断。<code>CH58X_BLEInit()</code> 内部同样会调用 <code>__SysTick_Config(SysTick_LOAD_RELOAD_Msk)</code> 配置 SysTick，虽然紧接着就关了 SysTick 中断（<code>PFIC_DisableIRQ(SysTick_IRQn)</code>），但 SysTick 的配置寄存器已经被覆盖。TMOS 的时间基准来自 RTC（<code>SYSTEM_TIME_MICROSEN 625us</code>），不依赖 SysTick——但 BLE 初始化覆盖 SysTick 配置这个副作用仍然会让 RT-Thread 的系统心跳失效。</p>
+<p><strong>解决</strong>：在 <code>CH58X_BLEInit()</code> 内部找到 <code>__SysTick_Config()</code> 调用并注释掉，只保留 RT-Thread 的 SysTick 配置。BLE 初始化完成后，RT-Thread 需要重新配置一次 SysTick 以确保心跳参数正确。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// 在 CH58X_BLEInit() 内部：</span></span>
+<span class="line"><span style="color:#6A9955">// SysTick_Config(...);   // ← 注释掉，交给 RT-Thread 管理</span></span></code></pre><hr>
+<h2>坑二：LLE 中断内部做环境切换，RT-Thread 任务调度破坏上下文</h2>
+<p><strong>现象</strong>：蓝牙广播和连接都正常，运行几秒到几分钟后系统死机或数据错乱，无固定规律。</p>
+<p><strong>原因</strong>：CH585 的蓝牙链路层中断 <code>LLE_IRQHandler</code> 在中断处理过程中，协议栈会在中断内部保存当前上下文，切换到另一个运行环境等待 BLE 硬件事件完成。如果这个过程中 SysTick 中断恰好触发了一次 RT-Thread 任务调度，调度器会尝试保存&quot;当前任务&quot;的上下文，但此时 CPU 正处于 BLE 协议栈的另一个运行环境中，上下文被错误保存，导致数据损坏甚至死机。</p>
+<p><strong>解决</strong>：在 <code>ble_task_scheduler.S</code> 的 <code>LLE_IRQHandler</code> 入口加临界区保护，退出时恢复。</p>
+<pre><code>/* ↓ 示意代码，基于 EVT ble_task_scheduler.S 原始代码修改 ↓ */
+LLE_IRQHandler:
+    addi    sp, sp, -32*4            /* 分配 32 个寄存器保存空间 */
+
+    sw      x1,  1 * 4(sp)           /* 保存 ra  */
+    sw      x4,  2 * 4(sp)           /* 保存 tp  */
+    sw      x5,  3 * 4(sp)
+    /* ... x6~x30 按偏移依次保存 ... */
+    sw      x31, 29 * 4(sp)
+
+    /* ★ 关键：停掉 RT-Thread 调度，防止在 BLE 内部环境切换时切入 */
+    call    rt_hw_interrupt_disable
+
+    la      a1, g_LLE_IRQLibHandlerLocation
+    lw      a0, 0(a1)
+    jalr    x1, 0(a0)                /* 通过函数指针间接调用 BLE 库处理函数 */
+
+    /* ★ 关键：恢复 RT-Thread 调度 */
+    call    rt_hw_interrupt_enable
+
+    lw      x1,  1 * 4(sp)
+    lw      x4,  2 * 4(sp)
+    /* ... x6~x30 按偏移依次恢复 ... */
+    lw      x31, 29 * 4(sp)
+
+    addi    sp, sp, 32*4
+    mret</code></pre><p>以上为示意代码，基于 EVT <code>BLE/LIB/ble_task_scheduler.S</code> 的原始代码修改，插入的 <code>rt_hw_interrupt_disable</code> / <code>rt_hw_interrupt_enable</code> 来自 RT-Thread 移植 readme 第 12 条的明确要求。实际修改时务必以你的 EVT 版本中的原始汇编为准。</p>
+<hr>
+<h2>坑三：TMOS 事件执行太久，BLE 连接超时</h2>
+<p><strong>现象</strong>：在 GATT 写回调或 TMOS 定时事件中加了 Flash 写入、外设等待等操作后，BLE 连接不规则断开。</p>
+<p><strong>原因</strong>：TMOS 是单线程事件循环，所有 BLE 事件都在同一个循环中依次处理。BLE 对时序极其敏感，每个连接间隔内主从设备必须按约定时间窗口交换数据。如果某个 TMOS 事件回调执行了 20ms 的 Flash 擦写，连接间隔只有 30ms，对端设备连续几次收不到响应就会判定超时断开。</p>
+<p><strong>解决</strong>：单次 TMOS 事件执行时间控制在连接间隔的一半以内。耗时操作拆分成多个小事件，通过事件链逐步执行。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// ❌ 错误：在 GATT 回调中直接做耗时操作</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> gatt_write_callback</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint16_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    flash_erase_page</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0x1000</span><span style="color:#D4D4D4">);</span><span style="color:#6A9955">        // 耗时 20ms+</span></span>
+<span class="line"><span style="color:#DCDCAA">    flash_write</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0x1000</span><span style="color:#D4D4D4">, data, len);</span><span style="color:#6A9955">  // 直接阻塞 TMOS 循环</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// ✅ 正确：只做数据缓存，通过事件链异步处理</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> gatt_write_callback</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint16_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    memcpy</span><span style="color:#D4D4D4">(g_rx_buffer, data, len);</span></span>
+<span class="line"><span style="color:#DCDCAA">    tmos_set_event</span><span style="color:#D4D4D4">(task_id, EVENT_FLASH_WRITE);</span><span style="color:#6A9955">  // 延迟到下一个 TMOS 周期</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> flash_write_event_handler</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    flash_write_page</span><span style="color:#D4D4D4">(g_current_page++, g_rx_buffer + offset, </span><span style="color:#B5CEA8">256</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (!finished) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        tmos_set_event</span><span style="color:#D4D4D4">(task_id, EVENT_FLASH_WRITE);</span><span style="color:#6A9955">  // 继续下一批</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><hr>
+<h2>坑四：在中断里直接调用 BLE 函数</h2>
+<p><strong>现象</strong>：在 GPIO 中断或定时器中断中调用 <code>GATT_Notification()</code> 等 BLE 发送函数，系统死机或数据发不出去。</p>
+<p><strong>原因</strong>：TMOS 不可重入，BLE 函数内部依赖 TMOS 事件机制，必须运行在任务上下文中。</p>
+<p><strong>解决</strong>：中断只置标志，在 RT-Thread 任务或 TMOS 事件回调中执行 BLE 操作。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// GPIO 中断</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> GPIO_IRQHandler</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">GPIO_ReadITFlagPort</span><span style="color:#D4D4D4">() &#x26; GPIO_Pin_5) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        g_send_flag = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">                           // 只置标志</span></span>
+<span class="line"><span style="color:#DCDCAA">        rt_sem_release_from_isr</span><span style="color:#D4D4D4">(g_ble_sem);</span><span style="color:#6A9955">         // 通知任务</span></span>
+<span class="line"><span style="color:#DCDCAA">        GPIO_ClearITFlagBit</span><span style="color:#D4D4D4">(GPIO_Pin_5);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// RT-Thread 任务</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> ble_send_task</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">param</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        rt_sem_take</span><span style="color:#D4D4D4">(g_ble_sem, RT_WAITING_FOREVER);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (g_send_flag) {</span></span>
+<span class="line"><span style="color:#D4D4D4">            g_send_flag = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">            attHandleValueNoti_t</span><span style="color:#D4D4D4"> noti;</span></span>
+<span class="line"><span style="color:#9CDCFE">            noti</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">handle</span><span style="color:#D4D4D4"> = g_char_handle;</span></span>
+<span class="line"><span style="color:#9CDCFE">            noti</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">len</span><span style="color:#D4D4D4"> = len;</span></span>
+<span class="line"><span style="color:#DCDCAA">            tmos_memcpy</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">noti</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">value</span><span style="color:#D4D4D4">, data, len);</span></span>
+<span class="line"><span style="color:#DCDCAA">            GATT_Notification</span><span style="color:#D4D4D4">(conn_handle, &#x26;noti, </span><span style="color:#569CD6">FALSE</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><hr>
+<h2>坑五：任务优先级排错</h2>
+<p><strong>现象</strong>：BLE 数据卡顿，或 TMOS 任务长期得不到执行。</p>
+<p><strong>推荐配置</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>优先级</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>TMOS 循环任务</td>
+<td>仅比 IDLE 高一级</td>
+<td>由高优先级任务抢占，空闲时立即处理 BLE</td>
+</tr>
+<tr>
+<td>业务逻辑任务</td>
+<td>中（高于 TMOS）</td>
+<td>传感器采集、数据处理等</td>
+</tr>
+<tr>
+<td>IDLE</td>
+<td>最低</td>
+<td>RT-Thread 空闲任务</td>
+</tr>
+</tbody></table>
+<p>RT-Thread Nano 中 IDLE 任务优先级通常为 31（最低）。TMOS 任务设置为优先级 2<del>3，业务任务设置为 4</del>6——即 TMOS 低于业务、远高于 IDLE。&quot;仅比 IDLE 高一级&quot;这个说法容易让人误解为设置为 30，实际上 readme 的意思是 TMOS 任务处于低优先级区间、不抢占业务即可。</p>
+<p>这里容易有一个误解：TMOS 本身会主动让出 CPU（<code>TMOS_SystemProcess()</code> 处理完事件队列就返回，没有事件时几乎立即返回），并不会永久占据 CPU。优先级不建议过高的真正原因是 BLE 的硬实时保障在 LLE 中断层——连接间隔的严格时序由硬件中断保证，不依赖 TMOS 任务的优先级。TMOS 任务只负责消化中断产生的事件（GATT 回调、连接参数更新、广播刷新等），这些事件只要在下一个连接间隔到来之前处理完即可。因此 TMOS 任务可以设为低优先级，让传感器采集、电机控制等对延迟敏感的业务任务优先拿到 CPU，业务跑完后再由 TMOS 在空闲时间里收尾 BLE 事件。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#4EC9B0">rt_thread_t</span><span style="color:#D4D4D4"> tmos_thread = </span><span style="color:#DCDCAA">rt_thread_create</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#CE9178">    "tmos"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    tmos_task_entry,</span></span>
+<span class="line"><span style="color:#D4D4D4">    RT_NULL,</span></span>
+<span class="line"><span style="color:#B5CEA8">    1024</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">    // 栈大小，建议 ≥ 1024 字节</span></span>
+<span class="line"><span style="color:#B5CEA8">    3</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">       // 优先级，低于用户业务任务</span></span>
+<span class="line"><span style="color:#B5CEA8">    5</span><span style="color:#6A9955">        // 时间片</span></span>
+<span class="line"><span style="color:#D4D4D4">);</span></span></code></pre><hr>
+<h2>坑六：自定义连接参数太紧凑</h2>
+<p><strong>现象</strong>：RT-Thread 任务频繁被 BLE 中断打断，业务逻辑执行效率低。</p>
+<p>EVT 官方 Peripheral 例程的默认连接参数本身已经比较宽松（MAX 间隔 125ms）。但很多开发者会为了低延迟把连接间隔改小，在 RTOS 场景下这会进一步挤压业务任务的 CPU 时间。</p>
+<p><strong>解决</strong>：如果需要自定义连接参数，保持宽松的配置。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// EVT Peripheral 默认值（参考 peripheral.c）</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_MIN_CONN_INTERVAL    </span><span style="color:#B5CEA8">6</span><span style="color:#6A9955">     // 7.5ms</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_MAX_CONN_INTERVAL    </span><span style="color:#B5CEA8">100</span><span style="color:#6A9955">   // 125ms（本身已较宽松）</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_SLAVE_LATENCY        </span><span style="color:#B5CEA8">0</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_CONN_TIMEOUT         </span><span style="color:#B5CEA8">100</span><span style="color:#6A9955">   // 1s</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// RTOS 场景建议值（如果默认值仍不够宽松）</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_MIN_CONN_INTERVAL    </span><span style="color:#B5CEA8">12</span><span style="color:#6A9955">    // 15ms</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_MAX_CONN_INTERVAL    </span><span style="color:#B5CEA8">100</span><span style="color:#6A9955">   // 125ms</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_SLAVE_LATENCY        </span><span style="color:#B5CEA8">4</span><span style="color:#6A9955">     // 可跳过 4 个间隔</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DEFAULT_DESIRED_CONN_TIMEOUT         </span><span style="color:#B5CEA8">500</span><span style="color:#6A9955">   // 5s 超时</span></span></code></pre><p>关键调整是增大 <code>SLAVE_LATENCY</code>（允许从机跳过若干连接间隔），在 MAX 间隔 125ms + 4 次延迟的最长窗口下，RT-Thread 有约 625ms 完整时间片执行业务任务。不要随意减小 <code>MAX_CONN_INTERVAL</code>——越小 BLE 中断越频繁，留给 RT-Thread 的时间越少。</p>
+<hr>
+<h2>整体架构</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>RT-Thread 调度器</span></span>
+<span class="line"><span>│</span></span>
+<span class="line"><span>├── 传感器采集任务（优先级 4）</span></span>
+<span class="line"><span>├── 数据处理任务（优先级 5）</span></span>
+<span class="line"><span>├── TMOS 循环任务（优先级 2，仅比 IDLE 高一级）</span></span>
+<span class="line"><span>│     └── while(1) { TMOS_SystemProcess(); }</span></span>
+<span class="line"><span>│           └── TMOS 内部：GATT 回调、连接管理、广播刷新</span></span>
+<span class="line"><span>├── IDLE 任务</span></span>
+<span class="line"><span>│</span></span>
+<span class="line"><span>└── 中断层</span></span>
+<span class="line"><span>      ├── LLE_IRQHandler（+ rt_hw_interrupt_disable/enable）</span></span>
+<span class="line"><span>      └── SysTick_IRQ（RT-Thread 心跳）</span></span></code></pre><hr>
+<h2>调试顺序</h2>
+<ol>
+<li><strong>裸机验证</strong>：关掉 RT-Thread，确认裸机 BLE 例程正常工作</li>
+<li><strong>单独验证</strong>：关掉 BLE，确认 RT-Thread 多任务调度正常</li>
+<li><strong>合入检查</strong>：在 SysTick 中断和 TMOS 处理中各加一个 GPIO 翻转，用逻辑分析仪观察时序</li>
+<li><strong>栈检查</strong>：用 <code>list_thread</code> 检查 TMOS 任务栈使用量，确保没有溢出</li>
+<li><strong>临界区验证</strong>：在 <code>LLE_IRQHandler</code> 的 <code>rt_hw_interrupt_disable/enable</code> 前后加 GPIO 翻转，确认保护区间覆盖了 BLE 库函数调用</li>
+</ol>
+<hr>
+<h2>其他 CH585 特有约束</h2>
+<p>以下来自 RT-Thread 移植 readme，除第 8、11、12 条外，也是在使用 BLE 时必须注意的：</p>
+<ul>
+<li><strong>关闭全局中断再初始化 BLE</strong>（readme 第 8 条）：初始化蓝牙时需要先关闭全局中断，等初始化完成后再开启。蓝牙使用免表中断，<code>StartUP.S</code> 已将 <code>BB_IRQLibHandler</code> 和 <code>LLE_IRQLibHandler</code> 放入中断向量表</li>
+<li><strong>禁止裸开关中断</strong>（readme 第 12 条）：不可使用 <code>__enable_irq()</code> / <code>__disable_irq()</code>，必须使用 RT-Thread 的 <code>rt_hw_interrupt_disable()</code> / <code>rt_hw_interrupt_enable()</code></li>
+<li><strong>mscratch 寄存器</strong>（readme 第 7 条）：已被中断系统占用，用户代码不可使用</li>
+<li><strong>中断函数修饰</strong>（readme 第 4 条）：统一入口中断（<code>unified_interrupt_entry</code>）不需要 <code>__attribute__((interrupt(...)))</code> 修饰；非统一入口中断需要</li>
+<li><strong>统一入口中断无需手动调 enter/leave</strong>（readme 第 10 条）：<code>unified_interrupt_entry</code> 中已调用 <code>rt_interrupt_enter</code> 和 <code>rt_interrupt_leave</code>，用户中断函数内不要重复调用</li>
+<li><strong>中断栈</strong>（readme 第 5 条）：所有统一入口中断会切换到独立中断栈（<code>_eusrstack</code>），务必在 LD 脚本中预留足够 RAM，否则中断中栈溢出直接 HardFault</li>
+<li><strong>中断函数放高速 RAM</strong>（readme 第 2 条）：外部中断函数建议用 <code>__attribute__((section(&quot;.highcode&quot;)))</code> 修饰</li>
+<li><strong>BLE_LibInit 调用顺序</strong>：<code>TMOS_SystemProcess()</code> 必须在 <code>CH58x_BLEInit()</code>（内部调用 <code>BLE_LibInit()</code>）成功之后才能调用，否则会访问未初始化的库内部数据结构</li>
+</ul>
+<hr>
+<h2>参考资料</h2>
+<ul>
+<li><a href="https://github.com/smartmx/MX-WCH-RTOS-SDK">MX-WCH-RTOS-SDK</a> — 社区维护的 CH585/CH582 RT-Thread Nano + BLE 移植参考</li>
+<li><a href="https://www.wch.cn/bbs/thread-155362-1.html">WCH 论坛：RT-Thread 上使用 BLE 的一些疑惑</a></li>
+<li><a href="https://wch.cn/bbs/thread-92075-1.html">WCH 论坛：rtt 工程加了蓝牙后，断连</a></li>
+<li><a href="https://wch.cn/bbs/thread-157867-1.html">WCH 论坛：CH585M FreeRTOS tickless BLE</a></li>
+<li>CH585 EVT <code>EXAM/FreeRTOS/readme.txt</code> — 官方 FreeRTOS 移植说明（RT-Thread 同理可参考）</li>
+</ul>
+<hr>
+<p>CH585 上 RT-Thread + BLE 的核心做法：TMOS 作为 BLE 的微调度器跑在 RT-Thread 的低优先级任务里，LLE 中断中以临界区保护阻止 RT-Thread 在 BLE 内部环境切换时切入，TMOS 事件执行时间控制在连接间隔的一半以内。</p>
+<p>再次强调：<strong>这是社区摸索出来的 workaround，不是官方推荐方案。</strong> 低功耗模式完全不可用——BLE 需要 TMOS 运行，RTOS 的 tickless 低功耗与 TMOS 的 RTC 时间基准直接冲突，官方已明确回应无法共存。如果你的产品需要 BLE + 低功耗，纯 TMOS 是唯一选择。只有在确实需要 RTOS 的多任务能力、可以放弃低功耗、并且愿意承担踩坑成本时，才考虑本文的方案。</p>
+<blockquote>
+<p><strong>关于代码示例</strong>：文中的汇编和 C 代码为示意代码，基于 EVT 原始文件修改，未经过编译验证。实际移植时务必以你的 SDK 版本中的实际代码为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-11 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=rtthread-ble-ch585');
+  }
+  </script>
+</body>
+</html>

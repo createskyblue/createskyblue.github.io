@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-C3 httpd 并发请求第二个必被 ECONNRESET，前端串行队列根治 - CacheRivulet小记</title>
+  <meta name="description" content="并发 HTTP 第二个必被 ECONNRESET、刷新后状态不同步：请求队列串行化">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ESP32">
+  <meta property="article:tag" content="ESP-IDF">
+  <meta property="article:tag" content="前端">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:published_time" content="2026-08-08">
+  <meta property="og:title" content="ESP32-C3 httpd 并发请求第二个必被 ECONNRESET，前端串行队列根治">
+  <meta property="og:description" content="并发 HTTP 第二个必被 ECONNRESET、刷新后状态不同步：请求队列串行化">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32c3-httpd-single-connection/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32c3-httpd-single-connection/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP32-C3 httpd 并发请求第二个必被 ECONNRESET，前端串行队列根治",
+  "description": "并发 HTTP 第二个必被 ECONNRESET、刷新后状态不同步：请求队列串行化",
+  "datePublished": "2026-08-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32c3-httpd-single-connection/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32c3-httpd-single-connection/"
+  },
+  "keywords": "嵌入式, ESP32, ESP-IDF, 前端, 性能优化"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP32-C3 httpd 并发请求第二个必被 ECONNRESET，前端串行队列根治</h1>
+  <article class="article-body">
+<h1>ESP32-C3 httpd 并发请求第二个必被 ECONNRESET，前端串行队列根治</h1>
+<p>一块 ESP32-C3 电源控制板，Web 前端通过 HTTP API 控制电源，WebSocket 推实时采样曲线。打开输出后刷新页面，输出按钮显示「已关闭」，实际输出保持开启。后端接口返回的状态正确，问题出在页面加载时前端同时发出多个 HTTP 请求：C3 的 httpd 只处理第一个，其余连接全部被重置。本文记录复现过程、原因和前端串行化修复。</p>
+<h2>现象：刷新后输出按钮显示关闭，输出实际开启</h2>
+<p>打开输出后刷新网页。输出按钮显示「已关闭」，电源输出实际保持开启。按钮状态没有同步到真实状态。</p>
+<h2>复现：并发 HTTP 请求第二个必被 ECONNRESET</h2>
+<p>先排除后端。用 curl 直查 <code>/api/getSystemStatus</code>，返回 <code>is_output_on: 1</code>，与实际状态一致。后端是实时查询 PSU，返回值正确。</p>
+<p>再看前端。页面加载时同时执行三个接口请求（get_memory_preset、getSystemStatus、get_output_status），并建立 WebSocket 连接。用 node 脚本模拟这个行为：</p>
+<ul>
+<li>同时发两个请求，第一个 200，第二个报 <code>read ECONNRESET</code>；连测两次结果一致。</li>
+<li>同时发三个快速接口（get_config、debug.json、network.json），也只成功第一个。</li>
+<li>把请求改成串行，三个全部成功（getSystemStatus 1559ms、get_output_status 1904ms、get_memory_preset 920ms）。</li>
+</ul>
+<p>结论：这台 C3 的 httpd 同时只处理一个请求，并发到达的其余连接被重置。</p>
+<p><img src="/posts/esp32c3-httpd-single-connection/img/request-serialization.svg" alt="并发与串行请求对比"></p>
+<h2>原因：单任务 httpd 加 PSU 慢查询占住处理循环</h2>
+<p>esp_http_server 是单任务模型。httpd 配置 <code>max_open_sockets=7</code>（C3 上限），<code>lru_purge_enable=true</code>。处理一个请求期间，并发到达的连接得不到处理，被 httpd 关闭，客户端收到 ECONNRESET。快速接口并发也失败，重置来自 httpd 单任务处理能力本身，与处理器快慢无关。</p>
+<p>PSU 串口查询把问题放大。AST2/AST4/AST5 每条查询要约 1.5s（仪器把应答拆成多个小块、间隔约 300ms 吐出）。慢查询占住 httpd 任务时，并发到达的连接更明显被重置。</p>
+<p>前端 <code>.catch</code> 把失败吞掉，界面停在初始值。<code>getSystemStatus</code> 失败后 <code>isOutput</code> 保持初始 <code>false</code>，按钮显示「已关闭」。</p>
+<h2>修复：前端请求队列串行化</h2>
+<p>让所有 HTTP 请求进同一个队列，前一个完成（成功或失败）再发下一个，任何时刻只有一个请求在飞。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">var</span><span style="color:#9CDCFE"> apiQueue</span><span style="color:#D4D4D4">=</span><span style="color:#4EC9B0">Promise</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">resolve</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#569CD6">function</span><span style="color:#DCDCAA"> api</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">path</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">opts</span><span style="color:#D4D4D4">){</span></span>
+<span class="line"><span style="color:#569CD6">  var</span><span style="color:#DCDCAA"> run</span><span style="color:#D4D4D4">=</span><span style="color:#569CD6">function</span><span style="color:#D4D4D4">(){</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#4EC9B0"> Promise</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">race</span><span style="color:#D4D4D4">([</span></span>
+<span class="line"><span style="color:#DCDCAA">      fetch</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">path</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">Object</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">assign</span><span style="color:#D4D4D4">({</span><span style="color:#9CDCFE">headers:</span><span style="color:#D4D4D4">{</span><span style="color:#CE9178">'Content-Type'</span><span style="color:#9CDCFE">:</span><span style="color:#CE9178">'application/json'</span><span style="color:#D4D4D4">}}, </span><span style="color:#9CDCFE">opts</span><span style="color:#D4D4D4">||{}))</span></span>
+<span class="line"><span style="color:#D4D4D4">        .</span><span style="color:#DCDCAA">then</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">function</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">r</span><span style="color:#D4D4D4">){</span><span style="color:#C586C0">return</span><span style="color:#9CDCFE"> r</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">json</span><span style="color:#D4D4D4">()}),</span></span>
+<span class="line"><span style="color:#569CD6">      new</span><span style="color:#4EC9B0"> Promise</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">function</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">_</span><span style="color:#D4D4D4">,</span><span style="color:#9CDCFE">rej</span><span style="color:#D4D4D4">){</span><span style="color:#DCDCAA">setTimeout</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">function</span><span style="color:#D4D4D4">(){</span><span style="color:#DCDCAA">rej</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">new</span><span style="color:#DCDCAA"> Error</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'timeout'</span><span style="color:#D4D4D4">))},</span><span style="color:#B5CEA8">10000</span><span style="color:#D4D4D4">)})</span></span>
+<span class="line"><span style="color:#D4D4D4">    ]).</span><span style="color:#DCDCAA">catch</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">function</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">e</span><span style="color:#D4D4D4">){</span><span style="color:#DCDCAA">showMsg</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'请求失败: '</span><span style="color:#D4D4D4">+</span><span style="color:#9CDCFE">path</span><span style="color:#D4D4D4">,</span><span style="color:#CE9178">'err'</span><span style="color:#D4D4D4">); </span><span style="color:#C586C0">throw</span><span style="color:#9CDCFE"> e</span><span style="color:#D4D4D4">});</span></span>
+<span class="line"><span style="color:#D4D4D4">  };</span></span>
+<span class="line"><span style="color:#569CD6">  var</span><span style="color:#9CDCFE"> p</span><span style="color:#D4D4D4">=</span><span style="color:#9CDCFE">apiQueue</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">then</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">run</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">run</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">  apiQueue</span><span style="color:#D4D4D4">=</span><span style="color:#9CDCFE">p</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">catch</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">function</span><span style="color:#D4D4D4">(){});</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#9CDCFE"> p</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>要点：</p>
+<ol>
+<li><code>apiQueue</code> 保存前一条请求的完成状态，新的 <code>api()</code> 用 <code>apiQueue.then(run, run)</code> 排队，队列空闲后才执行。</li>
+<li><code>apiQueue=p.catch(...)</code> 吞掉错误，队列链不断，失败的请求不会卡住后续请求。</li>
+<li>10s 超时兜底：PSU 查询挂死时队列不会被永久卡住。</li>
+</ol>
+<p>WebSocket 握手也是 HTTP 连接。页面加载时先走完状态请求，队列清空后再 <code>connectWS()</code>，避免握手和 API 抢连接被重置：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">syncStatus</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">loadPreset</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">apiQueue</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">then</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">connectWS</span><span style="color:#D4D4D4">);</span></span></code></pre><p>加载顺序上先查 <code>getSystemStatus</code>，输出按钮在首个请求完成（约 1.6s）后即反映真实状态。串行加载三个查询全部成功，状态同步恢复。</p>
+<h2>边界：嵌入式前端的并发策略</h2>
+<p>串行化修复了这台 C3 的并发重置。前端不能假设设备有浏览器一样的并行请求能力，嵌入式 httpd 场景按这几条控制：</p>
+<ol>
+<li>前端请求串行发送，任何时刻只允许一个请求在飞。慢查询占住 httpd 时并发请求全被重置。</li>
+<li>合并接口、减少往返。多个状态能一次查询就一次返回，减少慢查询次数。</li>
+<li>慢读取在后端做缓存或批量，让 httpd 处理器尽快返回，缩短占住单任务的时间。</li>
+<li>实时数据走 WebSocket 批量推送（配合降采样），避免高频 HTTP 轮询挤占连接池。</li>
+</ol>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32c3-httpd-single-connection');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iotspool 原理：只追加、砍脏尾、重试打散 - CacheRivulet小记</title>
+  <meta name="description" content="不原地改，掉电只丢最后半截">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="物联网">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="iotspool 原理：只追加、砍脏尾、重试打散">
+  <meta property="og:description" content="不原地改，掉电只丢最后半截">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/iotspool-internals/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/iotspool-internals/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "iotspool 原理：只追加、砍脏尾、重试打散",
+  "description": "不原地改，掉电只丢最后半截",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/iotspool-internals/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/iotspool-internals/"
+  },
+  "keywords": "嵌入式, 物联网, Flash存储, 系统设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">iotspool 原理：只追加、砍脏尾、重试打散</h1>
+  <article class="article-body">
+<h1>iotspool 原理：只追加、砍脏尾、重试打散</h1>
+<blockquote>
+<p><strong>声明：</strong> iotspool 是一个开源项目，作者为 <a href="https://github.com/Vanderhell">Vanderhell</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解嵌入式持久化消息队列的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/iotspool" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/iotspool</a></p>
+<p>上一篇讲怎么用。这篇只讲三个选择：消息怎么落盘、掉电怎么认账、Broker 挂了怎么重试。</p>
+<h2>只追加，不回头改</h2>
+<p>设备要保证采样到的数据在断网、掉电、Broker 重启之后还能发出去。RAM 顶不住，Flash 又不能随便改——写一半断电，文件就脏了。</p>
+<p>落盘因此只允许两种笔：</p>
+<ul>
+<li><strong>入队</strong>：在文件尾巴追加一条 ENQ，带编号、主题和正文。确认落盘，才算收下。</li>
+<li><strong>确认</strong>：发送成功后不回去改那条 ENQ，再追加一条 ACK，只带同一个编号。</li>
+</ul>
+<p>日志永远往前长。掉电窗口只剩一种：最后一条可能写了一半。中间已经落盘的记录，不会被一次半截写入弄脏。</p>
+<p><img src="/posts/iotspool-internals/record.svg" alt="入队和确认是两条独立记录"></p>
+<p>编号单调往上加。ACK 靠编号对上当初那条 ENQ。校验盖住整条记录；半截或校验失败，恢复时一律当脏尾巴丢掉。</p>
+<h2>恢复就是顺序扫一遍</h2>
+<p>开机从文件头扫到尾：</p>
+<ol>
+<li>完整且校验通过的 ENQ，记成待发。</li>
+<li>扫到对应 ACK，从待发里拿掉。</li>
+<li>读到半截或校验不过，截到上一条完整记录，停。</li>
+</ol>
+<p>半截永远不重放。ACK 如果刚好没写完，最坏是这条再发一次——至少一次，不会丢已经确认过的。</p>
+<p>内存不囤正文，只记编号、位置和长短。待发条数决定 RAM，消息大小不影响。发送那一刻再按位置读出来。</p>
+<p>文件会因为历史 ENQ 和 ACK 越滚越大。满了就把还没发出去的 ENQ 整本抄到新文件，原子换掉旧的。已确认的全部扔掉。不做段回收，逻辑短，也好验证。</p>
+<p><img src="/posts/iotspool-internals/log.svg" alt="追加写日志与整理前后"></p>
+<h2>重试要打散</h2>
+<p>一群设备同时掉线，如果都按同一个固定间隔重试，窗口一到会一起砸 Broker。</p>
+<p>所以失败后把等待上限翻倍并封顶，真正等到的时间在 0 到上限之间随机抽。发出去之后，上限收回去。调用方只问“现在有没有到期该发的”，不用自己算钟。</p>
+<p><img src="/posts/iotspool-internals/backoff.svg" alt="固定间隔会扎堆，随机打散峰值"></p>
+<h2>边界</h2>
+<ul>
+<li>文件还是 Flash，库不管，只要能追加、按位置读、确认落盘、截尾巴、整份替换。</li>
+<li>默认假定调用是串行的。两个任务同时摸队列，自己加锁；中断里不要直接入队。</li>
+<li>它不管 MQTT 协议，不管加密，也不保证只投递一次。重复送达上层去重。</li>
+</ul>
+<p>三句话：写入永远只追加；恢复只砍尾巴；内存只记位置，文件大了整本重抄。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=iotspool-internals');
+  }
+  </script>
+</body>
+</html>

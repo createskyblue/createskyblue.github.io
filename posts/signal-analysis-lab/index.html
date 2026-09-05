@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>信号处理实验室用拖拽流程图完成浏览器端滤波和波形分析 - CacheRivulet小记</title>
+  <meta name="description" content="信号处理实验室拖拽流程图做浏览器端滤波和波形分析">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="前端">
+  <meta property="article:tag" content="Canvas">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:tag" content="数据可视化">
+  <meta property="article:tag" content="信号处理实验室">
+  <meta property="article:tag" content="Vite">
+  <meta property="article:published_time" content="2026-06-29">
+  <meta property="og:title" content="信号处理实验室用拖拽流程图完成浏览器端滤波和波形分析">
+  <meta property="og:description" content="信号处理实验室拖拽流程图做浏览器端滤波和波形分析">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/signal-analysis-lab/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/signal-analysis-lab/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "信号处理实验室用拖拽流程图完成浏览器端滤波和波形分析",
+  "description": "信号处理实验室拖拽流程图做浏览器端滤波和波形分析",
+  "datePublished": "2026-06-29",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/signal-analysis-lab/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/signal-analysis-lab/"
+  },
+  "keywords": "前端, Canvas, 信号处理, 数据可视化, 信号处理实验室, Vite"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">信号处理实验室用拖拽流程图完成浏览器端滤波和波形分析</h1>
+  <article class="article-body">
+<h1>信号处理实验室用拖拽流程图完成浏览器端滤波和波形分析</h1>
+<p><img src="/posts/signal-analysis-lab/img/cover.webp" alt="信号处理实验室界面"></p>
+<p>信号处理实验室是一个运行在浏览器里的可视化信号处理工具。它把 CSV 输入、信号发生器、滤波器、窗口统计、特征提取、FFT 频谱、示波器和 CSV 输出做成可拖拽节点，用户通过连线组织处理流程，再在右侧查看波形结果。</p>
+<p>项目入口：</p>
+<ul>
+<li>GitHub：<a href="https://github.com/createskyblue/signal-analysis-lab">https://github.com/createskyblue/signal-analysis-lab</a></li>
+<li>在线体验：<a href="https://createskyblue.github.io/signal-analysis-lab/">https://createskyblue.github.io/signal-analysis-lab/</a></li>
+</ul>
+<p>在线页面打开后，可以点击左下角的「演示数据」生成含噪声的正弦波测试流程图，用它快速观察滤波、比较、分流和示波器显示效果。</p>
+<h2>交付内容</h2>
+<p>这个项目交付的是一个浏览器端信号处理工作台，不需要后端服务即可完成常见实验流程：</p>
+<ul>
+<li>从 CSV 文件导入采样序列，设置采样率，并把结果导出为纯净 CSV。</li>
+<li>使用信号发生器生成默认正弦波，作为测试信号或流程参考。</li>
+<li>把多个处理节点连接成流程图，按连接关系逐级计算。</li>
+<li>在右侧示波器中查看多路波形，每个图表都有独立光标读数。</li>
+<li>保存、导入和导出 JSON 项目文件，浏览器本地也会自动保存当前项目。</li>
+<li>切换中文和英文界面，便于把同一套工具交给不同使用者。</li>
+</ul>
+<p>项目定位为轻量、可共享、可快速验证的实验界面，不承担专业 DSP 软件的完整建模和分析能力。它适合做滤波链路试验、传感器波形观察、简单特征提取、流程演示和自定义算法验证。</p>
+<h2>流程图是主要交互模型</h2>
+<p>工具的核心交互是节点和连线。左侧栏提供节点库，中间画布用于组织流程，右侧面板显示输出波形。</p>
+<p>常用操作包括：</p>
+<ul>
+<li>从左侧拖拽节点到画布。</li>
+<li>从输出端口拖到输入端口完成连线。</li>
+<li>点击或右键删除连线。</li>
+<li>选中节点后按 <code>Delete</code> 删除节点。</li>
+<li>在画布空白处框选多个节点，并拖动一组节点。</li>
+<li>双击节点标题重命名。</li>
+<li>使用 <code>Ctrl+C</code> / <code>Ctrl+V</code> 复制粘贴节点。</li>
+<li>使用 <code>Ctrl+Z</code> / <code>Ctrl+Y</code> 撤销和重做。</li>
+<li>用鼠标中键平移画布，按空格复位视图。</li>
+<li>按 <code>F5</code> 或点击运行按钮执行流程。</li>
+</ul>
+<p>这种模型的好处是处理链路会直接呈现在界面上。相比把一串滤波函数写在脚本里，流程图更适合调参、讲解和定位某一路中间结果。</p>
+<h2>节点覆盖常见信号处理步骤</h2>
+<p>项目里的节点按用途分组，覆盖了从输入、滤波、统计、特征提取到输出的常见步骤。</p>
+<p>输入输出节点包括 CSV 输入、信号发生器、CSV 输出和示波器。CSV 输出节点可以单独导出，也可以在打开「自动导出」后随运行流程导出。导出的 CSV 正文不带表头，每行一个采样点，节点名称、时间戳和采样率会写入文件名。</p>
+<p>滤波器节点包括 RC 低通、高通、带通、指数平均滤波、FIR 线性相位、Hampel 滤波和卡尔曼滤波。Hampel 节点会同时输出滤波结果和局部 MAD，便于观察阈值调节对异常点处理的影响。</p>
+<p>运算和变换节点包括加法器、减法器、乘法器、加权合成器、反相器、绝对值、对数乘法器、归一化、限位器、移相器、迟滞比较器、去直流偏置和微分器。它们承担流程中的基础组合逻辑。</p>
+<p>窗口统计节点包括滑动平均、中值窗口、最大值窗口、最小值窗口、极值窗口、滑动标准差、因果窗口熵和矩形波检测器。它们适合观察局部趋势、尖峰、波动强度和边沿规律。</p>
+<p>特征提取和流程控制节点包括峰谷检测器、间隔到 BPM、分流器、开关、多路选择器和比较选择器。峰谷检测器可以配合迟滞比较器做触发驱动的分段极值搜索；比较选择器可以根据比较值逐点选择最大或最小值对应的信号。</p>
+<p>项目还提供自定义节点。用户可以写 JavaScript 处理输入信号，单输入单输出时可沿用 <code>return signal.map(...)</code> 的简单写法；多输入时读取 <code>inputs.in</code>、<code>inputs.in2</code> 等端口数组，多输出时返回 <code>{ out: arr1, out2: arr2 }</code>。</p>
+<h2>波形显示服务于调参</h2>
+<p>右侧图表面板承担调参过程中的观察入口。</p>
+<ul>
+<li>示波器节点可以设置颜色，也可以关闭「启用」，关闭后该路不会出现在右侧波形显示中。</li>
+<li>每张图都有独立 X 轴游标读数，普通波形显示采样点，FFT 频谱显示频率 Hz。</li>
+<li>鼠标滚轮可以缩放图表。</li>
+<li>点击图表标题或按钮可以折叠显示，隐藏后保留标题。</li>
+<li>点击图表会把对应示波器节点定位到画布中心，并短暂显示十字准心。</li>
+<li>拖拽图表标题可以调整多个图表的显示顺序。</li>
+</ul>
+<p>这些细节让流程图和波形图之间能互相定位。节点多起来以后，单纯看画布很难知道哪条曲线来自哪个输出；单纯看波形也很难快速回到对应节点。图表定位把这两个视图连在一起。</p>
+<h2>自定义节点和 AI 上下文</h2>
+<p>自定义节点让工具可以扩展到内置节点没有覆盖的处理逻辑。为了降低编写成本，界面提供「复制上下文」按钮，可以把当前项目流程图和自定义节点 API 说明复制到剪贴板。</p>
+<p>这份上下文不包含信号数据，主要用于让外部 AI 工具理解节点拓扑、端口命名和可用 API，然后辅助编写自定义节点代码。对临时实验来说，这比从零描述整个流程图更直接。</p>
+<h2>WebSocket 实时数据流</h2>
+<p>项目支持通过 WebSocket 从 ESP32 等设备接收实时传感器数据。典型流程是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>开始节点 -> 自定义节点(WebSocket 客户端) -> 滤波器链 -> 示波器</span></span></code></pre><p>这里有一个浏览器安全限制：在线版是 HTTPS 页面，浏览器会拒绝连接明文 <code>ws://</code> 设备。因此实时连接 ESP32 这类本地设备时，需要把项目克隆到本地并使用开发服务器运行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">npm</span><span style="color:#CE9178"> install</span></span>
+<span class="line"><span style="color:#DCDCAA">npm</span><span style="color:#CE9178"> run</span><span style="color:#CE9178"> dev</span></span></code></pre><p>本地页面使用 <code>http://localhost:3000</code> 调试时，才能连接明文 WebSocket 设备。更详细的实时数据流用法见项目文档 <code>doc/websocket-streaming.md</code>。</p>
+<h2>使用边界</h2>
+<p>这个项目更适合快速实验和交互式验证，不适合直接承诺严肃生产环境里的算法正确性。</p>
+<p>几个边界需要明确：</p>
+<ul>
+<li>带通滤波由低通和高通级联得到，两个截止频率应保持足够间隔。</li>
+<li>采样率、窗口长度、截止频率、滤波阶数等参数仍需要按实际信号含义设置。</li>
+<li>CSV 导入输出适合离线样本和中小规模数据，定位为浏览器端实验工具。</li>
+<li>WebSocket 实时数据受浏览器安全策略限制，在线 HTTPS 页面不能直接连明文 <code>ws://</code>。</li>
+<li>自定义节点执行的是用户提供的 JavaScript，应把它当作本地实验扩展能力使用。</li>
+</ul>
+<p>它的价值在于把信号处理链路从代码脚本变成可观察、可保存、可共享的流程图。对于传感器波形、滤波器调参、异常点处理和简单频域分析，这种界面能明显缩短试错路径。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-29 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=signal-analysis-lab');
+  }
+  </script>
+</body>
+</html>

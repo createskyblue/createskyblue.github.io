@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>U8g2 文字渲染缓存演示</title>
+<style>
+  :root { --bg:#f5f7fb; --panel:#fff; --ink:#182235; --muted:#68758a; --line:#dbe2ec; --blue:#2e6fd1; --green:#23885b; --orange:#d37c22; --shadow:0 16px 45px rgba(35,54,85,.10); }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--ink); background:var(--bg); font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .page { width:min(1240px,calc(100% - 32px)); margin:0 auto; padding:34px 0 42px; }
+  .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  h1 { margin:8px 0; font-size:clamp(26px,4vw,42px); line-height:1.1; letter-spacing:0; }
+  .intro { max-width:760px; margin:0; color:var(--muted); line-height:1.7; font-size:15px; }
+  .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:26px 0 18px; padding:12px; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); }
+  button,select { min-height:38px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); padding:0 13px; font:inherit; cursor:pointer; }
+  button:hover,select:hover { border-color:var(--blue); } button.primary { color:#fff; background:var(--blue); border-color:var(--blue); }
+  .control-group { display:flex; align-items:center; gap:8px; margin-left:auto; color:var(--muted); font-size:13px; }
+  .status { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; margin:0 0 18px; color:var(--muted); font-size:13px; }
+  .status strong { color:var(--ink); font-variant-numeric:tabular-nums; } .status .live { color:var(--orange); }
+  .comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+  .card { min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; box-shadow:var(--shadow); }
+  .card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
+  .card h2 { margin:0 0 5px; font-size:19px; } .card p { margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+  .badge { flex:none; padding:5px 8px; border-radius:5px; font-size:12px; font-weight:700; } .badge.slow { color:#875313; background:#fff1dd; } .badge.fast { color:#17633f; background:#e6f7ee; }
+  .screen-wrap { overflow-x:auto; padding:14px; background:#111827; border-radius:7px; }
+  .screen { display:grid; grid-template-columns:repeat(32,minmax(7px,1fr)); grid-template-rows:repeat(16,minmax(7px,1fr)); aspect-ratio:2/1; width:min(100%,640px); min-width:360px; margin:0 auto; gap:1px; padding:5px; background:#26354d; border:2px solid #4a607f; border-radius:4px; }
+  .pixel { min-width:0; min-height:0; background:#162235; transition:background-color .12s,box-shadow .12s; } .pixel.on { background:#f5c451; box-shadow:0 0 7px rgba(245,196,81,.55); } .pixel.pending { background:#62c795; box-shadow:0 0 7px rgba(98,199,149,.62); } .pixel.active { background:#ff8e50; box-shadow:0 0 10px rgba(255,142,80,.9); }
+  .screen-meta { display:flex; justify-content:space-between; gap:12px; margin-top:11px; color:var(--muted); font-size:12px; } .screen-meta strong { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .meter { height:7px; margin-top:12px; background:#e9eef5; border-radius:4px; overflow:hidden; } .meter>span { display:block; height:100%; width:0; border-radius:inherit; transition:width .18s ease; } .immediate .meter>span { background:var(--orange); } .cached .meter>span { background:var(--green); }
+  .detail-grid { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; margin-top:18px; } .detail { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; } .detail h2 { margin:0 0 12px; font-size:17px; }
+  .operation { min-height:86px; display:grid; grid-template-columns:100px 1fr; gap:14px; align-items:center; padding:12px; background:#f8fafc; border:1px solid var(--line); border-radius:6px; }
+  .op-label { color:var(--muted); font-size:12px; } .op-label strong { display:block; margin-top:4px; color:var(--ink); font-size:22px; font-variant-numeric:tabular-nums; }
+  .run-track { display:flex; align-items:center; gap:3px; height:28px; } .run { height:14px; min-width:5px; background:var(--orange); border-radius:2px; transition:opacity .15s,transform .15s; } .run.current { transform:scaleY(1.55); background:var(--blue); }
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:7px; color:var(--muted); font-size:13px; line-height:1.6; } .flow b { padding:4px 7px; color:var(--ink); background:#f0f4f9; border:1px solid var(--line); border-radius:4px; font-weight:700; } .flow .arrow { color:var(--blue); font-size:18px; }
+  .legend { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:14px; color:var(--muted); font-size:12px; } .legend span { display:flex; align-items:center; gap:6px; } .dot { width:10px; height:10px; display:inline-block; border-radius:2px; } .dot.yellow{background:#f5c451}.dot.green{background:#62c795}.dot.orange{background:#ff8e50}
+  .note { margin-top:12px; color:var(--muted); font-size:12px; line-height:1.65; }
+  @media (max-width:850px) { .comparison,.detail-grid { grid-template-columns:1fr; } .control-group { margin-left:0; width:100%; } .screen { min-width:330px; } }
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="eyebrow">U8g2 / TFT / DMA</div>
+  <h1>中文文字渲染：立即提交 vs 水平线缓存</h1>
+  <p class="intro">同一串字形水平线段，送进两种显示算法。左侧每段都立即写屏，右侧先合并同一行的连续线段，遇到边界或结束哨兵再批量提交。</p>
+  <div class="toolbar" aria-label="动画控制">
+    <button class="primary" id="playBtn" type="button">暂停播放</button><button id="stepBtn" type="button">单步</button><button id="resetBtn" type="button">重置</button>
+    <div class="control-group"><label for="speed">播放速度</label><select id="speed"><option value="1100" selected>慢速</option><option value="650">正常</option><option value="280">快速</option></select></div>
+  </div>
+  <div class="status"><span>当前输入：<strong id="opIndex">0 / 0</strong></span><span>字符：<strong>中</strong></span><span id="phase" class="live">等待开始</span></div>
+  <section class="comparison" aria-label="两种渲染算法对比">
+    <article class="card immediate"><div class="card-head"><div><h2>算法 A：每段立即提交</h2><p>每收到一段，就设置窗口并启动一次 DMA。</p></div><span class="badge slow">重复事务多</span></div><div class="screen-wrap"><div class="screen" id="screenA" aria-label="立即提交屏幕"></div></div><div class="screen-meta"><span>屏幕状态</span><strong id="stateA">等待输入</strong></div><div class="screen-meta"><span>提交次数</span><strong id="txA">0</strong></div><div class="meter"><span id="meterA"></span></div></article>
+    <article class="card cached"><div class="card-head"><div><h2>算法 B：水平线缓存</h2><p>相邻线段先追加到 lineBuf，边界时批量提交。</p></div><span class="badge fast">事务少</span></div><div class="screen-wrap"><div class="screen" id="screenB" aria-label="缓存提交屏幕"></div></div><div class="screen-meta"><span>缓存状态</span><strong id="stateB">空闲</strong></div><div class="screen-meta"><span>提交次数</span><strong id="txB">0</strong></div><div class="meter"><span id="meterB"></span></div></article>
+  </section>
+  <section class="detail-grid">
+    <div class="detail"><h2>当前水平线段</h2><div class="operation"><div class="op-label">输入序号<strong id="runNumber">等待</strong></div><div class="run-track" id="runTrack" aria-label="当前水平线段"></div></div><div class="legend"><span><i class="dot yellow"></i>已提交像素</span><span><i class="dot green"></i>缓存中像素</span><span><i class="dot orange"></i>当前写入</span></div><p class="note">为了让差异清楚，同一行的一条字形扫描线被拆成多段相邻输入。两块屏幕最终显示相同的“中”。</p></div>
+    <div class="detail"><h2>一次缓存提交的路径</h2><div class="flow"><b>drawUTF8</b><span class="arrow">→</span><b>水平线段</b><span class="arrow">→</span><b>lineBuf</b><span class="arrow">→</span><b>DMA</b></div><p class="note">同一行且首尾相接时，缓存继续追加。换行、出现间隔，或执行 <code>DisplayAdapter_drawFastHLine(888, 888, 0, color)</code> 时，待发送数据提交到 TFT。</p></div>
+  </section>
+</main>
+<script>
+(() => {
+  const W=32,H=16,glyph=['0000000000000000','0000011111110000','0000011111110000','0000011000110000','0000011000110000','0000011000110000','0000011000110000','1111111111111111','1111111111111111','0000011000110000','0000011010110000','0000011111110000','0000011010110000','0000011000110000','0000011000110000','0000000000000000'];
+  const screenA=document.querySelector('#screenA'),screenB=document.querySelector('#screenB'),opIndex=document.querySelector('#opIndex'),phase=document.querySelector('#phase'),txA=document.querySelector('#txA'),txB=document.querySelector('#txB'),stateA=document.querySelector('#stateA'),stateB=document.querySelector('#stateB'),meterA=document.querySelector('#meterA'),meterB=document.querySelector('#meterB'),runNumber=document.querySelector('#runNumber'),runTrack=document.querySelector('#runTrack'),playBtn=document.querySelector('#playBtn'),stepBtn=document.querySelector('#stepBtn'),resetBtn=document.querySelector('#resetBtn'),speed=document.querySelector('#speed');
+  const pixelsA=[],pixelsB=[]; for(let i=0;i<W*H;i++){const a=document.createElement('i'),b=document.createElement('i');a.className='pixel';b.className='pixel';screenA.appendChild(a);screenB.appendChild(b);pixelsA.push(a);pixelsB.push(b);}
+  function makeRuns(){const runs=[];const split=(x,end,y)=>{const width=end-x,cuts=width>=8?[4,3]:width>=5?[2]:[];let cursor=x;cuts.forEach(cut=>{if(cursor+cut<end){runs.push({x:cursor,y,len:cut});cursor+=cut;}});if(cursor<end)runs.push({x:cursor,y,len:end-cursor});};glyph.forEach((row,y)=>{let x=0;while(x<row.length){const start=row.indexOf('1',x);if(start<0)break;const zero=row.indexOf('0',start),end=zero<0?row.length:zero;split(8+start,8+end,y);x=end;}});return runs;}
+  function reportHeight(){const content=document.querySelector('.page');const height=content?content.getBoundingClientRect().height:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);if(window.parent!==window)window.parent.postMessage({type:'u8g2-demo-height',height},'*');}
+  function handleHeightRequest(event){if(event.data?.type==='u8g2-demo-request-height')reportHeight();}
+  const runs=makeRuns(),maxTx=runs.length;let cursor=0,playing=true,timer=null,countA=0,countB=0,cache=null;
+  function pixelIndex(x,y){return y*W+x;} function paint(pixels,run,className){for(let x=run.x;x<run.x+run.len;x++){const pixel=pixels[pixelIndex(x,run.y)];pixel.classList.remove('active','pending');pixel.classList.add(className);}} function clearActive(){pixelsA.forEach(p=>p.classList.remove('active'));pixelsB.forEach(p=>p.classList.remove('active'));}
+  function submitCache(){if(!cache)return;countB++;cache.runs.forEach(run=>paint(pixelsB,run,'on'));cache=null;}
+  function updateStats(){opIndex.textContent=`${cursor} / ${runs.length}`;txA.textContent=countA;txB.textContent=countB;meterA.style.width=`${countA/maxTx*100}%`;meterB.style.width=`${countB/maxTx*100}%`;if(cursor===0){stateA.textContent='等待输入';stateB.textContent='空闲';phase.textContent='等待开始';}else if(cursor>=runs.length&&!cache){stateA.textContent='已完成';stateB.textContent='已完成';phase.textContent='渲染完成';}else{stateA.textContent='立即写入';stateB.textContent=cache?`缓存 ${cache.runs.reduce((sum,run)=>sum+run.len,0)} 像素`:'准备提交';phase.textContent=cache?'相邻线段继续进入缓存':'正在处理水平线段';}}
+  function renderCurrentRun(){runTrack.replaceChildren();if(cursor===0||cursor>runs.length){runNumber.textContent='等待';return;}const run=runs[cursor-1];runNumber.textContent=`${cursor} / ${runs.length}`;for(let i=0;i<run.len;i++){const part=document.createElement('span');part.className='run current';part.style.width=`${Math.max(9,run.len*5)}px`;runTrack.appendChild(part);}}
+  function step(){if(cursor>=runs.length){submitCache();updateStats();renderCurrentRun();finishCycle();return;}clearActive();const run=runs[cursor];paint(pixelsA,run,'on');for(let x=run.x;x<run.x+run.len;x++)pixelsA[pixelIndex(x,run.y)].classList.add('active');countA++;const canAppend=cache&&cache.y===run.y&&cache.end===run.x;if(!canAppend){submitCache();cache={y:run.y,end:run.x,runs:[]};}cache.runs.push(run);cache.end=run.x+run.len;cache.runs.forEach(pending=>paint(pixelsB,pending,'pending'));cursor++;updateStats();renderCurrentRun();}
+  function finishCycle(){clearActive();updateStats();if(!playing)return;phase.textContent='本轮完成，准备重播';stop();timer=window.setTimeout(()=>{if(!playing)return;cursor=0;countA=0;countB=0;cache=null;pixelsA.forEach(p=>p.className='pixel');pixelsB.forEach(p=>p.className='pixel');updateStats();renderCurrentRun();timer=window.setTimeout(autoStep,500);},900);}
+  function stop(){if(timer)window.clearTimeout(timer);timer=null;} function autoStep(){if(!playing)return;step();if(cursor<runs.length||cache)timer=window.setTimeout(autoStep,Number(speed.value));}
+  function reset(){stop();cursor=0;countA=0;countB=0;cache=null;pixelsA.forEach(p=>p.className='pixel');pixelsB.forEach(p=>p.className='pixel');playing=true;playBtn.textContent='暂停播放';updateStats();renderCurrentRun();timer=window.setTimeout(autoStep,500);}
+  playBtn.addEventListener('click',()=>{if(playing){playing=false;stop();playBtn.textContent='继续播放';phase.textContent='已暂停';}else{if(cursor>=runs.length&&!cache)reset();playing=true;playBtn.textContent='暂停播放';autoStep();}});stepBtn.addEventListener('click',()=>{playing=false;stop();playBtn.textContent='继续播放';step();});resetBtn.addEventListener('click',reset);speed.addEventListener('change',()=>{if(playing){stop();autoStep();}});window.addEventListener('message',handleHeightRequest);window.addEventListener('resize',reportHeight);if(window.ResizeObserver)new ResizeObserver(reportHeight).observe(document.body);updateStats();renderCurrentRun();reportHeight();timer=window.setTimeout(autoStep,600);
+})();
+</script>
+</body>
+</html>

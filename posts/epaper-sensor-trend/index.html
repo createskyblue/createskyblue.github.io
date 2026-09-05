@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>u8g2-js：打通单色屏开发 Web 仿真的最后一公里 - CacheRivulet小记</title>
+  <meta name="description" content="U8g2-Js 开发单色屏反复烧录太慢，我造浏览器仿真给 AI 闭环">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="前端">
+  <meta property="article:tag" content="嵌入式GUI">
+  <meta property="article:tag" content="AI辅助开发">
+  <meta property="article:tag" content="JavaScript">
+  <meta property="article:tag" content="Canvas">
+  <meta property="article:tag" content="数据可视化">
+  <meta property="article:tag" content="传感器">
+  <meta property="article:published_time" content="2026-08-06">
+  <meta property="og:title" content="u8g2-js：打通单色屏开发 Web 仿真的最后一公里">
+  <meta property="og:description" content="U8g2-Js 开发单色屏反复烧录太慢，我造浏览器仿真给 AI 闭环">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/epaper-sensor-trend/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/epaper-sensor-trend/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "u8g2-js：打通单色屏开发 Web 仿真的最后一公里",
+  "description": "U8g2-Js 开发单色屏反复烧录太慢，我造浏览器仿真给 AI 闭环",
+  "datePublished": "2026-08-06",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/epaper-sensor-trend/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/epaper-sensor-trend/"
+  },
+  "keywords": "嵌入式, 前端, 嵌入式GUI, AI辅助开发, JavaScript, Canvas, 数据可视化, 传感器"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">u8g2-js：打通单色屏开发 Web 仿真的最后一公里</h1>
+  <article class="article-body">
+<h1>U8g2-Js 为开发单色屏，我给 AI 造了浏览器仿真环境</h1>
+<iframe id="epaper-demo-frame" data-auto-height="true" scrolling="no" src="https://createskyblue.github.io/epaper-sensor-trend-demo/" title="墨水屏传感器趋势交互演示" style="width: 100%; height: 560px; border: 1px solid #dbe2ec; border-radius: 8px; background: #f5f7fb; overflow: hidden;"></iframe>
+<script>
+(() => {
+  const frame = document.getElementById('epaper-demo-frame');
+  const measure = () => {
+    let h = 0;
+    try {
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      const app = doc.querySelector('#app');
+      // demo 的 body 用 min-height:100vh，直接量 body 会触发高度反馈循环；改量内容容器 #app 再补 body 上下 padding(24*2)
+      const pad = 48;
+      h = app ? (app.getBoundingClientRect().height + pad)
+              : Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+    } catch (e) { return; }
+    if (h > 0) frame.style.height = `${Math.ceil(h) + 8}px`;
+  };
+  const schedule = () => requestAnimationFrame(() => requestAnimationFrame(measure));
+  frame.addEventListener('load', () => {
+    schedule();
+    try {
+      const doc = frame.contentDocument;
+      const app = doc && doc.querySelector('#app');
+      if (app && window.ResizeObserver) new ResizeObserver(schedule).observe(app);
+    } catch (e) {}
+  });
+  window.addEventListener('resize', schedule);
+})();
+</script>
+
+<p><a href="https://createskyblue.github.io/epaper-sensor-trend-demo/">打开交互 Demo</a></p>
+<h2>单色屏开发卡在 AI 看不见屏幕</h2>
+<p>OLED、单色点阵屏（12864 那类灰白屏）、墨水屏这类单色屏资源有限，跑不动 LVGL 一类重型 GUI。单色屏图形库的事实标准是 U8G2：支持几十种屏幕控制器、字体库庞大、内存占用极小。</p>
+<p>但 U8G2 开发很慢：改一次显示效果，要重新编译、烧录、上板看，一轮几十秒到几分钟。AI 写的 U8G2 代码经常能编译过、屏幕不对，字体、坐标、布局来回调都对不上。AI 看不见屏幕，写完只能等人烧录反馈，迭代闭环断在它看不见的地方。</p>
+<p>为了让 AI 能独立把单色屏界面做对，我把它需要的环境直接搬进浏览器：一份像素级还原 U8G2 的纯 JS 仿真，AI 在这里生成代码、实时预览、截图自检，确认效果对了，再把同一份代码挪到嵌入式真机。</p>
+<h2>浏览器里的像素级仿真闭环</h2>
+<p>把 U8G2 完整移植成纯 JS 后，AI 在浏览器里就能跑通整个闭环：</p>
+<ol>
+<li>开发 U8G2 显示界面（JavaScript，浏览器原样运行）</li>
+<li>视觉验证：AI 自己运行、截图、识图，把 UI 闭环</li>
+<li>自动化测试：AI 在浏览器上跑测试，提前排除错误隐患</li>
+<li>用户确认：效果符合预期即通过</li>
+<li>部署：同一份代码上真机（与原生 U8G2 C 库 API 一致）</li>
+</ol>
+<p>显示逻辑在浏览器里提前验证，问题不用等到上板才发现。</p>
+<p><strong>U8G2JS 项目：</strong> <a href="https://github.com/createskyblue/u8g2-js" target="_blank" rel="noopener noreferrer">github.com/createskyblue/u8g2-js</a></p>
+<p><strong>Demo 仓库：</strong> <a href="https://createskyblue.github.io/u8g2-js/" target="_blank" rel="noopener noreferrer">createskyblue.github.io/u8g2-js/</a></p>
+<h2>用仿真环境做出的墨水屏传感器趋势界面</h2>
+<p>仿真环境最大的价值，是能低成本反复试错。下面这套单色墨水屏传感器趋势界面，就是 AI 在浏览器里迭代出来的：</p>
+<ul>
+<li>CO₂ 曲线趋势：渐变填充分两步，先在独立灰度通道按曲线生成深浅渐变，再用误差扩散把灰度量化成黑白点阵叠加到屏幕，整体墨量近似守恒，观感平滑，全程整数运算，符合嵌入式无浮点约束</li>
+<li>PM2.5 三粒径趋势：多曲线同屏，靠抖动区分层次</li>
+<li>温湿度双曲线：双轴对照，信息密度压进单色屏</li>
+</ul>
+<p><img src="/posts/epaper-sensor-trend/co2-mode.webp" alt="CO₂ 趋势界面"></p>
+<p><img src="/posts/epaper-sensor-trend/pm25-mode.webp" alt="PM2.5 三粒径趋势界面"></p>
+<p><img src="/posts/epaper-sensor-trend/environment-mode.webp" alt="温湿度双曲线界面"></p>
+<h2>仿真器逐字节一致的实现</h2>
+<p>浏览器里的效果必须和真机一模一样，否则仿真毫无意义。这部分是仿真器的核心。</p>
+<h3>逐行移植 C 渲染引擎</h3>
+<p>移植没有走 WASM 或自动转译，直接对照 C 源码逐行手写 JS：同一套算法、同一种控制流，连字体格式和帧缓冲的字节布局都保持一致。浏览器端能直接读源码、改算法，AI 也容易理解和修改。</p>
+<h3>与原版 C 库逐字节对拍</h3>
+<p>手工移植最怕大概一致。做法是把原版 U8G2 C 库用 gcc 编译出来，跑 18 个场景（文本、图形、旋转、裁剪、XOR、按钮、Unicode、全量中文），每一帧都与 JS 输出逐字节比对，0 字节差异。验证脚本可复现，改完核心代码重跑一遍即可确认没有偏差。</p>
+<h3>像素级还原细节</h3>
+<ul>
+<li>帧缓冲、字体 RLE 位流、draw_color 0/1/2、旋转，输出与真机逐字节一致</li>
+<li>字体运行时加载：字体就是字节数组，运行时代码里直接 load / fromBase64 载入任意 U8G2 字体</li>
+<li>内置全量中文字库：宋体 12/16/24px，约 2.8 万字形，AI 写的中文直接渲染</li>
+<li>零依赖开箱即用：纯 ESM，浏览器 file:// 双击 demo 即可运行，Node 可无头测试</li>
+<li>API 与真机一致：Arduino U8g2lib 风格 camelCase 加 C 风格别名，仿真代码可直接平移到硬件</li>
+</ul>
+<h2>快速开始</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> { </span><span style="color:#9CDCFE">U8g2</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">U8g2Font</span><span style="color:#D4D4D4"> } </span><span style="color:#C586C0">from</span><span style="color:#CE9178"> './src/index.js'</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> u8g2</span><span style="color:#D4D4D4"> = </span><span style="color:#569CD6">new</span><span style="color:#DCDCAA"> U8g2</span><span style="color:#D4D4D4">({ </span><span style="color:#9CDCFE">display:</span><span style="color:#CE9178"> 'ssd1306_128x64_noname_f'</span><span style="color:#D4D4D4"> });</span></span>
+<span class="line"><span style="color:#9CDCFE">u8g2</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">setFont</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">U8g2Font</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">fromBase64</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'AP//AA...'</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#9CDCFE">u8g2</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">drawStr</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">'Hello'</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">u8g2</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">sendBuffer</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">u8g2</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">attachCanvas</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">document</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">getElementById</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'screen'</span><span style="color:#D4D4D4">));</span></span></code></pre><h2>本地运行</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">python</span><span style="color:#569CD6"> -m</span><span style="color:#CE9178"> http.server</span><span style="color:#B5CEA8"> 8765</span><span style="color:#569CD6"> --bind</span><span style="color:#B5CEA8"> 127.0.0.1</span></span></code></pre><p>然后访问 <code>http://127.0.0.1:8765/</code>。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-06 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=epaper-sensor-trend');
+  }
+  </script>
+</body>
+</html>

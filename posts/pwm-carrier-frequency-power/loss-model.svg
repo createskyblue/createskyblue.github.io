@@ -1,0 +1,150 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ns2="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" viewBox="0 0 920 470" version="1.1" role="img" aria-label="开关损耗随频率上升、纹波铜损随频率平方下降，总损耗由两者与基线损耗逐点相加得到的理想化模型">
+ <metadata>
+  <rdf:RDF>
+   <ns2:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <ns2:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </ns2:Agent>
+    </dc:creator>
+   </ns2:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 470  L 920 470  L 920 0  L 0 0  z " style="fill: #fcfcfb" />
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 82.8 361.9  L 855.6 361.9  L 855.6 79.9  L 82.8 79.9  z " style="fill: #fcfcfb" />
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="text_1">
+     <text style="font-size: 10px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #52514e" x="469.2" y="382.332812" transform="rotate(-0 469.2 382.332812)">PWM 载波频率 f（示意）</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_1">
+      <path d="M 82.8 361.9  L 855.6 361.9  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_2" />
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_3">
+      <path d="M 82.8 324.827582  L 855.6 324.827582  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_4" />
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_5">
+      <path d="M 82.8 287.755163  L 855.6 287.755163  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_6" />
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_7">
+      <path d="M 82.8 250.682745  L 855.6 250.682745  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_8" />
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_9">
+      <path d="M 82.8 213.610327  L 855.6 213.610327  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_10" />
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_11">
+      <path d="M 82.8 176.537909  L 855.6 176.537909  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_12" />
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_13">
+      <path d="M 82.8 139.46549  L 855.6 139.46549  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_14" />
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_15">
+      <path d="M 82.8 102.393072  L 855.6 102.393072  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #000000; stroke-opacity: 0.094118; stroke-linecap: square" />
+     </g>
+     <g id="line2d_16" />
+    </g>
+    <g id="text_2">
+     <text style="font-size: 10px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #52514e" x="60.76582" y="220.9" transform="rotate(-90 60.76582 220.9)">相对损耗</text>
+    </g>
+   </g>
+   <g id="line2d_17">
+    <path d="M 82.8 330.203082  L 855.6 164.674735  L 855.6 164.674735  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #eb6834; stroke-width: 2.4; stroke-linecap: square" />
+   </g>
+   <g id="line2d_18">
+    <path d="M 82.8 178.826329  L 86.664 188.025014  L 90.528 196.54743  L 94.392 204.458279  L 98.256 211.814706  L 102.12 218.667335  L 105.984 225.06114  L 109.848 231.036185  L 113.712 236.628258  L 117.576 241.869401  L 121.44 246.788375  L 125.304 251.411054  L 129.168 255.760765  L 133.032 259.858584  L 136.896 263.723591  L 142.692 269.122005  L 148.488 274.087096  L 154.284 278.664029  L 160.08 282.892236  L 165.876 286.806263  L 171.672 290.436483  L 177.468 293.809688  L 183.264 296.949578  L 189.06 299.877184  L 196.788 303.482488  L 204.516 306.782334  L 212.244 309.810279  L 219.972 312.595393  L 227.7 315.162965  L 237.36 318.099884  L 247.02 320.768426  L 256.68 323.200321  L 266.34 325.422745  L 277.932 327.845849  L 289.524 330.035291  L 303.048 332.332897  L 316.572 334.390671  L 332.028 336.489867  L 347.484 338.357641  L 364.872 340.222886  L 384.192 342.046748  L 403.512 343.64975  L 424.764 345.198663  L 447.948 346.67375  L 474.996 348.160401  L 503.976 349.523945  L 536.82 350.837529  L 573.528 352.072554  L 614.1 353.211437  L 660.468 354.286334  L 714.564 355.306105  L 776.388 356.239329  L 847.872 357.090991  L 855.6 357.171375  L 855.6 357.171375  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #1baf7a; stroke-width: 2.4; stroke-linecap: square" />
+   </g>
+   <g id="line2d_19">
+    <path d="M 82.8 100.788889  L 86.664 109.159932  L 90.528 116.854706  L 94.392 123.937913  L 98.256 130.466699  L 102.12 136.491686  L 105.984 142.057849  L 109.848 147.205252  L 113.712 151.969683  L 117.576 156.383185  L 121.44 160.474517  L 125.304 164.269554  L 129.168 167.791623  L 133.032 171.0618  L 136.896 174.099166  L 140.76 176.921028  L 144.624 179.543115  L 148.488 181.979746  L 154.284 185.315217  L 160.08 188.30196  L 165.876 190.974525  L 171.672 193.363283  L 177.468 195.495025  L 183.264 197.393452  L 189.06 199.079595  L 194.856 200.572169  L 202.584 202.289758  L 210.312 203.727506  L 218.04 204.915537  L 225.768 205.880024  L 233.496 206.643804  L 243.156 207.346499  L 252.816 207.800452  L 262.476 208.034557  L 274.068 208.059984  L 285.66 207.840912  L 297.252 207.408114  L 310.776 206.66763  L 324.3 205.706455  L 339.756 204.374869  L 355.212 202.829047  L 372.6 200.870874  L 391.92 198.463591  L 413.172 195.578597  L 436.356 192.195112  L 461.472 188.29937  L 488.52 183.883551  L 519.432 178.608732  L 554.208 172.440186  L 592.848 165.355007  L 637.284 156.971452  L 687.516 147.260319  L 745.476 135.821395  L 813.096 122.240891  L 855.6 113.605587  L 855.6 113.605587  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke: #2a78d6; stroke-width: 3; stroke-linecap: square" />
+   </g>
+   <g id="LineCollection_1">
+    <path d="M 269.339045 361.9  L 269.339045 208.081065  " clip-path="url(#p221b4f2f63)" style="fill: none; stroke-dasharray: 3.6,3.6; stroke-dashoffset: 0; stroke: #2a78d6; stroke-width: 1.2" />
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #2a78d6" x="269.339045" y="196.081065" transform="rotate(-0 269.339045 196.081065)">模型最低点</text>
+   </g>
+   <g id="PathCollection_1">
+    <defs>
+     <path id="mbf99eca5df" d="M 0 3.535534  C 0.937635 3.535534 1.836992 3.163008 2.5 2.5  C 3.163008 1.836992 3.535534 0.937635 3.535534 0  C 3.535534 -0.937635 3.163008 -1.836992 2.5 -2.5  C 1.836992 -3.163008 0.937635 -3.535534 0 -3.535534  C -0.937635 -3.535534 -1.836992 -3.163008 -2.5 -2.5  C -3.163008 -1.836992 -3.535534 -0.937635 -3.535534 0  C -3.535534 0.937635 -3.163008 1.836992 -2.5 2.5  C -1.836992 3.163008 -0.937635 3.535534 0 3.535534  z " style="stroke: #2a78d6; stroke-width: 2" />
+    </defs>
+    <g clip-path="url(#p221b4f2f63)">
+     <use xlink:href="#mbf99eca5df" x="269.339045" y="208.081065" style="fill: #fcfcfb; stroke: #2a78d6; stroke-width: 2" />
+    </g>
+   </g>
+   <g id="legend_1">
+    <g id="patch_3">
+     <path d="M 620.776562 135.623438  L 850.6 135.623438  L 850.6 84.9  L 620.776562 84.9  z " style="fill: #fcfcfb" />
+    </g>
+    <g id="line2d_20">
+     <path d="M 624.776562 93.715625  L 638.776562 93.715625  L 652.776562 93.715625  " style="fill: none; stroke: #eb6834; stroke-width: 2.4; stroke-linecap: square" />
+    </g>
+    <g id="text_4">
+     <text style="font-size: 10px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: start" x="660.776562" y="97.215625" transform="rotate(-0 660.776562 97.215625)">开关损耗：P_sw = k1 f</text>
+    </g>
+    <g id="line2d_21">
+     <path d="M 624.776562 109.653125  L 638.776562 109.653125  L 652.776562 109.653125  " style="fill: none; stroke: #1baf7a; stroke-width: 2.4; stroke-linecap: square" />
+    </g>
+    <g id="text_5">
+     <text style="font-size: 10px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: start" x="660.776562" y="113.153125" transform="rotate(-0 660.776562 113.153125)">纹波铜损：P_ripple = k2/f^2</text>
+    </g>
+    <g id="line2d_22">
+     <path d="M 624.776562 125.570313  L 638.776562 125.570313  L 652.776562 125.570313  " style="fill: none; stroke: #2a78d6; stroke-width: 3; stroke-linecap: square" />
+    </g>
+    <g id="text_6">
+     <text style="font-size: 10px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: start" x="660.776562" y="129.070313" transform="rotate(-0 660.776562 129.070313)">总损耗：P_total = P0 + P_sw + P_ripple</text>
+    </g>
+   </g>
+  </g>
+  <g id="text_7">
+   <text style="font-weight: 700; font-size: 15px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #0b0b0b" x="460" y="30.55" transform="rotate(-0 460 30.55)">开关损耗与纹波铜损的理想化模型</text>
+  </g>
+  <g id="text_8">
+   <text style="font-size: 10px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #8a8985" x="460" y="49.35" transform="rotate(-0 460 49.35)">固定平均电流、连续电流条件下的趋势图，不是本次扫频的损耗分解</text>
+  </g>
+  <g id="text_9">
+   <text style="font-size: 11px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #52514e" x="460" y="420.65" transform="rotate(-0 460 420.65)">P_total = P0 + k1 f + k2/f^2</text>
+  </g>
+  <g id="text_10">
+   <text style="font-size: 10px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #52514e" x="460" y="444.15" transform="rotate(-0 460 444.15)">f* = (2k2/k1)^(1/3)；参数取决于电机、驱动器和工况</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p221b4f2f63">
+   <rect x="82.8" y="79.9" width="772.8" height="282" />
+  </clipPath>
+ </defs>
+</svg>

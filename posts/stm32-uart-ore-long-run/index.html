@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STM32 DMA 串口长时间运行后响应失效要检查 UART 错误状态 - CacheRivulet小记</title>
+  <meta name="description" content="串口长时间运行后突然失效">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="中断">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:published_time" content="2026-06-28">
+  <meta property="og:title" content="STM32 DMA 串口长时间运行后响应失效要检查 UART 错误状态">
+  <meta property="og:description" content="串口长时间运行后突然失效">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32-uart-ore-long-run/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32-uart-ore-long-run/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "STM32 DMA 串口长时间运行后响应失效要检查 UART 错误状态",
+  "description": "串口长时间运行后突然失效",
+  "datePublished": "2026-06-28",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32-uart-ore-long-run/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32-uart-ore-long-run/"
+  },
+  "keywords": "嵌入式, 低功耗, MCU, 中断, 故障诊断"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">STM32 DMA 串口长时间运行后响应失效要检查 UART 错误状态</h1>
+  <article class="article-body">
+<h1>STM32 DMA 串口长时间运行后响应失效要检查 UART 错误状态</h1>
+<p>接手维护一个低功耗项目后，遇到串口长时间运行后失效的问题。MCU 向外部通信模组发起查询，模组按请求返回数据，但 MCU 侧收不到响应。接收链路已经用了 DMA、中断、乒乓缓冲区和外部 FIFO，仍然会在连续运行数天后偶发失效。</p>
+<p>串口长时间失效不一定只由 ORE 触发，也可能来自 FE、NE、PE 等其他 UART 错误状态。这个案例最后定位到的是 ORE 接收溢出：固件没有清掉这个错误标志，后续 DMA/HAL 接收链路被错误状态卡住。</p>
+<h2>现象</h2>
+<p>故障表现很窄：</p>
+<ul>
+<li>外部通信模组不会主动上报，只会响应 MCU 的查询。</li>
+<li>MCU 发出查询后，业务层收不到模组响应。</li>
+<li>接收侧已有 DMA 中断、乒乓缓冲和外部 FIFO。</li>
+<li>失效后 UART 接收链路不再按预期推进。</li>
+<li>复位后通信恢复。</li>
+<li>整机连续挂机几天后更容易出现。</li>
+</ul>
+<h2>测试方法</h2>
+<p>为了缩短复现时间，测试时把这个通信模块单独拎出来做压力测试，并缩短低功耗休眠间隔。单位时间内执行更多次“进入低功耗、唤醒、查询模组、接收响应”的循环，让原本几天才暴露的问题更快出现。</p>
+<p>问题暴露后，保存两个时间点的状态：</p>
+<ul>
+<li>正常通信时的 UART 相关寄存器。</li>
+<li>失效后的 UART 相关寄存器。</li>
+<li>正常通信时的 HAL UART 结构体字段。</li>
+<li>失效后的 HAL UART 结构体字段。</li>
+</ul>
+<p>这些 dump 再交给一个临时 HTML 解析工具做字段级对比。对比结果直接指向 UART 错误状态：失效现场出现了 ORE。</p>
+<p>后续验证不再每次从零开始挂机。下一轮测试会把故障时 dump 出来的内存状态重新加载回去，让系统直接回到问题现场，再观察修复后的接收链路能不能恢复。</p>
+<h2>原因</h2>
+<p>ORE 是 Overrun Error，含义是接收溢出。典型过程如下：</p>
+<ol>
+<li>UART 收到一个字节，硬件把数据放入接收数据寄存器，并置位 RXNE。</li>
+<li>CPU 或 DMA 还没有及时搬走 RDR 或 DR 里的数据。</li>
+<li>下一个字节已经到达。</li>
+<li>接收寄存器没有空位，硬件置位 ORE。</li>
+</ol>
+<p>接手时，已有代码里有一段注释为“玄学操作”的处理：先读 SR 寄存器，再读 DR 寄存器。这个动作并不玄学，它正是部分 STM32 系列用于清除 ORE 的规定序列。问题在于这段代码放在一个不够可靠的位置，只覆盖了部分正常路径；特殊时序下没有走到这段处理，ORE 就没有按预期清掉。</p>
+<p>在这个项目里，外部模组的响应只发生在 MCU 查询之后，不存在模组长时间主动灌数据。ORE 更可能来自接收链路的短暂不可服务区间：</p>
+<ul>
+<li>MCU 进入或退出低功耗时，某段时间没有处理 UART 接收。</li>
+<li>全局中断关闭时间过长。</li>
+<li>UART 中断优先级较低，被其他任务或中断长期压住。</li>
+<li>DMA 接收在切换、重启或错误处理期间存在空档。</li>
+<li>乒乓缓冲和外部 FIFO 只保护已经搬运出来的数据，不能清除 UART 外设错误位。</li>
+<li>模组响应时机和 MCU 低功耗恢复、调度延迟或接收重启时序偶然重合。</li>
+<li>调试期间打断点，CPU 停住但 UART 外设仍在接收。</li>
+</ul>
+<p>这些条件单次测试未必出现。运行时间足够长后，查询响应、低功耗切换、任务调度、中断屏蔽和 DMA 接收状态总会碰到一次不利组合。</p>
+<h2>后果</h2>
+<p>ORE 置位后，至少已经丢过一个字节。对 AT 指令、Modbus、帧头帧尾协议或二进制数据流来说，当前帧可能已经不完整。</p>
+<p>ORE 也不能当成普通告警忽略。很多 STM32 工程里，ORE 未清除会让 UART 停在错误状态；HAL 可能记录 <code>HAL_UART_ERROR_ORE</code>，进入错误回调，或者停掉原来的 DMA/中断接收流程。最终现象就是 MCU 继续发查询，但响应数据进不了正常接收路径。</p>
+<h2>修复</h2>
+<p>修复遵循最小职责原则：UART/DMA 层只负责清外设错误、恢复接收链路。已经进入外部 FIFO 或协议缓存的数据，继续交给后面的协议层处理。</p>
+<p>这次修复沿用已有的清除机制，但把 ORE 清除动作放到可靠位置。旧 STM32 系列常见方式是读 SR 后读 DR；新系列可能需要写 ICR 的 ORECF 位，或者按参考手册要求组合读取 ISR/RDR。检测到 UART 错误状态后，按目标芯片要求清外设错误、恢复 UART/DMA 接收、记录错误事件，并向上层暴露状态。</p>
+<p>HAL 工程里还要确认 DMA 是否仍在运行，必要时按乒乓缓冲状态重新启动。协议是否丢帧、重同步、继续等待下一包，应由协议层根据校验、帧边界和业务语义决定。</p>
+<p>清除 ORE 是恢复接收链路的止血动作，不等于根因闭环。如果时间允许，还应该继续追查触发 ORE 的具体时序：是哪一次低功耗切换、DMA 重启、调度延迟或中断屏蔽，让接收寄存器没有及时被服务。</p>
+<h2>预防</h2>
+<p>后续同类项目至少补这些检查：</p>
+<ul>
+<li>在 UART 错误中断或 HAL 错误回调里处理 ORE、FE、NE、PE 等错误。</li>
+<li>查询外部模组前确认 UART/DMA 接收链路处于可接收状态。</li>
+<li>把 UART 错误状态纳入响应式串口通信的默认排查项。</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-28 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32-uart-ore-long-run');
+  }
+  </script>
+</body>
+</html>

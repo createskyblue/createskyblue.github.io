@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vue SPA 博客改为静态 HTML 输出解决爬虫无法索引文章内容 - CacheRivulet小记</title>
+  <meta name="description" content="静态博客生成HTML详情页，让搜索引擎能读正文">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Vue">
+  <meta property="article:tag" content="Vite">
+  <meta property="article:tag" content="SEO">
+  <meta property="article:tag" content="博客">
+  <meta property="article:tag" content="静态站点生成">
+  <meta property="article:published_time" content="2026-06-03">
+  <meta property="og:title" content="Vue SPA 博客改为静态 HTML 输出解决爬虫无法索引文章内容">
+  <meta property="og:description" content="静态博客生成HTML详情页，让搜索引擎能读正文">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/blog-json-to-html-seo-upgrade/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/blog-json-to-html-seo-upgrade/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Vue SPA 博客改为静态 HTML 输出解决爬虫无法索引文章内容",
+  "description": "静态博客生成HTML详情页，让搜索引擎能读正文",
+  "datePublished": "2026-06-03",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/blog-json-to-html-seo-upgrade/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/blog-json-to-html-seo-upgrade/"
+  },
+  "keywords": "Vue, Vite, SEO, 博客, 静态站点生成"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Vue SPA 博客改为静态 HTML 输出解决爬虫无法索引文章内容</h1>
+  <article class="article-body">
+<h1>Vue SPA 博客改为静态 HTML 输出解决爬虫无法索引文章内容</h1>
+<h2>问题背景</h2>
+<p>基于 Vue 3 + Vite 的 SPA 博客，文章内容在构建时渲染为 HTML 字符串，存储为 JSON 文件（<code>public/data/posts/{slug}.json</code>）。运行时通过 <code>fetch()</code> 加载 JSON，再用 <code>v-html</code> 注入到弹窗组件中。</p>
+<p>这套方案对搜索引擎爬虫和 AI 索引不友好：</p>
+<ul>
+<li>Googlebot 执行 JS 的能力有限</li>
+<li>AI 爬虫（如 ChatGPT）直接读 HTML 源码，拿不到 JSON 里的内容</li>
+<li>用户分享链接时，接收方打开后只能看到空白首页（需要等 SPA 加载完再解析 URL 参数）</li>
+</ul>
+<p>GitHub Pages 是纯静态托管，没有后端服务器，SSR 走不通。最终方案：构建时直接生成独立的 HTML 文件，每篇文章一个目录。</p>
+<h2>目录结构</h2>
+<p>改造前：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>public/data/posts/esp32s3-esp-nn-sin-demo.json   ← { "content": "&#x3C;html>..." }</span></span>
+<span class="line"><span>public/blog/嵌入式 &#x26; Linux/esp32s3-esp-nn-sin-demo/img.jpg</span></span></code></pre><p>改造后：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>public/posts/esp32s3-esp-nn-sin-demo/</span></span>
+<span class="line"><span>  index.html          ← 完整 HTML 页面（meta 标签 + 正文 + 样式引用）</span></span>
+<span class="line"><span>  img.jpg             ← 图片和 HTML 同目录</span></span></code></pre><p><code>posts.json</code> 索引文件保留，首页卡片列表仍依赖它加载文章元数据。slug 字段从 <code>嵌入式 &amp; Linux/esp32s3-esp-nn-sin-demo</code> 改为 <code>esp32s3-esp-nn-sin-demo</code>，URL 不再包含分类路径。</p>
+<h2>构建流程</h2>
+<p><code>scripts/generate-data.js</code> 负责整个流程：</p>
+<ol>
+<li>扫描 <code>src/content/blog/</code> 下的 Markdown 文件</li>
+<li>解析 frontmatter，提取数学公式，用 <code>marked</code> + Shiki 渲染为 HTML</li>
+<li>修复图片路径，复制图片到 <code>public/posts/{postDir}/</code></li>
+<li>调用 <code>post-html-template.js</code> 生成完整 HTML 页面</li>
+<li>生成 <code>posts.json</code> 索引和 <code>sitemap.xml</code></li>
+</ol>
+<p>公开文章和加密文章都输出为 HTML。加密文章的 HTML 内嵌 <code>&lt;script type=&quot;application/json&quot; id=&quot;encrypted-data&quot;&gt;</code> 存储密文，页面自带解密 UI 和内联的 Web Crypto 解密脚本。</p>
+<p><code>package.json</code> 构建脚本：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>node scripts/generate-data.js &#x26;&#x26; vite build &#x26;&#x26; node scripts/generate-data.js --post-build</span></span></code></pre><p>第三步 <code>--post-build</code> 把 <code>public/posts/</code> 重新复制到 <code>dist/posts/</code>，覆盖 Vite 构建时改写过的版本。</p>
+<h2>关键设计决策</h2>
+<h3>扁平 URL 结构</h3>
+<p>所有文章放在 <code>posts/</code> 根目录下，不按分类建子目录。分类仅用于首页筛选和侧边栏展示，不进入 URL。好处是改分类名不会导致已分享的链接失效。</p>
+<h3>图片用绝对路径</h3>
+<p>HTML 中图片使用 <code>/posts/{postDir}/img.jpg</code> 而非相对路径 <code>img.jpg</code>。原因是 SPA 弹窗通过 <code>fetch()</code> 获取 HTML 后用 <code>innerHTML</code> 注入首页 DOM，浏览器会以当前页面 URL 为基准解析相对路径，导致图片地址错误。</p>
+<p>CSS 样式和 KaTeX CSS 用相对路径 <code>../post-styles.css</code>，因为它们在 <code>&lt;head&gt;</code> 中引用，直接由浏览器加载，不存在 DOM 注入的上下文问题。</p>
+<h3>Vite dev 服务器中间件</h3>
+<p>Vite dev 服务器把 <code>/posts/xxx/</code> 当作 SPA 路由，返回 <code>index.html</code> 而不是实际的文章 HTML 文件。通过 <code>configureServer</code> 钩子添加中间件拦截请求：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">function</span><span style="color:#DCDCAA"> postsMiddleware</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">    name:</span><span style="color:#CE9178"> 'posts-middleware'</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#DCDCAA">    configureServer</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">server</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">      server</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">middlewares</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">use</span><span style="color:#D4D4D4">((</span><span style="color:#9CDCFE">req</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">res</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">next</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">req</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">url</span><span style="color:#D4D4D4">?.</span><span style="color:#DCDCAA">startsWith</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'/posts/'</span><span style="color:#D4D4D4">) &#x26;&#x26; !</span><span style="color:#9CDCFE">req</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">url</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">includes</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'.'</span><span style="color:#D4D4D4">)) {</span></span>
+<span class="line"><span style="color:#569CD6">          const</span><span style="color:#4FC1FF"> urlPath</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">decodeURIComponent</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">req</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">url</span><span style="color:#D4D4D4">).</span><span style="color:#DCDCAA">replace</span><span style="color:#D4D4D4">(</span><span style="color:#D16969">/</span><span style="color:#D7BA7D">\/</span><span style="color:#DCDCAA">$</span><span style="color:#D16969">/</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">''</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#569CD6">          const</span><span style="color:#4FC1FF"> filePath</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">resolve</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">__dirname</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">'public'</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">urlPath</span><span style="color:#D4D4D4"> + </span><span style="color:#CE9178">'/index.html'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#C586C0">          if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">fs</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">existsSync</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">filePath</span><span style="color:#D4D4D4">)) {</span></span>
+<span class="line"><span style="color:#9CDCFE">            res</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">setHeader</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'Content-Type'</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">'text/html'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#9CDCFE">            res</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">end</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">fs</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">readFileSync</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">filePath</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">'utf-8'</span><span style="color:#D4D4D4">))</span></span>
+<span class="line"><span style="color:#C586C0">            return</span></span>
+<span class="line"><span style="color:#D4D4D4">          }</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#DCDCAA">        next</span><span style="color:#D4D4D4">()</span></span>
+<span class="line"><span style="color:#D4D4D4">      })</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>直接访问文章 URL 的处理</h3>
+<p>文章 HTML 内嵌一段 JS：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">top</span><span style="color:#D4D4D4"> === </span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">  window</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">location</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">replace</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">'/?article={slug}'</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>浏览器直接访问文章 URL 时，先加载 HTML 页面，脚本检测到是顶层窗口（非 SPA 弹窗的 fetch），自动跳转到首页并携带 <code>?article=</code> 参数。首页的 <code>checkUrlForArticle()</code> 读取该参数，自动打开对应文章弹窗，URL 替换为 <code>/posts/{slug}</code>。</p>
+<h2>踩过的坑</h2>
+<h3>Vite 构建改写 public 下 HTML 的路径</h3>
+<p><code>vite build</code> 会处理 <code>public/</code> 目录下的 HTML 文件，把 <code>src=&quot;img.jpg&quot;</code> 解析为 <code>src=&quot;/posts/嵌入式 &amp; Linux/xxx/img.jpg&quot;</code> 绝对路径。解决办法是构建脚本在 Vite 完成后执行 <code>--post-build</code>，用未被改写的版本覆盖 <code>dist/posts/</code>。</p>
+<h3>dev 服务器缓存旧数据</h3>
+<p><code>npm run dev</code> 启动的 <code>generate-data.js --watch</code> 进程使用 Node.js 模块缓存，修改构建脚本代码后不会自动生效。需要杀掉旧进程重新启动 dev 服务器。Vite 本身也有进程级缓存，即使文件已更新，正在运行的 Vite 进程仍返回旧内容。</p>
+<h3>SPA 弹窗中相对图片路径解析错误</h3>
+<p>最初图片用相对路径 <code>img.jpg</code>，在独立访问时正常，但在 SPA �弹窗中加载失败。原因是 <code>innerHTML</code> 注入后浏览器以当前页面 URL（<code>/</code> 或 <code>/posts/xxx</code>）为基准解析相对路径，而不是以文章 HTML 所在目录为基准。改为绝对路径 <code>/posts/{postDir}/img.jpg</code> 后解决。</p>
+<h2>最终效果</h2>
+<ul>
+<li>每篇文章是独立 HTML 页面，包含完整的 meta 标签、Open Graph、Schema.org 结构化数据</li>
+<li><code>sitemap.xml</code> 列出所有文章 URL，搜索引擎可直接发现和索引</li>
+<li>首页 SPA 体验不变，点击卡片弹窗显示文章内容</li>
+<li>直接访问文章 URL 自动跳转首页并打开弹窗</li>
+<li>加密文章同样输出 HTML，密文和解密 UI 内嵌在页面中</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-03 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=blog-json-to-html-seo-upgrade');
+  }
+  </script>
+</body>
+</html>

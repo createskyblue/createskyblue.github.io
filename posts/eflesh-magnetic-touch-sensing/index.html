@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eFlesh 用磁场指纹把 3D 打印结构变成触觉皮肤 - CacheRivulet小记</title>
+  <meta name="description" content="eFlesh磁触觉 机器学习">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="eFlesh">
+  <meta property="article:tag" content="触觉传感">
+  <meta property="article:tag" content="机器人">
+  <meta property="article:tag" content="机器学习">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="eFlesh 用磁场指纹把 3D 打印结构变成触觉皮肤">
+  <meta property="og:description" content="eFlesh磁触觉 机器学习">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/eflesh-magnetic-touch-sensing/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/eflesh-magnetic-touch-sensing/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "eFlesh 用磁场指纹把 3D 打印结构变成触觉皮肤",
+  "description": "eFlesh磁触觉 机器学习",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/eflesh-magnetic-touch-sensing/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/eflesh-magnetic-touch-sensing/"
+  },
+  "keywords": "eFlesh, 触觉传感, 机器人, 机器学习"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">eFlesh 用磁场指纹把 3D 打印结构变成触觉皮肤</h1>
+  <article class="article-body">
+<h1>eFlesh 用磁场指纹把 3D 打印结构变成触觉皮肤</h1>
+<p>原始项目仓库：<a href="https://github.com/notvenky/eFlesh">https://github.com/notvenky/eFlesh</a></p>
+<p>eFlesh 是一个磁触觉传感项目。它把柔性 3D 打印结构、磁铁、磁力计阵列和机器学习放到同一条链路里，让机器人表面能够感知接触位置、法向力、剪切力和滑移状态。</p>
+<p>这类项目有一个很现实的难点：接触状态很难直接测量。手指碰到物体后，外力先让柔性结构变形，再改变磁铁和磁力计之间的位置关系，最后才表现为磁场读数变化。eFlesh 的思路是保留这条复杂链路，然后用数据把磁场读数映射回接触状态。</p>
+<p><img src="/posts/eflesh-magnetic-touch-sensing/robot-hand-eflesh.webp" alt="eFlesh 覆盖在机器人手上的示意"></p>
+<h2>磁场指纹来自结构变形</h2>
+<p>eFlesh 的传感单元里有柔性结构、磁铁和磁力计。结构受压或受剪切时，磁铁相对磁力计的位置会变化，磁力计读到的三轴磁场也会跟着变化。</p>
+<p>项目里的 Arduino 采集程序会扫描 I2C 地址，读取多个 MLX90393 磁力计。每个磁力计输出 X、Y、Z 三轴数据，多个传感器合起来形成一组多维磁场读数。</p>
+<p>这组读数可以理解成一次接触留下的“磁场指纹”。接触位置、按压力、剪切方向不同，柔性结构的变形路径也不同，最后得到的磁场模式也不同。模型学习的目标就是把这些磁场模式翻译成位置、力或滑移判断。</p>
+<p><img src="/posts/eflesh-magnetic-touch-sensing/sensor-structure.webp" alt="eFlesh 传感结构和磁力计板"></p>
+<h2>3D 打印结构决定信号质量</h2>
+<p>磁触觉传感不能只看电子部分。外部接触力能不能形成稳定、可分辨的磁场变化，很大程度取决于机械结构。</p>
+<p>eFlesh 使用 cut-cell microstructures 生成可打印的柔性微结构，并在结构里设计磁铁口袋和磁力计板槽位。这样传感器形状可以贴合机器人手、指尖或夹爪，结构刚度也可以通过微结构参数调整。</p>
+<p>这个设计的价值在于可定制性。机器人触觉皮肤很难依靠一种固定形状覆盖所有任务。eFlesh 把传感结构做成可打印、可改形状的对象，让同一套磁感知方法可以迁移到不同表面。</p>
+<h2>采集链路保持简单</h2>
+<p>硬件采集端的职责很清楚：稳定读传感器，稳定输出数据。Arduino 程序负责发现传感器、配置参数、进入连续读取模式，然后通过串口输出二进制读数。</p>
+<p>这条链路里有几个容易被忽略的点：</p>
+<ul>
+<li>传感器顺序要稳定，否则模型输入列的含义会乱。</li>
+<li>无接触状态要做 baseline，后续读数通常要减去基线。</li>
+<li>传感器数据和外部状态数据要带时间戳，训练时才能对齐。</li>
+<li>MCU 侧先保证采样稳定，复杂映射放到 PC 侧训练。</li>
+</ul>
+<p>这种分工适合原型阶段。MCU 负责采样，PC 负责记录、可视化和训练。模型稳定以后，再考虑边缘推理或 MCU 部署。</p>
+<h2>训练数据来自同步采集</h2>
+<p>这类数据集通常不会靠人工逐条标注。人工可以告诉系统“正在做哪类实验”，但每一帧的接触位置、力值和磁场读数需要通过设备同步记录。</p>
+<p>仓库里能确认的表征训练数据由两类文件组成：<code>sensor_post_baselines.csv</code> 保存减去 baseline 后的磁力计读数，<code>states.csv</code> 保存同一实验过程里的状态或力值。训练脚本读取这两个文件，用时间戳为每条传感器读数寻找最近的状态记录。</p>
+<p>这说明数据采集过程至少包含两路信息：</p>
+<ul>
+<li>磁力计阵列连续输出传感器读数。</li>
+<li>外部实验系统记录位置、法向力、剪切力或动作标签。</li>
+<li>两路数据都保留时间戳。</li>
+<li>训练前先做 baseline 处理，再按时间戳配对。</li>
+</ul>
+<p>仓库没有给出完整的表征实验采集脚本，所以不能把某一种机械运动流程写死。可以确认的是，训练阶段依赖已经配对好的时间序列数据，标签来源应当是实验装置、机器人流程或力学测量设备，人工只负责实验组织和样本类别确认。</p>
+<h2>MLP 把磁场读数回归到位置或力</h2>
+<p><code>characterization/train.py</code> 里使用 PyTorch MLP 做表征训练。它支持三种模式：空间位置、法向力和剪切力。</p>
+<p>训练流程很直接：</p>
+<ul>
+<li>读取 <code>states.csv</code> 和 <code>sensor_post_baselines.csv</code>。</li>
+<li>通过最近时间戳把传感器读数和状态值配对。</li>
+<li>按随机 80/20 切分训练集和验证集。</li>
+<li>只用训练集统计均值和方差，再归一化输入和标签。</li>
+<li>使用两层隐藏层、隐藏宽度 128 的 MLP 训练。</li>
+<li>用 Adam 和 MSE loss 回归位置或力值。</li>
+<li>保存模型权重和归一化参数到 <code>artifacts</code> 目录。</li>
+</ul>
+<p>这个训练方式没有依赖复杂网络。磁场到位置或力的关系是非线性的，但输入维度不高，目标也明确。小 MLP 足够先跑通从读数到物理量的闭环。</p>
+<p><img src="/posts/eflesh-magnetic-touch-sensing/shear-force-fit.webp" alt="剪切力数据和模型预测曲线"></p>
+<h2>滑移检测展示了触觉的实用性</h2>
+<p>滑移检测是 eFlesh 很直观的应用。机器人夹住物体后，如果物体开始被拉走，触觉信号会先发生变化。视觉系统未必能稳定看到这种细小相对运动，触觉传感器可以直接感知接触状态变化。</p>
+<p><code>slip_detection</code> 目录里包含数据采集、训练和机器人控制代码。控制脚本以 100Hz 采样触觉序列，先用前 50 帧计算 baseline，然后在后续序列中减去 baseline，提取一段触觉变化作为分类特征。</p>
+<p>滑移训练脚本读取 <code>seq_*.pt</code> 序列和标签文件。它会对序列做 Savitzky-Golay 滤波，取传感器通道减去 baseline 后的变化量，再训练一个轻量分类器判断是否发生拉拽或滑移。</p>
+<p><img src="/posts/eflesh-magnetic-touch-sensing/slip-ui.webp" alt="滑移检测演示界面"></p>
+<p>这个例子说明触觉传感的价值不止是测力。它可以给机器人提供接触反馈：碰到了哪里、力有没有变化、物体是否开始滑动。抓取、交接、插拔、擦拭这类任务都依赖这种反馈。</p>
+<h2>学习这个项目时要看边界</h2>
+<p>eFlesh 的优点是系统链路完整：结构设计、传感器采集、baseline、数据集、训练脚本和演示应用都能对应起来。读这个仓库时，可以同时看到触觉硬件和学习算法怎么配合。</p>
+<p>复现时需要注意几个边界：</p>
+<ul>
+<li>磁铁一致性会影响读数。</li>
+<li>磁力计位置误差会改变输入分布。</li>
+<li>TPU 打印结构的刚度和回弹会影响响应。</li>
+<li>换形状或换传感器布局后，原模型可能需要重新采集数据。</li>
+<li>环境磁干扰会让 baseline 和预测稳定性变差。</li>
+</ul>
+<p>因此，eFlesh 更适合作为“磁触觉系统怎么搭起来”的学习案例。它展示了机械、电路、采集和训练如何配合，也提醒触觉模型的质量高度依赖采集覆盖范围和实验条件。</p>
+<h2>结论</h2>
+<p>eFlesh 的主线可以概括为：可打印柔性结构把接触变成磁铁位移，磁力计阵列把位移变成多维磁场读数，训练脚本再把这些磁场指纹映射到位置、力或滑移状态。</p>
+<p>这篇项目最值得看的部分是训练数据链路。数据来自传感器流和实验状态流的同步记录，再通过时间戳、baseline 和归一化进入模型训练。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=eflesh-magnetic-touch-sensing');
+  }
+  </script>
+</body>
+</html>

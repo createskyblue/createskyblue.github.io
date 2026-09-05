@@ -1,0 +1,59 @@
+<svg viewBox="0 0 680 390" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <rect width="680" height="390" fill="#ffffff"/>
+
+  <text x="20" y="26" font-size="15" font-weight="bold" fill="#0f172a">运行时数据驱动菜单：节点 + 四类控件</text>
+
+  <text x="20" y="46" font-size="12" fill="#334155">固定功能（启动时创建）：</text>
+  <rect x="20" y="54" width="96" height="34" rx="5" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="128" y="54" width="96" height="34" rx="5" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="236" y="54" width="96" height="34" rx="5" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="344" y="54" width="96" height="34" rx="5" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="452" y="54" width="96" height="34" rx="5" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="560" y="54" width="96" height="34" rx="5" fill="#dbeafe" stroke="#93c5fd"/>
+  <text x="68" y="76" font-size="12" fill="#1e3a8a" text-anchor="middle">校准</text>
+  <text x="176" y="76" font-size="12" fill="#1e3a8a" text-anchor="middle">倾角</text>
+  <text x="284" y="76" font-size="12" fill="#1e3a8a" text-anchor="middle">信息</text>
+  <text x="392" y="76" font-size="12" fill="#1e3a8a" text-anchor="middle">配置</text>
+  <text x="500" y="76" font-size="12" fill="#1e3a8a" text-anchor="middle">固件</text>
+  <text x="608" y="76" font-size="12" fill="#1e3a8a" text-anchor="middle">设置</text>
+
+  <text x="20" y="110" font-size="12" fill="#334155">动态内容（进页面前才生成）：</text>
+  <rect x="20" y="118" width="190" height="34" rx="5" fill="#fef9c3" stroke="#fde047"/>
+  <rect x="225" y="118" width="190" height="34" rx="5" fill="#fef9c3" stroke="#fde047"/>
+  <rect x="430" y="118" width="190" height="34" rx="5" fill="#fef9c3" stroke="#fde047"/>
+  <text x="115" y="140" font-size="11" fill="#854d0e" text-anchor="middle">设备列表 ← 扫描结果</text>
+  <text x="320" y="140" font-size="11" fill="#854d0e" text-anchor="middle">配置文件列表 ← SD 卡</text>
+  <text x="525" y="140" font-size="11" fill="#854d0e" text-anchor="middle">固件列表 ← SD 卡</text>
+
+  <text x="20" y="174" font-size="12" fill="#334155">每个菜单节点只存三项：</text>
+  <rect x="30" y="182" width="620" height="46" rx="5" fill="#ffffff" stroke="#475569"/>
+  <line x1="236" y1="182" x2="236" y2="228" stroke="#94a3b8"/>
+  <line x1="444" y1="182" x2="444" y2="228" stroke="#94a3b8"/>
+  <text x="133" y="210" font-size="12" fill="#0f172a" text-anchor="middle">显示内容</text>
+  <text x="340" y="210" font-size="12" fill="#0f172a" text-anchor="middle">节点类型</text>
+  <text x="537" y="210" font-size="12" fill="#0f172a" text-anchor="middle">触发动作</text>
+
+  <text x="20" y="252" font-size="12" fill="#334155">控件按现场操作分四类：</text>
+  <rect x="30" y="260" width="150" height="30" rx="5" fill="#ede9fe" stroke="#c4b5fd"/>
+  <rect x="200" y="260" width="150" height="30" rx="5" fill="#ede9fe" stroke="#c4b5fd"/>
+  <rect x="370" y="260" width="150" height="30" rx="5" fill="#ede9fe" stroke="#c4b5fd"/>
+  <rect x="540" y="260" width="150" height="30" rx="5" fill="#ede9fe" stroke="#c4b5fd"/>
+  <text x="105" y="280" font-size="12" fill="#5b21b6" text-anchor="middle">列表项</text>
+  <text x="275" y="280" font-size="12" fill="#5b21b6" text-anchor="middle">跳转项</text>
+  <text x="445" y="280" font-size="12" fill="#5b21b6" text-anchor="middle">动作项</text>
+  <text x="615" y="280" font-size="12" fill="#5b21b6" text-anchor="middle">数值条</text>
+  <text x="105" y="304" font-size="10" fill="#475569" text-anchor="middle">展示对象，高亮滚动</text>
+  <text x="275" y="304" font-size="10" fill="#475569" text-anchor="middle">进入下一层功能页</text>
+  <text x="445" y="304" font-size="10" fill="#475569" text-anchor="middle">确认即执行业务</text>
+  <text x="615" y="304" font-size="10" fill="#475569" text-anchor="middle">输入有界数值执行</text>
+
+  <rect x="30" y="322" width="300" height="50" rx="6" fill="#dbeafe" stroke="#93c5fd"/>
+  <text x="44" y="342" font-size="12" font-weight="bold" fill="#1e3a8a">渲染（画什么）</text>
+  <text x="44" y="360" font-size="10.5" fill="#334155">标题 / 列表 / 高亮 / 滚动 / 弹窗 / 进度</text>
+
+  <rect x="350" y="322" width="300" height="50" rx="6" fill="#fce7f3" stroke="#f3a8c7"/>
+  <text x="364" y="342" font-size="12" font-weight="bold" fill="#9d174d">执行（按了怎么办）</text>
+  <text x="364" y="360" font-size="10.5" fill="#334155">上移 / 下移 / 确认 / 返回 / 数字输入</text>
+
+  <text x="30" y="386" font-size="11" fill="#475569">确认键按节点类型分流：跳转 / 动作 / 编辑 / 单选。</text>
+</svg>

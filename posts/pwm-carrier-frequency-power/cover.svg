@@ -1,0 +1,57 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ns2="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:xlink="http://www.w3.org/1999/xlink" width="800" height="800" viewBox="0 0 800 800" version="1.1" role="img" aria-label="PWM 载波频率优化封面，三条粗线展示 U 型损耗模型">
+ <metadata>
+  <rdf:RDF>
+   <ns2:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <ns2:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </ns2:Agent>
+    </dc:creator>
+   </ns2:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 800  L 800 800  L 800 0  L 0 0  z " style="fill: #111315" />
+  </g>
+  <g id="axes_1">
+   <g id="line2d_1">
+    <path d="M 56 706.680152  L 744 470.009833  L 744 470.009833  " clip-path="url(#p933fac517e)" style="fill: none; stroke: #ff8a3d; stroke-width: 12; stroke-linecap: square" />
+   </g>
+   <g id="line2d_2">
+    <path d="M 56 490.243603  L 59.44 503.395764  L 62.88 515.581006  L 66.32 526.891837  L 69.76 537.409963  L 73.2 547.207764  L 76.64 556.349544  L 80.08 564.892588  L 83.52 572.888062  L 86.96 580.381782  L 90.4 587.414868  L 93.84 594.024315  L 97.28 600.243476  L 100.72 606.102485  L 104.16 611.628624  L 107.6 616.846638  L 111.04 621.779016  L 114.48 626.446231  L 119.64 632.990272  L 124.8 639.035707  L 129.96 644.631933  L 135.12 649.822376  L 140.28 654.645341  L 145.44 659.134715  L 150.6 663.320569  L 155.76 667.229659  L 160.92 670.885857  L 166.08 674.310516  L 171.24 677.522781  L 178.12 681.504902  L 185 685.175985  L 191.88 688.567598  L 198.76 691.707405  L 205.64 694.61973  L 212.52 697.326029  L 221.12 700.447893  L 229.72 703.309809  L 238.32 705.939857  L 246.92 708.362423  L 257.24 711.025376  L 267.56 713.451806  L 277.88 715.668917  L 289.92 718.022028  L 301.96 720.153717  L 315.72 722.353167  L 329.48 724.332386  L 344.96 726.331009  L 362.16 728.307859  L 379.36 730.064836  L 398.28 731.780911  L 418.92 733.433003  L 441.28 735.004227  L 467.08 736.581422  L 494.6 738.033464  L 525.56 739.434658  L 559.96 740.757765  L 597.8 741.985468  L 640.8 743.151352  L 688.96 744.230806  L 744 745.239073  L 744 745.239073  " clip-path="url(#p933fac517e)" style="fill: none; stroke: #36d399; stroke-width: 12; stroke-linecap: square" />
+   </g>
+   <g id="line2d_3">
+    <path d="M 56 378.666667  L 59.44 390.635477  L 62.88 401.637367  L 66.32 411.764846  L 69.76 421.099621  L 73.2 429.71407  L 76.64 437.672498  L 80.08 445.032191  L 83.52 451.844313  L 86.96 458.154681  L 90.4 464.004416  L 93.84 469.430511  L 97.28 474.466321  L 100.72 479.141978  L 104.16 483.484765  L 107.6 487.519428  L 111.04 491.268454  L 114.48 494.752317  L 117.92 497.98969  L 121.36 500.997628  L 124.8 503.791739  L 128.24 506.386323  L 133.4 509.932507  L 138.56 513.098967  L 143.72 515.920992  L 148.88 518.429865  L 154.04 520.653395  L 159.2 522.616373  L 164.36 524.340954  L 169.52 525.846987  L 174.68 527.152299  L 179.84 528.272933  L 186.72 529.504649  L 193.6 530.464153  L 200.48 531.178226  L 207.36 531.670433  L 214.24 531.961577  L 222.84 532.070627  L 231.44 531.925671  L 240.04 531.554  L 248.64 530.979334  L 258.96 530.05074  L 269.28 528.89045  L 279.6 527.524988  L 291.64 525.702915  L 303.68 523.663542  L 317.44 521.100324  L 331.2 518.320709  L 346.68 514.969472  L 363.88 511.00598  L 382.8 506.397379  L 403.44 501.11857  L 425.8 495.151666  L 449.88 488.485135  L 475.68 481.112777  L 504.92 472.521181  L 537.6 462.676974  L 573.72 451.557739  L 615 438.606426  L 661.44 423.793095  L 714.76 406.540896  L 744 396.991818  L 744 396.991818  " clip-path="url(#p933fac517e)" style="fill: none; stroke: #45b8ff; stroke-width: 15; stroke-linecap: square" />
+   </g>
+   <g id="LineCollection_1">
+    <path d="M 222.069958 752  L 222.069958 532.07165  " clip-path="url(#p933fac517e)" style="fill: none; stroke-dasharray: 20,20; stroke-dashoffset: 0; stroke: #45b8ff; stroke-opacity: 0.72; stroke-width: 5" />
+   </g>
+   <g id="PathCollection_1">
+    <defs>
+     <path id="m0247fed518" d="M 0 9.746794  C 2.58488 9.746794 5.064238 8.719811 6.892024 6.892024  C 8.719811 5.064238 9.746794 2.58488 9.746794 0  C 9.746794 -2.58488 8.719811 -5.064238 6.892024 -6.892024  C 5.064238 -8.719811 2.58488 -9.746794 0 -9.746794  C -2.58488 -9.746794 -5.064238 -8.719811 -6.892024 -6.892024  C -8.719811 -5.064238 -9.746794 -2.58488 -9.746794 0  C -9.746794 2.58488 -8.719811 5.064238 -6.892024 6.892024  C -5.064238 8.719811 -2.58488 9.746794 0 9.746794  z " style="stroke: #45b8ff; stroke-width: 8" />
+    </defs>
+    <g clip-path="url(#p933fac517e)">
+     <use xlink:href="#m0247fed518" x="222.069958" y="532.07165" style="fill: #111315; stroke: #45b8ff; stroke-width: 8" />
+    </g>
+   </g>
+  </g>
+  <g id="text_1">
+   <text style="font-weight: 700; font-size: 96px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #f8fafc" x="400" y="155.893438" transform="rotate(-0 400 155.893438)">PWM 载波频率</text>
+  </g>
+  <g id="text_2">
+   <text style="font-weight: 700; font-size: 122px; font-family: 'Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #f8fafc" x="400" y="283.381191" transform="rotate(-0 400 283.381191)">损耗优化</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p933fac517e">
+   <rect x="56" y="360" width="688" height="392" />
+  </clipPath>
+ </defs>
+</svg>

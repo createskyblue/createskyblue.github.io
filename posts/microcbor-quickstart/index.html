@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>microcbor 入门：MCU 上用 CBOR 编码遥测消息 - CacheRivulet小记</title>
+  <meta name="description" content="JSON在MCU上太重，microcbor用32位整数子集给遥测减负">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="物联网">
+  <meta property="article:tag" content="编码">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="microcbor 入门：MCU 上用 CBOR 编码遥测消息">
+  <meta property="og:description" content="JSON在MCU上太重，microcbor用32位整数子集给遥测减负">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/microcbor-quickstart/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/microcbor-quickstart/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "microcbor 入门：MCU 上用 CBOR 编码遥测消息",
+  "description": "JSON在MCU上太重，microcbor用32位整数子集给遥测减负",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/microcbor-quickstart/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/microcbor-quickstart/"
+  },
+  "keywords": "嵌入式, C语言, 通信协议, 物联网, 编码"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">microcbor 入门：MCU 上用 CBOR 编码遥测消息</h1>
+  <article class="article-body">
+<h1>microcbor 入门：MCU 上用 CBOR 编码遥测消息</h1>
+<blockquote>
+<p><strong>声明：</strong> microcbor 是一个开源项目，作者为 <a href="https://github.com/Vanderhell">Vanderhell</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解嵌入式场景下 CBOR 编解码的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/microcbor" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/microcbor</a>（C99、零依赖、零堆分配的 CBOR 编解码库，面向 MCU 遥测场景裁剪了 RFC 8949 子集）</p>
+<h2>CBOR 在 MCU 遥测场景的优势</h2>
+<p>MQTT、CoAP、BLE GATT、LoRa 这几类链路传输的典型载荷是键值型遥测消息：几个传感器数值加一个设备 ID。JSON 在 PC 端是默认选项，搬到 Cortex-M0/M3 这类小 MCU 上会遇到几个具体问题：</p>
+<ul>
+<li>每个字符串键、字符串值两端都要加引号；冒号、逗号、花括号是纯开销字节。</li>
+<li>浮点数转成 ASCII 文本要走 <code>sprintf</code>，在无 FPU 的芯片上是最耗时的一段；数字 <code>&quot;23.4&quot;</code> 占 4 个 ASCII 字节，CBOR 里是 4 字节定长二进制 float32。</li>
+<li>解析器要处理任意嵌套和字符串转义，代码体积和栈占用都偏大。</li>
+</ul>
+<p>CBOR（RFC 8949）是二进制 JSON 替代品，主要思路是用一个头字节同时携带「类型 + 长度信息」，去掉所有结构标点，整数和浮点数走二进制定长编码。同一条消息通常比 JSON 短 30%–50%，在 LoRa 51 字节 payload 限制下这个差距直接决定能不能一帧发完。</p>
+<p><img src="/posts/microcbor-quickstart/cbor-vs-json.svg" alt="JSON 与 CBOR 字节占用对比"></p>
+<h2>microcbor 的定位</h2>
+<p>microcbor 面向遥测场景裁剪了 RFC 8949 子集，只实现：</p>
+<ul>
+<li>uint/int 32 位整数、bool、null、float32；</li>
+<li>UTF-8 文本串、字节串；</li>
+<li>定长 array 和 map；</li>
+<li>未知字段的迭代式 skip（用于前向兼容）。</li>
+</ul>
+<p>砍掉的部分也是刻意的：不支持 64 位整数、不定长编码、Tag、半精度/双精度浮点。换来的是两个 <code>.c/.h</code> 就能集成、没有任何 malloc、编码端有 sticky overflow 标志可以连写后统一检查。</p>
+<h2>集成方式</h2>
+<p>代码只有一个实现文件和两个头文件：</p>
+<ul>
+<li><code>include/mcbor.h</code>：公共 API</li>
+<li><code>include/mcbor_config.h</code>：一个开关 <code>MCBOR_ENABLE_FLOAT32</code>（默认 1，关闭后 float API 返回 <code>MCBOR_ERR_UNSUPPORTED</code>）</li>
+<li><code>src/mcbor.c</code>：实现</li>
+</ul>
+<p>把这三个文件拷进工程，<code>#include &quot;mcbor.h&quot;</code> 即可，没有第三方依赖，C99 可编译。也可以直接用 CMake 里的 <code>add_subdirectory</code> 链接。</p>
+<h2>入门 Demo：编码一条传感器消息</h2>
+<p>下面这段代码编码一条 <code>{dev:&quot;s-01&quot;, temp:23.4, hum:55, ok:true}</code>，验证完整性后再解回来。完整可编译文件见仓库 README 的 Quick Start，下面给出跑通的版本。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdio.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "mcbor.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#9CDCFE"> buf</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#4EC9B0">    mcbor_enc_t</span><span style="color:#D4D4D4"> enc;</span></span>
+<span class="line"><span style="color:#569CD6">    size_t</span><span style="color:#D4D4D4"> used = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 编码：4 个键值对的 map */</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_enc_init</span><span style="color:#D4D4D4">(&#x26;enc, buf, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(buf));</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_enc_map</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_enc_str</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#CE9178">"dev"</span><span style="color:#D4D4D4">);   </span><span style="color:#DCDCAA">mcbor_enc_str</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#CE9178">"s-01"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_enc_str</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#CE9178">"temp"</span><span style="color:#D4D4D4">);  </span><span style="color:#DCDCAA">mcbor_enc_float</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#B5CEA8">23.4f</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_enc_str</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#CE9178">"hum"</span><span style="color:#D4D4D4">);   </span><span style="color:#DCDCAA">mcbor_enc_uint</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#B5CEA8">55</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_enc_str</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#CE9178">"ok"</span><span style="color:#D4D4D4">);    </span><span style="color:#DCDCAA">mcbor_enc_bool</span><span style="color:#D4D4D4">(&#x26;enc, </span><span style="color:#569CD6">true</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_enc_size</span><span style="color:#D4D4D4">(&#x26;enc, &#x26;used);</span></span>
+<span class="line"><span style="color:#6A9955">    /* 编码后 used=30 字节，hex:</span></span>
+<span class="line"><span style="color:#6A9955">       a4 63646576 64732d3031 6474656d70 fa41bb3333</span></span>
+<span class="line"><span style="color:#6A9955">       6368756d 1837 626f6b f5 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 一次性验证：顶层 1 个完整项、无 trailing 字节 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_validate_one</span><span style="color:#D4D4D4">(buf, used);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 解码：按 key 查表，未知 key 用 skip 跳过 */</span></span>
+<span class="line"><span style="color:#4EC9B0">    mcbor_dec_t</span><span style="color:#D4D4D4"> dec;</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_dec_init</span><span style="color:#D4D4D4">(&#x26;dec, buf, used);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    size_t</span><span style="color:#D4D4D4"> n;</span></span>
+<span class="line"><span style="color:#DCDCAA">    mcbor_dec_map</span><span style="color:#D4D4D4">(&#x26;dec, &#x26;n);</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; n; i++) {</span></span>
+<span class="line"><span style="color:#569CD6">        char</span><span style="color:#9CDCFE"> key</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">]; </span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> klen;</span></span>
+<span class="line"><span style="color:#DCDCAA">        mcbor_dec_str</span><span style="color:#D4D4D4">(&#x26;dec, key, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(key), &#x26;klen);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">strcmp</span><span style="color:#D4D4D4">(key, </span><span style="color:#CE9178">"temp"</span><span style="color:#D4D4D4">) == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">            float</span><span style="color:#D4D4D4"> v; </span><span style="color:#DCDCAA">mcbor_dec_float</span><span style="color:#D4D4D4">(&#x26;dec, &#x26;v);</span></span>
+<span class="line"><span style="color:#DCDCAA">            printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"temp=</span><span style="color:#9CDCFE">%.1f</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, v);</span></span>
+<span class="line"><span style="color:#D4D4D4">        } </span><span style="color:#C586C0">else</span><span style="color:#C586C0"> if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">strcmp</span><span style="color:#D4D4D4">(key, </span><span style="color:#CE9178">"hum"</span><span style="color:#D4D4D4">) == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">            uint32_t</span><span style="color:#D4D4D4"> v; </span><span style="color:#DCDCAA">mcbor_dec_uint</span><span style="color:#D4D4D4">(&#x26;dec, &#x26;v);</span></span>
+<span class="line"><span style="color:#DCDCAA">            printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"hum=</span><span style="color:#9CDCFE">%u</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, v);</span></span>
+<span class="line"><span style="color:#D4D4D4">        } </span><span style="color:#C586C0">else</span><span style="color:#C586C0"> if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">strcmp</span><span style="color:#D4D4D4">(key, </span><span style="color:#CE9178">"ok"</span><span style="color:#D4D4D4">) == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">            bool</span><span style="color:#D4D4D4"> v; </span><span style="color:#DCDCAA">mcbor_dec_bool</span><span style="color:#D4D4D4">(&#x26;dec, &#x26;v);</span></span>
+<span class="line"><span style="color:#DCDCAA">            printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"ok=</span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, v);</span></span>
+<span class="line"><span style="color:#D4D4D4">        } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#DCDCAA">            mcbor_dec_skip</span><span style="color:#D4D4D4">(&#x26;dec);</span><span style="color:#6A9955">   /* 不识别的 key 直接跳过 value */</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>编译运行（仓库自带测试文件也用同一条命令验证过，43/43 测试通过）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">gcc</span><span style="color:#569CD6"> -std=c99</span><span style="color:#569CD6"> -Iinclude</span><span style="color:#CE9178"> src/mcbor.c</span><span style="color:#CE9178"> demo.c</span><span style="color:#569CD6"> -lm</span><span style="color:#569CD6"> -o</span><span style="color:#CE9178"> demo</span></span>
+<span class="line"><span style="color:#DCDCAA">./demo</span></span></code></pre><p>几个阅读这段代码时需要注意的点：</p>
+<ul>
+<li><code>mcbor_enc_map(n)</code> 只写容器头，不校验后面是否真的写了 n 对。编码器状态机不跟踪结构完整性，交给调用方或 <code>mcbor_validate_one</code> 收尾校验。</li>
+<li>每个 <code>mcbor_enc_*</code> 返回 <code>mcbor_err_t</code>，buf 写满时会置 <code>enc-&gt;overflow = true</code>（sticky，置位后所有后续写入直接返回 overflow），可以在链尾用 <code>mcbor_enc_overflow</code> 一次检查。</li>
+<li><code>mcbor_dec_str</code> 把文本拷进调用方提供的 buffer 并补 NUL 终止符；<code>mcbor_dec_bytes_ref</code> 则返回指向输入 buffer 的零拷贝指针，二进制 payload 走这个接口。</li>
+<li>解码未知字段一定要用 <code>mcbor_dec_skip</code>，它内部是迭代式计数跳过，嵌套 array/map 也不会递归消耗栈。</li>
+</ul>
+<h2>API 速查</h2>
+<p>编码端（写入调用方提供的 <code>uint8_t buf[]</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mcbor_enc_init</code></td>
+<td>绑定 buffer，重置 pos/overflow</td>
+</tr>
+<tr>
+<td><code>mcbor_enc_uint / mcbor_enc_int</code></td>
+<td>32 位无符号 / 有符号整数，自动选最短宽度</td>
+</tr>
+<tr>
+<td><code>mcbor_enc_bool / mcbor_enc_null / mcbor_enc_float</code></td>
+<td>简单值</td>
+</tr>
+<tr>
+<td><code>mcbor_enc_str / mcbor_enc_text / mcbor_enc_bytes</code></td>
+<td>以 NUL 结尾串 / 指定长度文本 / 字节串</td>
+</tr>
+<tr>
+<td><code>mcbor_enc_array(n) / mcbor_enc_map(n)</code></td>
+<td>定长容器头</td>
+</tr>
+<tr>
+<td><code>mcbor_enc_size / mcbor_enc_overflow</code></td>
+<td>链尾查询已写字节 / 是否溢出</td>
+</tr>
+</tbody></table>
+<p>解码端（顺序读，指针前移）：</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mcbor_dec_init</code></td>
+<td>绑定输入 buffer</td>
+</tr>
+<tr>
+<td><code>mcbor_dec_next</code></td>
+<td>通用取下一项，返回 <code>mcbor_value_t</code> tagged union</td>
+</tr>
+<tr>
+<td><code>mcbor_dec_uint / mcbor_dec_int / mcbor_dec_bool / mcbor_dec_float</code></td>
+<td>按类型取，类型不匹配返回 <code>MCBOR_ERR_TYPE</code></td>
+</tr>
+<tr>
+<td><code>mcbor_dec_str</code></td>
+<td>拷贝到调用方 buffer 并补 NUL</td>
+</tr>
+<tr>
+<td><code>mcbor_dec_bytes_ref</code></td>
+<td>零拷贝拿字节串指针</td>
+</tr>
+<tr>
+<td><code>mcbor_dec_array / mcbor_dec_map</code></td>
+<td>读容器头，返回元素个数</td>
+</tr>
+<tr>
+<td><code>mcbor_dec_skip</code></td>
+<td>跳过当前项（含嵌套容器），用于前向兼容</td>
+</tr>
+<tr>
+<td><code>mcbor_dec_remaining / mcbor_dec_done</code></td>
+<td>剩余字节 / 是否读完</td>
+</tr>
+</tbody></table>
+<p>校验：</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mcbor_validate_one</code></td>
+<td>校验 buffer 包含且仅包含一个完整受支持的 CBOR 项，无 trailing 字节</td>
+</tr>
+<tr>
+<td><code>mcbor_err_str</code></td>
+<td>错误码转字符串，日志用</td>
+</tr>
+</tbody></table>
+<h2>适用边界</h2>
+<p>适合：传感器遥测、配置项导出、日志结构化字段、BLE GATT  characteristic 载荷、MQTT/CoAP 短消息。</p>
+<p>不适合：</p>
+<ul>
+<li>载荷里需要 64 位整数、大整数、半精度/双精度浮点、Tag（比如日期 Tag 1）。</li>
+<li>需要流式编码（encoder 只写定长容器头，必须提前知道元素个数）。</li>
+<li>接收端需要 canonical CBOR（确定性编码）：库不排序 map key，不做最短浮点表示，NaN payload 原样出。</li>
+</ul>
+<p>跑通 demo 之后，下一篇 <a href="https://createskyblue.github.io/blog/microcbor-internals">microcbor 原理：头字节编码、sticky overflow 与迭代式 skip</a> 展开内部实现，重点看 <code>enc_head</code> 宽度选择、<code>dec_skip_core</code> 的迭代计数、以及 UTF-8 校验放在编码端还是解码端这个取舍。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=microcbor-quickstart');
+  }
+  </script>
+</body>
+</html>

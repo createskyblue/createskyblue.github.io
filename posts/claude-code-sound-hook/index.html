@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>如何让 Claude Code 每轮对话结束播放提示音通知你 - CacheRivulet小记</title>
+  <meta name="description" content="加个声音钩子，Claude完工自动通知你">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Claude Code">
+  <meta property="article:tag" content="Hook">
+  <meta property="article:tag" content="开发效率">
+  <meta property="article:tag" content="Windows">
+  <meta property="article:published_time" content="2026-05-22">
+  <meta property="og:title" content="如何让 Claude Code 每轮对话结束播放提示音通知你">
+  <meta property="og:description" content="加个声音钩子，Claude完工自动通知你">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/claude-code-sound-hook/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/claude-code-sound-hook/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "如何让 Claude Code 每轮对话结束播放提示音通知你",
+  "description": "加个声音钩子，Claude完工自动通知你",
+  "datePublished": "2026-05-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/claude-code-sound-hook/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/claude-code-sound-hook/"
+  },
+  "keywords": "Claude Code, Hook, 开发效率, Windows"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">如何让 Claude Code 每轮对话结束播放提示音通知你</h1>
+  <article class="article-body">
+<h1>如何让 Claude Code 每轮对话结束播放提示音通知你</h1>
+<p>Claude Code 处理长任务时，开发者切到浏览器或终端做别的事，完成后没有声音提示，容易错过回复时机。同样，Claude 向你提问或请求权限审批时如果没注意到，也会拖慢整个流程。通过配置 <code>Stop</code>、<code>Notification</code>、<code>PermissionRequest</code> 三个 Hook，可以让 Claude 在不同场景下自动播放不同提示音。</p>
+<h2>Claude Code 的 Hook 机制</h2>
+<p>Hook 是 Claude Code 的生命周期钩子系统，在特定事件发生时自动执行命令。与声音通知相关的事件：</p>
+<table>
+<thead>
+<tr>
+<th>事件</th>
+<th>触发时机</th>
+<th>音效建议</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Stop</code></td>
+<td>Claude 完成一轮回复</td>
+<td><code>tada.wav</code> — 任务完成</td>
+</tr>
+<tr>
+<td><code>Notification</code></td>
+<td>Claude 发出通知（包括提问）</td>
+<td><code>notify.wav</code> — 需要你注意</td>
+</tr>
+<tr>
+<td><code>PermissionRequest</code></td>
+<td>Claude 请求权限审批</td>
+<td><code>chimes.wav</code> — 需要立即审批</td>
+</tr>
+</tbody></table>
+<p>三个事件用不同音效，听声音就知道该做什么。</p>
+<h2>配置方法</h2>
+<p>编辑用户级配置文件 <code>~/.claude/settings.json</code>，添加 <code>hooks</code> 字段：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "hooks"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">    "Stop"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">      {</span></span>
+<span class="line"><span style="color:#9CDCFE">        "hooks"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">          {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"command"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "command"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"(New-Object Media.SoundPlayer 'C:</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">Windows</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">Media</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">tada.wav').PlaySync()"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "shell"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"powershell"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "timeout"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">10</span></span>
+<span class="line"><span style="color:#D4D4D4">          }</span></span>
+<span class="line"><span style="color:#D4D4D4">        ]</span></span>
+<span class="line"><span style="color:#D4D4D4">      }</span></span>
+<span class="line"><span style="color:#D4D4D4">    ],</span></span>
+<span class="line"><span style="color:#9CDCFE">    "Notification"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">      {</span></span>
+<span class="line"><span style="color:#9CDCFE">        "hooks"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">          {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"command"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "command"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"(New-Object Media.SoundPlayer 'C:</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">Windows</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">Media</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">notify.wav').PlaySync()"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "shell"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"powershell"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "timeout"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">10</span></span>
+<span class="line"><span style="color:#D4D4D4">          }</span></span>
+<span class="line"><span style="color:#D4D4D4">        ]</span></span>
+<span class="line"><span style="color:#D4D4D4">      }</span></span>
+<span class="line"><span style="color:#D4D4D4">    ],</span></span>
+<span class="line"><span style="color:#9CDCFE">    "PermissionRequest"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">      {</span></span>
+<span class="line"><span style="color:#9CDCFE">        "hooks"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">          {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"command"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "command"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"(New-Object Media.SoundPlayer 'C:</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">Windows</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">Media</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">chimes.wav').PlaySync()"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "shell"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"powershell"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "timeout"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">10</span></span>
+<span class="line"><span style="color:#D4D4D4">          }</span></span>
+<span class="line"><span style="color:#D4D4D4">        ]</span></span>
+<span class="line"><span style="color:#D4D4D4">      }</span></span>
+<span class="line"><span style="color:#D4D4D4">    ]</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>保存后立即生效，无需重启。</p>
+<h2>字段说明</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>值</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>type</code></td>
+<td><code>&quot;command&quot;</code></td>
+<td>执行 shell 命令</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td>PowerShell 播放音频的命令</td>
+<td>播放指定 <code>.wav</code> 文件</td>
+</tr>
+<tr>
+<td><code>shell</code></td>
+<td><code>&quot;powershell&quot;</code></td>
+<td>显式指定 PowerShell，避免被 Git Bash 接管</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
+<td><code>10</code></td>
+<td>超时秒数，防止音频卡死阻塞会话</td>
+</tr>
+</tbody></table>
+<p><code>command</code> 中的路径使用 <code>\\</code> 双反斜杠，因为 JSON 字符串中 <code>\</code> 是转义字符。</p>
+<h2>换成自定义音效</h2>
+<p>Windows 系统自带音效位于 <code>C:\Windows\Media\</code>，可选 <code>tada.wav</code>、<code>notify.wav</code>、<code>chimes.wav</code>、<code>ding.wav</code> 等。</p>
+<p>如果想用自定义音效：</p>
+<ol>
+<li>准备一个 <code>.wav</code> 文件，放到任意路径</li>
+<li>将 <code>command</code> 中的路径替换为自定义文件路径：</li>
+</ol>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#CE9178">"command"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"(New-Object Media.SoundPlayer 'C:</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">Users</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">你的用户名</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">sounds</span><span style="color:#D7BA7D">\\</span><span style="color:#CE9178">custom.wav').PlaySync()"</span></span></code></pre><h2>macOS / Linux 方案</h2>
+<p>非 Windows 系统需要替换 <code>command</code>，并去掉 <code>shell</code> 字段（默认使用 bash）：</p>
+<p>macOS：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"command"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "command"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"afplay /System/Library/Sounds/Glass.aiff"</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>Linux（需安装 <code>paplay</code> 或 <code>aplay</code>）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"command"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "command"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"paplay /usr/share/sounds/freedesktop/stereo/complete.oga"</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h2>禁用与管理</h2>
+<ul>
+<li>临时禁用：在 Claude Code 中输入 <code>/hooks</code>，找到对应 Hook 禁用</li>
+<li>永久删除：从 <code>settings.json</code> 中移除 <code>hooks</code> 字段</li>
+<li>音频太吵：将 <code>timeout</code> 设为 <code>1</code>，超时后自动中断播放</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=claude-code-sound-hook');
+  }
+  </script>
+</body>
+</html>

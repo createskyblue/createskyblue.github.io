@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlashDB 占用约 7KB Flash 时，固定配置可考虑 A/B 双页存储 - CacheRivulet小记</title>
+  <meta name="description" content="FlashDB KV 与 A/B 双页存储：按数据模型和 Flash 预算选型">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="FlashDB">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="Cortex-M0+">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:tag" content="A/B分区">
+  <meta property="article:published_time" content="2026-07-27">
+  <meta property="og:title" content="FlashDB 占用约 7KB Flash 时，固定配置可考虑 A/B 双页存储">
+  <meta property="og:description" content="FlashDB KV 与 A/B 双页存储：按数据模型和 Flash 预算选型">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ab-partition-vs-flashdb/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ab-partition-vs-flashdb/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "FlashDB 占用约 7KB Flash 时，固定配置可考虑 A/B 双页存储",
+  "description": "FlashDB KV 与 A/B 双页存储：按数据模型和 Flash 预算选型",
+  "datePublished": "2026-07-27",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ab-partition-vs-flashdb/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ab-partition-vs-flashdb/"
+  },
+  "keywords": "FlashDB, Flash存储, 嵌入式, Cortex-M0+, 系统设计, A/B分区"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">FlashDB 占用约 7KB Flash 时，固定配置可考虑 A/B 双页存储</h1>
+  <article class="article-body">
+<h1>FlashDB 占用约 7KB Flash 时，固定配置可考虑 A/B 双页存储</h1>
+<p>FlashDB 是面向嵌入式设备的数据库组件。KVDB 用键值对保存配置，适合 key 会增加、更新较频繁、需要遍历或删除数据的场景；它同时提供 GC、磨损均衡和掉电恢复等能力。</p>
+<p>A/B 双页存储使用两个独立 Flash 擦除页保存同一份固定结构体。写入中断或主副本校验失败时，程序可以读取另一页，适合数据少、结构稳定、更新频率低的设备配置。</p>
+<h2>FlashDB 的 7KB 代码占用</h2>
+<p>以下数据来自 Cortex-M0+ 在 <code>-Os -flto</code> 下的编译结果，仅开启 KVDB 与 FAL。这个数字用于说明当前工程的资源量级，不代表所有芯片和工具链都会得到相同结果。</p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>主要代价来源</th>
+<th>约 Flash 占用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>fdb_kvdb.c</td>
+<td>扇区管理、追加写、GC 回收、迭代器</td>
+<td>~3KB</td>
+</tr>
+<tr>
+<td>fdb_utils.c</td>
+<td>CRC32、状态字操作</td>
+<td>~1.5KB</td>
+</tr>
+<tr>
+<td>fdb.c</td>
+<td>数据库公共接口</td>
+<td>~0.5KB</td>
+</tr>
+<tr>
+<td>FAL 层</td>
+<td>分区表、设备管理、Flash 操作封装</td>
+<td>~2KB</td>
+</tr>
+<tr>
+<td>合计</td>
+<td></td>
+<td><strong>~7KB</strong></td>
+</tr>
+</tbody></table>
+<p>这 7KB 购买的是完整 KV 存储能力。项目仅保存几十字节固定配置时，其中很多能力用不上；配置持续增长或需要频繁维护时，这些能力可以降低应用层复杂度。</p>
+<h2>A/B 双页与 FlashDB 的选型差异</h2>
+<table>
+<thead>
+<tr>
+<th>选型维度</th>
+<th>A/B 双页存储</th>
+<th>FlashDB KVDB</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>数据模型</td>
+<td>固定结构体或固定二进制块</td>
+<td>key-value，条目可独立增删</td>
+</tr>
+<tr>
+<td>写入方式</td>
+<td>整块擦除、整块更新</td>
+<td>追加写入，由 GC 回收空间</td>
+</tr>
+<tr>
+<td>掉电恢复</td>
+<td>两份副本校验与回退</td>
+<td>数据库状态管理与恢复机制</td>
+</tr>
+<tr>
+<td>磨损管理</td>
+<td>应用自行控制写入频率</td>
+<td>提供 GC 和磨损均衡能力</td>
+</tr>
+<tr>
+<td>版本迁移</td>
+<td>应用处理结构体版本</td>
+<td>可按 key 补充或更新默认值</td>
+</tr>
+<tr>
+<td>外部管理</td>
+<td>需要自定义字段映射</td>
+<td>key 适合查询、修改和导出</td>
+</tr>
+<tr>
+<td>资源代价</td>
+<td>两个擦除页和少量代码</td>
+<td>当前最小配置约 7KB 代码</td>
+</tr>
+</tbody></table>
+<p>数据字节数只能作为一个判断维度。固定结构体即使接近 1KB，也可能适合 A/B；几十字节配置如果每个字段都要独立管理、频繁更新，FlashDB 仍有价值。</p>
+<h2>选型边界</h2>
+<p>选择 A/B 双页存储，需要同时满足这些条件：</p>
+<ul>
+<li>数据结构固定，保存时可以整体更新。</li>
+<li>写入频率低，两个页的擦写寿命可以接受。</li>
+<li>Flash 代码空间紧张，愿意在应用层维护版本迁移。</li>
+<li>不需要 KV 遍历、按 key 删除、TSDB 或通用管理接口。</li>
+</ul>
+<p>选择 FlashDB，通常是因为配置已经形成动态 KV 集合，写入和升级需求持续增加。此时 7KB 左右的代码代价换来了统一的数据管理、空间回收和恢复机制，项目不必继续扩展自写存储层。</p>
+<p>实际选择可以压缩成一句话：<strong>固定、低频、整块更新优先 A/B；动态、频繁、按 key 管理优先 FlashDB。</strong></p>
+<p>A/B 双页实现、Air001 接入方式和掉电边界见 <a href="/posts/ab-partition-flash-store">用 A/B 双页冗余保存 MCU 固定配置</a>。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-27 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ab-partition-vs-flashdb');
+  }
+  </script>
+</body>
+</html>

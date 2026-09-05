@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>深入理解 DALI 协议：曼彻斯特编解码与 Input Capture 实现 - CacheRivulet小记</title>
+  <meta name="description" content="DALI照明总线：曼彻斯特编码 实现">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="DALI">
+  <meta property="article:tag" content="Manchester">
+  <meta property="article:tag" content="曼彻斯特编码">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="IEC 62386">
+  <meta property="article:tag" content="Air001">
+  <meta property="article:published_time" content="2026-06-19">
+  <meta property="og:title" content="深入理解 DALI 协议：曼彻斯特编解码与 Input Capture 实现">
+  <meta property="og:description" content="DALI照明总线：曼彻斯特编码 实现">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/dali-manchester-codec/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/dali-manchester-codec/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "深入理解 DALI 协议：曼彻斯特编解码与 Input Capture 实现",
+  "description": "DALI照明总线：曼彻斯特编码 实现",
+  "datePublished": "2026-06-19",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/dali-manchester-codec/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/dali-manchester-codec/"
+  },
+  "keywords": "DALI, Manchester, 曼彻斯特编码, 嵌入式, IEC 62386, Air001"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">深入理解 DALI 协议：曼彻斯特编解码与 Input Capture 实现</h1>
+  <article class="article-body">
+<h1>深入理解 DALI 协议：曼彻斯特编解码与 Input Capture 实现</h1>
+<p><img src="/posts/dali-manchester-codec/img/manchester-timing.webp" alt="DALI 反相曼彻斯特时序"></p>
+<h2>DALI 协议物理层</h2>
+<p>DALI（Digital Addressable Lighting Interface）是 IEC 62386 标准定义的照明控制总线协议。物理层核心参数：</p>
+<ul>
+<li><strong>数据速率</strong>：1200 bps（±10% 容差）</li>
+<li><strong>编码方式</strong>：曼彻斯特（Manchester / bi-phase）编码</li>
+<li><strong>总线拓扑</strong>：两线差分，半双工，最大压降 2V</li>
+<li><strong>位周期</strong>：833.33 µs（1/1200 s）</li>
+<li><strong>半位周期 Te</strong>：416.67 µs</li>
+</ul>
+<p>DALI 帧分两类：</p>
+<ul>
+<li><strong>前向帧</strong>（控制器 → 设备）：1 起始位 + 16 数据位 + 2 停止位 = 19 位，总时长 38 Te ≈ 15.83 ms</li>
+<li><strong>后向帧</strong>（设备 → 控制器）：1 起始位 + 8 数据位 + 2 停止位 = 11 位，总时长 22 Te ≈ 9.17 ms</li>
+</ul>
+<p>每个字节按 MSB first 顺序发送。前向帧的 16 个数据位中，先发地址字节（bit17–10），再发数据字节（bit9–2），最后是两个停止位（bit1–0，恒为 11）。</p>
+<h2>曼彻斯特编码</h2>
+<p>曼彻斯特编码的规则是：每位中心必须发生一次电平跳变，用跳变方向区分逻辑值。</p>
+<ul>
+<li><strong>逻辑 1</strong>：位中心出现上升沿（低 → 高）</li>
+<li><strong>逻辑 0</strong>：位中心出现下降沿（高 → 低）</li>
+</ul>
+<p>当连续两个位的值相同时，位边界处额外多一次跳变；值不同时，位边界无跳变。这意味着相邻边沿的时间间隔只有两种可能：短脉冲 ≈ 1 Te（位边界），长脉冲 ≈ 2 Te（位中心）。这一特性是接收端解码的关键。</p>
+<p>以连续三个位 <code>1, 1, 0</code> 的反相曼彻斯特波形为例。位 1 的两半依次为高电平、低电平，位中心是下降沿（长脉冲 ≈ 2Te）。两个连续的 1 之间在位边界处有额外跳变（短脉冲 ≈ 1Te），因为前后位的值相同。位 0 的两半依次为低电平、高电平，位中心是上升沿（长脉冲 ≈ 2Te）。位 1 和位 0 值不同，位边界无跳变。</p>
+<p>DALI 总线通常经光耦或晶体管驱动，硬件上反相一次。因此 MCU 侧 GPIO 的实际波形是反相曼彻斯特：1 对应 <strong>高 → 低</strong>（下降沿），0 对应 <strong>低 → 高</strong>（上升沿）。总线空闲时 MCU 引脚保持低电平。</p>
+<h2>TX 发送：定时器驱动的 GPIO 位拆裂</h2>
+<p>硬件平台是 Air001（Cortex-M0+，48 MHz）。发送端将 TIM16 配置为 2400 Hz（Period = 20000，即 48 MHz / 20000），每 Te 触发一次中断。ISR 根据发送缓冲区 LSB 判断当前位值，按半位奇偶序号决定 GPIO 输出电平：编码 1 时前半输出 HIGH 后半输出 LOW，编码 0 时前半输出 LOW 后半输出 HIGH。每个完整位（两个半位）结束后，发送缓冲区右移一位，直到 38 个半位（前向帧）或 22 个半位（后向帧）全部发送。</p>
+<p>发送前，帧数据按 MSB first 装入发送缓冲区：停止位在最低位方向，起始位在最高位方向，中间按地址字节、数据字节的顺序逐位填入。</p>
+<h2>RX 接收：两种方案的对比</h2>
+<p>接收端的核心挑战是从 GPIO 引脚上的曼彻斯特波形中恢复数据和时钟。同一块 MCU 上，可以走两条完全不同的路线。</p>
+<h3>方案一：固定间隔采样</h3>
+<p>思路很简单：先靠 EXTI 捕获起始位的两个边沿完成同步，然后启动一个定时器，按固定间隔（如 1.5 Te ≈ 625 µs）周期性采样引脚电平，直接移位存入接收缓冲。</p>
+<p><strong>问题</strong>：因为相邻位值相同时位边界会有额外跳变，实际边沿间隔在 1 Te 和 2 Te 之间交替，固定 1.5 Te 采样点会随数据模式漂移，恰好落在电平翻转区时读到不确定值。此外，真实的 1200 bps 时钟有 ±10% 允许偏差，累积几个位后采样窗口就会偏移到错误位置。</p>
+<h3>方案二：Input Capture 边沿时间差测量</h3>
+<p>不依赖任何固定采样节拍。每收到一个 GPIO 边沿，从自由运行定时器中抓取时间戳。计算相邻边沿的时间差，直接分类：</p>
+<ul>
+<li><strong>≈ 1 Te（313–521 µs）</strong>：位边界跳变，不产生数据</li>
+<li><strong>≈ 2 Te（625–1041 µs）</strong>：位中心跳变，记录一个数据位</li>
+<li><strong>&gt; 2 ms</strong>：帧结束，触发解析</li>
+</ul>
+<p>边沿测量自动适应 ±10% 时钟偏差，不受数据模式影响，抗抖动能力由容差窗口宽度直接决定。</p>
+<p><img src="/posts/dali-manchester-codec/img/sampling-vs-capture.webp" alt="固定采样与 Input Capture 接收策略对比"></p>
+<h2>RX Input Capture 实现细节</h2>
+<p>TIM17 被配置为自由运行计数器：48 MHz 时钟经 48 分频（Prescaler = 47），得到 1 MHz 计数频率，每 tick = 1 µs。Period 设为 0xFFFF，溢出后自然回绕。在主循环初始化阶段调用 <code>HAL_TIM_Base_Start</code> 以非中断模式启动，此后持续运行。边沿时间戳的读取通过 <code>__HAL_TIM_GET_COUNTER</code> 宏完成，uint16_t 自然溢出保证差值计算总是正确。</p>
+<p>RX 引脚 PA1 配置为 EXTI 双沿触发。每个边沿进入中断后，从 TIM17 计数器读取当前时间戳，计算与上一个边沿的差值，驱动三级状态机。</p>
+<p><strong>状态 0 — IDLE</strong>：空闲。收到第一个边沿，转入 START_EDGE1，记录时间戳和引脚电平。</p>
+<p><strong>状态 1 — START_EDGE1</strong>：等待第二个边沿。若间隔 ≈ 1 Te，确认为有效起始位，记录其值（反相曼彻斯特下，引脚低电平取反得 1），转入 DECODING；否则当作噪声退回 IDLE。</p>
+<p><strong>状态 2 — DECODING</strong>：按间隔分类处理。短脉冲（≈ 1 Te）仅更新上次电平和时间戳，不产生数据。长脉冲（≈ 2 Te）说明位中心跳变到达，此时数据位的值由跳变前的引脚电平决定（反相曼彻斯特下，高电平之后的跳变表示逻辑 1，低电平之后的跳变表示逻辑 0）。解码出的 bit 左移进入接收缓冲，递增位计数。间隔超出容差范围则认为帧异常，退回 IDLE。</p>
+<p>状态转移规则：</p>
+<ul>
+<li>IDLE → START_EDGE1：第 1 个边沿触发</li>
+<li>START_EDGE1 → DECODING：第 2 个边沿间隔 ≈ 1Te，起始位确认</li>
+<li>START_EDGE1 → IDLE：第 2 个边沿间隔非 1Te，判为噪声丢弃</li>
+<li>DECODING → IDLE：delta 超出 SHORT/LONG 容差窗口，帧异常重置</li>
+<li>DECODING 自循环：每次边沿继续解码</li>
+<li>DECODING 超时退出：最后边沿距今超过 2ms，主循环判定帧结束，解析后回到 IDLE</li>
+</ul>
+<p>每次进入 EXTI 中断都会刷新帧超时计时标记，供主循环判断帧结束。</p>
+<p><img src="/posts/dali-manchester-codec/img/rx-state-machine.webp" alt="DALI RX Input Capture 状态机"></p>
+<h2>帧格式验证与数据提取</h2>
+<p>主循环中 <code>DALI_Update</code> 轮询检查：当状态为 DECODING 且最后边沿距今超过 2 ms，判定帧结束，进入解析。</p>
+<p>收到的比特流含起始位 + 数据 + 停止位。验证起始位和停止位模式后提取数据：</p>
+<ul>
+<li><strong>前向帧</strong>（≥ 19 位）：<code>raw[1:0] == 11</code>（停止位），<code>raw[18] == 1</code>（起始位），中间 16 位为地址字节 + 数据字节</li>
+<li><strong>后向帧</strong>（≥ 11 位）：<code>raw[1:0] == 11</code>，<code>raw[10] == 1</code>，中间 8 位为响应字节</li>
+</ul>
+<p>TX 端已经按 MSB first 发送，但接收缓冲的移位方向造成每个字节内位序颠倒，提取时用 <code>reverse_byte()</code> 恢复正确字节值。完整状态机在解析完成后重置，等待下一帧。</p>
+<h2>总结</h2>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>固定间隔采样</th>
+<th>Input Capture 边沿测量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>时钟同步</td>
+<td>依赖一次同步后开环运行</td>
+<td>每个边沿自动重新同步</td>
+</tr>
+<tr>
+<td>抗抖动</td>
+<td>累积漂移</td>
+<td>容差窗口吸收</td>
+</tr>
+<tr>
+<td>复杂度</td>
+<td>较低</td>
+<td>中等（三级状态机）</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>实验验证</td>
+<td>真实 DALI 总线通信</td>
+</tr>
+</tbody></table>
+<p>平台无关的关键结论是：对自时钟编码（Manchester、BMC 等），用边沿时间测量替代固定节拍采样，是可以用极少硬件代价（一个自由运行定时器 + 一个双沿 EXTI）换取解码鲁棒性的通用方案。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-19 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=dali-manchester-codec');
+  }
+  </script>
+</body>
+</html>

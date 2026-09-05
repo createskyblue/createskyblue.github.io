@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实时波形图表 — ECharts 复刻</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #eef2f7; color: #172033;
+    font-family: Arial, 'Microsoft YaHei', sans-serif;
+  }
+  main { width: min(900px, 100%); margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+
+  .panel { background: #fff; border-radius: 12px; padding: 14px; }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 8px; color: #5c6878; font-size: 13px;
+  }
+  .panel-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+  }
+  .panel-meta span + span { border-left: 1px solid #e2e8f0; padding-left: 8px; }
+
+  .threshold-panel { padding: 12px; display: grid; gap: 10px; }
+  .threshold-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    color: #5c6878; font-size: 12px;
+  }
+  .threshold-value { color: #172033; font-weight: 700; white-space: nowrap; }
+  input[type=range].range-control {
+    --range-fill: 0%;
+    appearance: none; height: 28px; padding: 0; border: 0;
+    background: transparent; cursor: pointer;
+  }
+  input[type=range].range-control:focus { border-color: transparent; box-shadow: none; }
+  input[type=range].range-control:focus-visible {
+    outline: 2px solid rgba(29,78,216,.35); outline-offset: 2px; border-radius: 999px;
+  }
+  input[type=range].range-control::-webkit-slider-runnable-track {
+    height: 8px; border-radius: 999px;
+    background: linear-gradient(to right, rgb(255,85,95) 0 var(--range-fill), #ffe4e8 var(--range-fill) 100%);
+  }
+  input[type=range].range-control::-webkit-slider-thumb {
+    appearance: none; width: 20px; height: 20px; margin-top: -6px;
+    border: 3px solid #fff; border-radius: 50%;
+    background: rgb(255,85,95); box-shadow: 0 1px 4px rgba(31,41,55,.22);
+  }
+
+  .chart-box { width: 100%; height: 260px; border-radius: 10px; }
+  .chart-box-tall { height: 300px; }
+
+  .chart-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 12px;
+    color: #5c6878; font-size: 12px; align-items: center;
+  }
+  .chart-legend-item {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .chart-legend-swatch {
+    width: 18px; height: 3px; border-radius: 999px; background: currentColor;
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <section class="panel threshold-panel">
+    <div class="threshold-head">
+      <div>质量阈值</div>
+      <div class="threshold-value"><span id="qualityThresholdValue">30</span></div>
+    </div>
+    <input id="qualityThresholdRange" class="range-control" type="range" min="0" max="100" step="1" aria-label="质量阈值">
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <span>原始采样（纯折线，自适应范围）</span>
+      <div class="panel-meta">
+        <span id="adcInfo">0 点 / 值 --</span>
+      </div>
+    </div>
+    <div id="adcChart" class="chart-box"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <span>实时趋势（分段着色 + 中位线）</span>
+      <div class="panel-meta">
+        <span id="chartBpmText">BPM --</span>
+        <span id="chartStatusText">--</span>
+      </div>
+    </div>
+    <div id="bpmChart" class="chart-box-tall"></div>
+    <div class="chart-legend">
+      <span class="chart-legend-item" style="color:rgb(255,85,95)"><span class="chart-legend-swatch"></span>可信区间</span>
+      <span class="chart-legend-item" style="color:rgba(255,85,95,.38)"><span class="chart-legend-swatch"></span>近期中位</span>
+      <span class="chart-legend-item" style="color:#cbd5e1"><span class="chart-legend-swatch"></span>质量过滤</span>
+    </div>
+  </section>
+
+</main>
+<script>
+(function() {
+  var adcSamples = [], bpmSamples = [], qualityThreshold = 30;
+
+  // ========== 辅助函数 ==========
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function isValidSample(s) {
+    return s && isFinite(s.bpm) && s.bpm > 0 && isFinite(s.quality) && s.quality < qualityThreshold;
+  }
+
+  function averageBpm(seconds) {
+    if (!bpmSamples.length) return NaN;
+    var now = bpmSamples[bpmSamples.length - 1].ts, cutoff = now - seconds;
+    var sum = 0, cnt = 0;
+    for (var i = 0; i < bpmSamples.length; i++) {
+      if (bpmSamples[i].ts >= cutoff && isValidSample(bpmSamples[i])) {
+        sum += bpmSamples[i].bpm; cnt++;
+      }
+    }
+    return cnt ? sum / cnt : NaN;
+  }
+
+  // ---- 计算 Y 范围（ADC 自适应 +12% padding）----
+  function computeYRange() {
+    if (!adcSamples.length) return { min: 0, max: 100 };
+    var yMin = adcSamples[0], yMax = yMin;
+    for (var j = 1; j < adcSamples.length; j++) {
+      if (adcSamples[j] < yMin) yMin = adcSamples[j];
+      if (adcSamples[j] > yMax) yMax = adcSamples[j];
+    }
+    if (yMax === yMin) yMax = yMin + 1;
+    var pad = Math.max((yMax - yMin) * 0.12, 1);
+    var lo = yMin - pad;
+    // 当数据下限接近 0 时，y 轴范围会刚好落在 0，ECharts 会在 grid 边界处
+    // 裁剪掉 y=0 上的线段。故意把 lo 设为 -0.5（肉眼不可见的偏移量），
+    // 让 0 值线进入绘图区内部，避免被切掉。
+    // 对应的 y 轴 formatter 会过滤负值标签，所以刻度上不会出现 "-0"。
+    if (lo < 0.5) lo = -0.5;
+    return { min: lo, max: yMax + pad };
+  }
+
+  // ---- 拆分 BPM 线段着色数据（返回纯值数组，category 轴自动对位）----
+  function splitBpmData() {
+    var n = bpmSamples.length;
+    var validData = [], filteredData = [];
+
+    if (n === 0) {
+      // 无数据
+    } else if (n === 1) {
+      var s0 = bpmSamples[0];
+      var ok = isValidSample(s0);
+      validData.push(ok ? s0.bpm : null);
+      filteredData.push(ok ? null : s0.bpm);
+    } else {
+      for (var i = 0; i < n; i++) {
+        var s = bpmSamples[i];
+        var thisOk = isValidSample(s);
+        var nextOk = (i + 1 < n) ? isValidSample(bpmSamples[i + 1]) : false;
+        // 点 i 出现在哪个系列，取决于它参与的所有线段的颜色
+        var inValid   = (i > 0 && thisOk) || (i + 1 < n && nextOk);
+        var inFiltered = (i > 0 && !thisOk) || (i + 1 < n && !nextOk);
+        validData.push(inValid ? s.bpm : null);
+        filteredData.push(inFiltered ? s.bpm : null);
+      }
+    }
+    return { validData: validData, filteredData: filteredData };
+  }
+
+  // ========== 初始化 ECharts ==========
+  var adcChart = echarts.init(document.getElementById("adcChart"));
+  var bpmChart = echarts.init(document.getElementById("bpmChart"));
+
+  var GRID = { left: 8, right: 44, top: 16, bottom: 12 };
+  var Y_AXIS_BASE = {
+    type: "value", position: "right",
+    axisLabel: { color: "#64748b", fontSize: 11, margin: 4 },
+    splitLine: { lineStyle: { color: "#e2e8f0", width: 1 } },
+    axisLine: { show: false }, axisTick: { show: false }
+  };
+
+  // category 轴：有多少数据点就占多少刻度位，两端不留空隙
+  var CAT_X = { type: "category", show: false, boundaryGap: false };
+
+  // ========== 一次性初始化 ==========
+
+  // --- ADC ---
+  adcChart.setOption({
+    animation: false,
+    grid: GRID,
+    xAxis: CAT_X,
+    yAxis: Object.assign({}, Y_AXIS_BASE, {
+      splitNumber: 5,
+      axisLabel: Object.assign({}, Y_AXIS_BASE.axisLabel, {
+        // 配合 computeYRange 的 -0.5 偏移：图表在 0 下方有渲染空间，但刻度上不显示负值
+        formatter: function(v) { return v < 0 ? "" : v.toFixed(0); }
+      })
+    }),
+    series: [{
+      id: "adcLine", type: "line", data: [],
+      lineStyle: { color: "#0284c7", width: 1.2 },
+      symbol: "none", animation: false
+    }]
+  });
+
+  // --- BPM ---
+  var BPM_GRADIENT_VALID = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    { offset: 0, color: "rgba(255,85,95,0.16)" },
+    { offset: 1, color: "rgba(255,85,95,0)" }
+  ]);
+  var BPM_GRADIENT_GRAY = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    { offset: 0, color: "rgba(203,213,225,0.16)" },
+    { offset: 1, color: "rgba(203,213,225,0)" }
+  ]);
+
+  bpmChart.setOption({
+    animation: false,
+    grid: GRID,
+    xAxis: CAT_X,
+    yAxis: Object.assign({}, Y_AXIS_BASE, {
+      min: 40, max: 120, interval: 20,
+      axisLabel: Object.assign({}, Y_AXIS_BASE.axisLabel, {
+        formatter: function(v) { return v.toFixed(0); }
+      })
+    }),
+    series: [
+      {
+        // 灰色过滤层在下，z 值设低
+        id: "bpmFiltered", type: "line", data: [], symbol: "none",
+        lineStyle: { color: "#cbd5e1", width: 1.2 },
+        areaStyle: { color: BPM_GRADIENT_GRAY }, animation: false,
+        z: 0
+      },
+      {
+        // 红色可信层在上，z 值设高，确保过渡点处红线与红底不被灰色覆盖
+        id: "bpmValid", type: "line", data: [], symbol: "none",
+        lineStyle: { color: "rgb(255,85,95)", width: 1.2 },
+        areaStyle: { color: BPM_GRADIENT_VALID }, animation: false,
+        z: 1
+      },
+      {
+        id: "bpmLatest", type: "scatter", data: [], symbolSize: 10,
+        animation: false, z: 10,
+        itemStyle: { color: "#fff", borderWidth: 1.2 }
+      }
+    ]
+  });
+
+  // ========== 增量更新 ==========
+
+  function drawAdcChart() {
+    var yr = computeYRange();
+    adcChart.setOption({
+      yAxis: { min: yr.min, max: yr.max },
+      series: [{ id: "adcLine", data: adcSamples }]
+    });
+
+    var n = adcSamples.length;
+    var lastVal = n ? adcSamples[n - 1] : "--";
+    var rMin = adcSamples[0], rMax = rMin;
+    for (var j = 1; j < n; j++) {
+      if (adcSamples[j] < rMin) rMin = adcSamples[j];
+      if (adcSamples[j] > rMax) rMax = adcSamples[j];
+    }
+    adcInfo.textContent = n + " 点 / 值 " +
+      (typeof lastVal === "number" ? lastVal.toFixed(0) : lastVal) +
+      " / 范围 " + rMin.toFixed(0) + ".." + rMax.toFixed(0);
+  }
+
+  function drawBpmChart() {
+    var n = bpmSamples.length;
+    var latest = n ? bpmSamples[n - 1] : null;
+    var avg = averageBpm(60);
+    var sd = splitBpmData();
+
+    var markLine = {
+      silent: true, animation: false, symbol: "none",
+      lineStyle: { color: "rgba(255,85,95,.38)", type: "dashed", width: 1.2 },
+      label: { show: false },
+      data: (isFinite(avg) && avg > 0) ? [{ yAxis: avg }] : []
+    };
+
+    var latestData = [];
+    var latestBorder = "#cbd5e1";
+    if (latest) {
+      latestData = [[n - 1, latest.bpm]];
+      latestBorder = isValidSample(latest) ? "rgb(255,85,95)" : "#cbd5e1";
+    }
+
+    bpmChart.setOption({
+      series: [
+        { id: "bpmValid",    data: sd.validData,    markLine: markLine },
+        { id: "bpmFiltered", data: sd.filteredData },
+        { id: "bpmLatest",   data: latestData,       itemStyle: { borderColor: latestBorder } }
+      ]
+    });
+
+    if (latest) {
+      bpmText.textContent = "BPM " + latest.bpm.toFixed(1);
+      statusText.textContent = isValidSample(latest) ? "OK" : "Filtered";
+    }
+  }
+
+  // ========== 阈值滑动条 ==========
+  var rangeEl = document.getElementById("qualityThresholdRange");
+  var valueEl = document.getElementById("qualityThresholdValue");
+  var adcInfo = document.getElementById("adcInfo");
+  var bpmText = document.getElementById("chartBpmText");
+  var statusText = document.getElementById("chartStatusText");
+
+  function setThreshold(val) {
+    var rmin = Number(rangeEl.min) || 0, rmax = Number(rangeEl.max) || 100;
+    var next = clamp(Number(val) || 30, rmin, rmax);
+    var fill = (next - rmin) / (rmax - rmin) * 100;
+    rangeEl.value = String(next);
+    rangeEl.style.setProperty("--range-fill", clamp(fill, 0, 100) + "%");
+    valueEl.textContent = String(next);
+    qualityThreshold = next;
+    drawBpmChart();
+  }
+  setThreshold(30);
+  rangeEl.addEventListener("input", function(e) { setThreshold(e.target.value); });
+
+  // ========== 预填初始数据 ==========
+  var now0 = Date.now() / 1000;
+  adcSamples.push(2048, 2060);
+  bpmSamples.push(
+    { bpm: 72, quality: 8, ts: now0 - 1 },
+    { bpm: 74, quality: 12, ts: now0 }
+  );
+
+  // 首帧
+  drawAdcChart();
+  drawBpmChart();
+
+  // ========== 定时模拟 ==========
+  function simulateAdc() {
+    var t = Date.now() / 1000;
+    var v = 2048 + 1800 * Math.sin(t * 0.8) + 300 * Math.sin(t * 3.1) + (Math.random() - 0.5) * 200;
+    adcSamples.push(v);
+    if (adcSamples.length > 200) adcSamples.shift();
+    drawAdcChart();
+  }
+
+  function simulateBpm() {
+    var now = Date.now() / 1000, base = 72, noise = (Math.random() - 0.5) * 8;
+    var cycle = now % 20;
+    var quality = cycle < 3 ? 35 + Math.random() * 25 : 5 + Math.random() * 20;
+    var bpm = base + noise + (quality > qualityThreshold ? 12 * Math.random() : 0);
+    bpmSamples.push({ bpm: bpm, quality: quality, ts: now });
+    if (bpmSamples.length > 120) bpmSamples.shift();
+    drawBpmChart();
+  }
+
+  setInterval(simulateAdc, 200);
+  setInterval(simulateBpm, 1000);
+
+  window.addEventListener("resize", function() {
+    adcChart.resize();
+    bpmChart.resize();
+  });
+})();
+</script>
+</body>
+</html>
