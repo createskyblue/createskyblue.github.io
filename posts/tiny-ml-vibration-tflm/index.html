@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>6000 点加速度数据 → 100 维特征 → 5KB int8 模型，完整部署到 MCU - CacheRivulet小记</title>
+  <meta name="description" content="用 TFLite Micro 在 MCU 上跑震动异常分类：从训练到部署">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:tag" content="TFLite Micro">
+  <meta property="article:tag" content="TFLM">
+  <meta property="article:tag" content="模型量化">
+  <meta property="article:tag" content="振动分析">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:published_time" content="2026-07-05">
+  <meta property="og:title" content="6000 点加速度数据 → 100 维特征 → 5KB int8 模型，完整部署到 MCU">
+  <meta property="og:description" content="用 TFLite Micro 在 MCU 上跑震动异常分类：从训练到部署">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/tiny-ml-vibration-tflm/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/tiny-ml-vibration-tflm/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "6000 点加速度数据 → 100 维特征 → 5KB int8 模型，完整部署到 MCU",
+  "description": "用 TFLite Micro 在 MCU 上跑震动异常分类：从训练到部署",
+  "datePublished": "2026-07-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/tiny-ml-vibration-tflm/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/tiny-ml-vibration-tflm/"
+  },
+  "keywords": "嵌入式, 边缘AI, TFLite Micro, TFLM, 模型量化, 振动分析, 信号处理"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">6000 点加速度数据 → 100 维特征 → 5KB int8 模型，完整部署到 MCU</h1>
+  <article class="article-body">
+<h1>6000 点加速度数据 → 100 维特征 → 5KB int8 模型，完整部署到 MCU</h1>
+<p>目标硬件是一块 Cortex-M 级别的 MCU，只有 64KB Flash 和 64KB RAM。要在上面跑一个程序：输入加速度传感器采集的 6000 个连续采样点，输出&quot;这是震动A、震动B、还是震动C&quot;。</p>
+<p>这篇文章走一遍完整过程：怎么把原始震动数据变成 MCU 能理解的数字，怎么训练一个足够小的模型，怎么把它压缩到 int8 塞进 MCU，以及怎么用 C++ 写出和 Python 训练时精度一致的推理代码。</p>
+<p>先看一眼整条链路在做什么：</p>
+<p><img src="/posts/tiny-ml-vibration-tflm/pipeline.svg" alt="完整管线"></p>
+<p>六个步骤，①②③ 在 Python 端完成（训练 + 导出），④⑤ 在 C++ 端完成（MCU 推理）。下面逐个展开。</p>
+<h2>特征提取：6000 点 → 100 维</h2>
+<p>MCU 拿到的是一串 6000 个 <code>float</code>：<code>[0.003, -0.012, 0.008, ...]</code>。直接把这 6000 个数扔给神经网络行不通 — 输入太大了，MCU 算不动。</p>
+<p>解决方案是做<strong>特征提取</strong>：把 6000 个原始采样点压缩成 100 个有意义的数字。这些数字要能描述震动信号的核心特性 — 低频有多强、波动大不大、有没有突然的尖峰。可以把它理解成一种<strong>有损压缩</strong>：扔掉不重要的细节，保留能区分三类震动的关键信息。</p>
+<p><img src="/posts/tiny-ml-vibration-tflm/feature-flow.svg" alt="特征提取流程"></p>
+<h3>FFT 频域特征（64 维）</h3>
+<p>FFT 做的事情：把一段随时间变化的波形，拆成&quot;哪些频率成分组成了这段波&quot;。不同震动的频率分布不一样，这是 FFT 能区分它们的原因。</p>
+<p>做法是对整条 6000 点的信号跑一次 FFT，取 64 个频率 bin 的幅度，用 <code>log1p(x) = ln(1 + x)</code> 对幅度做对数压缩。对数压缩的目的很简单：低频分量的幅度可能是高频的几百倍，直接送给模型，大数会把小数淹掉。取个对数，差距从几百倍缩到几倍。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">fft = np.abs(np.fft.rfft(sig))        </span><span style="color:#6A9955"># FFT → 取幅度</span></span>
+<span class="line"><span style="color:#D4D4D4">feats[:</span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">] = np.log1p(fft[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">:</span><span style="color:#B5CEA8">65</span><span style="color:#D4D4D4">])       </span><span style="color:#6A9955"># 跳过 DC（0Hz），取 64 个 bin + 对数压缩</span></span></code></pre><h3>时域分段特征（36 维）</h3>
+<p>频域告诉模型&quot;哪个频率在震&quot;，时域告诉模型&quot;震动有多剧烈、怎么变的&quot;。</p>
+<p>把 6000 个点切成 4 段，每段 1500 点。对每一段算 9 个统计量：</p>
+<table>
+<thead>
+<tr>
+<th>特征</th>
+<th>含义</th>
+<th align="center">只用加减乘除？</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>均值</td>
+<td>这段信号的平均值</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td>标准差</td>
+<td>波动幅度</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td>最小值 / 最大值</td>
+<td>振幅范围</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td>RMS</td>
+<td>有效值，衡量能量大小</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td>峰值</td>
+<td>绝对值的最大值</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td>过零率</td>
+<td>穿越零点的次数 ÷ 段长</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td>能量</td>
+<td>平方和 ÷ 段长</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td>非零比</td>
+<td>非零采样点占比</td>
+<td align="center">✓</td>
+</tr>
+</tbody></table>
+<p><strong>9 个特征 × 4 段 = 36 维。</strong> 加上前面 64 维 FFT，总共 100 维特征向量。</p>
+<p>选这些特征的硬性条件只有一个：<strong>MCU 上只用加减乘除就能算。</strong> 没有 <code>percentile()</code>、没有 <code>sort()</code>、没有 <code>log()</code>。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> seg </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">):</span></span>
+<span class="line"><span style="color:#D4D4D4">    s = sig[seg*</span><span style="color:#B5CEA8">1500</span><span style="color:#D4D4D4">:(seg+</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">)*</span><span style="color:#B5CEA8">1500</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">    b = </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4"> + seg * </span><span style="color:#B5CEA8">9</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">] = np.mean(s)                              </span><span style="color:#6A9955"># 均值</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">] = np.std(s)                               </span><span style="color:#6A9955"># 标准差</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">] = np.min(s)                               </span><span style="color:#6A9955"># 最小值</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">] = np.max(s)                               </span><span style="color:#6A9955"># 最大值</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">] = np.sqrt(np.mean(s**</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">))                  </span><span style="color:#6A9955"># RMS</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">] = np.max(np.abs(s))                       </span><span style="color:#6A9955"># 峰值</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">6</span><span style="color:#D4D4D4">] = np.sum(np.abs(np.diff(np.signbit(s)))) / </span><span style="color:#DCDCAA">len</span><span style="color:#D4D4D4">(s)  </span><span style="color:#6A9955"># 过零率</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">7</span><span style="color:#D4D4D4">] = np.sum(s**</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">) / </span><span style="color:#DCDCAA">len</span><span style="color:#D4D4D4">(s)                   </span><span style="color:#6A9955"># 能量</span></span>
+<span class="line"><span style="color:#D4D4D4">    feats[b+</span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">] = np.count_nonzero(s) / </span><span style="color:#DCDCAA">len</span><span style="color:#D4D4D4">(s)            </span><span style="color:#6A9955"># 非零比</span></span></code></pre><h2>特征标准化</h2>
+<p>100 维特征算出来了，但有一个问题：不同特征的数值范围差别很大。</p>
+<p>比如&quot;均值&quot;可能一直在 ±0.01 之间晃，但&quot;能量&quot;可能是几千的量级。直接把这些数喂给模型，数值大的特征会主导计算结果，数值小的等于没参与。</p>
+<p>解决方法是做一次<strong>标准化（StandardScaler）</strong>：对每个特征维度，减掉均值、除以标准差。处理完后，每个维度都变成零均值、单位方差的分布。相当于把厘米、千克、秒全部统一成同一个尺度。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">scaler = StandardScaler()</span></span>
+<span class="line"><span style="color:#D4D4D4">X_train_s = scaler.fit_transform(X_train)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 保存 mean 和 scale — C++ 端要用完全一样的值</span></span>
+<span class="line"><span style="color:#D4D4D4">s_mean = scaler.mean_</span></span>
+<span class="line"><span style="color:#D4D4D4">s_scale = scaler.scale_</span></span>
+<span class="line"><span style="color:#D4D4D4">s_scale[s_scale &#x3C; </span><span style="color:#B5CEA8">1e-8</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">1.0</span><span style="color:#6A9955">   # 防止除零</span></span></code></pre><p>保存 <code>s_mean</code> 和 <code>s_scale</code> 是关键动作。训练时用的 normalization 参数，推理时也必须用同一组。</p>
+<h2>模型结构</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>100 维输入 → Dense(16, ReLU) → Dense(8, ReLU) → Dense(3, Softmax)</span></span></code></pre><p>三层逐级压缩：100 → 16 → 8 → 3，每层只保留最关键的信息。16 和 8 是&quot;刚好够用且省空间&quot;的平衡点 — 翻倍则 Flash 放不下，减半则表达力不够。</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th align="left">数值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>float32 权重</td>
+<td align="left">~7.0 KB</td>
+</tr>
+<tr>
+<td>int8 权重</td>
+<td align="left">~1.8 KB</td>
+</tr>
+<tr>
+<td>TFLite 模型</td>
+<td align="left"><strong>5,024 字节</strong></td>
+</tr>
+</tbody></table>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">model = tf.keras.Sequential([</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.InputLayer(</span><span style="color:#9CDCFE">shape</span><span style="color:#D4D4D4">=(</span><span style="color:#B5CEA8">100</span><span style="color:#D4D4D4">,)),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'relu'</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'relu'</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'softmax'</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">])</span></span>
+<span class="line"><span style="color:#D4D4D4">model.compile(</span><span style="color:#9CDCFE">optimizer</span><span style="color:#D4D4D4">=tf.keras.optimizers.Adam(</span><span style="color:#B5CEA8">0.001</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#9CDCFE">              loss</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'sparse_categorical_crossentropy'</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">              metrics</span><span style="color:#D4D4D4">=[</span><span style="color:#CE9178">'accuracy'</span><span style="color:#D4D4D4">])</span></span>
+<span class="line"><span style="color:#D4D4D4">model.fit(X_train_s, y_train, </span><span style="color:#9CDCFE">batch_size</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">epochs</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">60</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">          validation_split</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">0.2</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">          callbacks</span><span style="color:#D4D4D4">=[tf.keras.callbacks.EarlyStopping(</span></span>
+<span class="line"><span style="color:#9CDCFE">              monitor</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'val_loss'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">patience</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">restore_best_weights</span><span style="color:#D4D4D4">=</span><span style="color:#569CD6">True</span><span style="color:#D4D4D4">)])</span></span></code></pre><h2>量化：把 float32 压成 int8</h2>
+<p>训练用的是 float32 — 每个权重占 4 字节。要在 MCU 上跑推理，需要把 float32 换成 int8，减少存储空间和计算开销。</p>
+<p>量化和 <code>map()</code> 是一个道理——把数值从一个范围线性映射到另一个范围：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">map</span><span style="color:#D4D4D4">(value, fromLow, fromHigh, toLow, toHigh)</span></span></code></pre><p>量化就是把 float32 的 <code>[r_min, r_max]</code> 映射到 int8 的 <code>[-128, 127]</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>q = round((r - r_min) / (r_max - r_min) * 255) - 128</span></span></code></pre><p>TFLite 的写法等价，用 scale（S）和 zero point（Z）来表达同一件事：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>q = round(r / S) + Z</span></span></code></pre><ul>
+<li><code>S = (r_max - r_min) / 255</code> — 一个 int8 刻度代表多少 float32</li>
+<li><code>Z</code> — float32 的 0 对应到 int8 的哪个值</li>
+</ul>
+<p>举个例子：某层激活值在 <code>[-1.0, 1.0]</code> 之间，则 <code>S = 2.0/255 ≈ 0.0078</code>，<code>Z = 0</code>。<code>r = 0.5</code> 映射后 <code>q = 64</code>。</p>
+<p>TFLite 转换器会自动算每层最优的 S 和 Z — 提供几十到几百个真实样本作为校准数据即可：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">def</span><span style="color:#DCDCAA"> representative_dataset</span><span style="color:#D4D4D4">():</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> i </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#DCDCAA">min</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">len</span><span style="color:#D4D4D4">(X_train_s), </span><span style="color:#B5CEA8">300</span><span style="color:#D4D4D4">)):</span></span>
+<span class="line"><span style="color:#C586C0">        yield</span><span style="color:#D4D4D4"> [X_train_s[i:i+</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">converter = tf.lite.TFLiteConverter.from_keras_model(model)</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.optimizations = [tf.lite.Optimize.DEFAULT]</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.representative_dataset = representative_dataset</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.inference_input_type = tf.int8</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.inference_output_type = tf.int8</span></span>
+<span class="line"><span style="color:#D4D4D4">tflite_model = converter.convert()</span></span></code></pre><p>量化前后的准确率对比：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th align="left">准确率</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>float32 训练模型</td>
+<td align="left">80.9%</td>
+</tr>
+<tr>
+<td>int8 TFLite（同测试集）</td>
+<td align="left">79.3%</td>
+</tr>
+<tr>
+<td>量化损失</td>
+<td align="left">−1.6%</td>
+</tr>
+</tbody></table>
+<p>损失不到 2%，但模型的存储空间从 7KB 降到了 1.8KB，计算从 float32 乘法变成了 int8 乘法（MCU 上快很多）。</p>
+<h2>用 C 实现特征提取</h2>
+<p>python 端的工作完成后，产出三个文件：</p>
+<ul>
+<li><code>vibration_model_v2.tflite</code> — 量化后的模型（5024 字节）</li>
+<li><code>vibration_model_v2_data.h</code> — 模型转为 C 数组，直接 <code>#include</code></li>
+<li><code>scaler_params_v2.h</code> — Scaler 的均值、标准差和量化参数</li>
+</ul>
+<p>C 端的特征提取流水线：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>CSV 一行 → 特征提取(DFT+时域) → StandardScaler → 量化到 int8 → 送入推理 runtime → 取最大类别</span></span></code></pre><h3>手写 DFT 的精度细节</h3>
+<p>python 端用的是 numpy 的高性能 FFT，MCU 上只能手写朴素 DFT。注意一个容易被跳过的细节 — <strong>角度必须用 double 算</strong>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">double</span><span style="color:#D4D4D4"> omega = -</span><span style="color:#B5CEA8">2.0</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">3.141592653589793</span><span style="color:#D4D4D4"> * k / len;</span></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; len; i++) {</span></span>
+<span class="line"><span style="color:#569CD6">    double</span><span style="color:#D4D4D4"> angle = omega * i;</span><span style="color:#6A9955">          // ← 关键：double，不是 float</span></span>
+<span class="line"><span style="color:#D4D4D4">    real += </span><span style="color:#9CDCFE">sig</span><span style="color:#D4D4D4">[i] * </span><span style="color:#DCDCAA">cos</span><span style="color:#D4D4D4">(angle);</span></span>
+<span class="line"><span style="color:#D4D4D4">    imag += </span><span style="color:#9CDCFE">sig</span><span style="color:#D4D4D4">[i] * </span><span style="color:#DCDCAA">sin</span><span style="color:#D4D4D4">(angle);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#9CDCFE">feats</span><span style="color:#D4D4D4">[k - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">] = (</span><span style="color:#569CD6">float</span><span style="color:#D4D4D4">)</span><span style="color:#DCDCAA">log1p</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">sqrt</span><span style="color:#D4D4D4">(real * real + imag * imag));</span></span></code></pre><p>为什么？6000 点的 DFT，<code>omega * i</code> 循环到最后一轮时 i=5999。如果用 float32 计算角度，累加误差在 10⁻³ 量级，cos/sin 之后误差被放大，最终的幅度谱和 python 端对不上。用 double 算角度，结果再截回 float，两边就对齐了。</p>
+<p>时域特征没这个问题 — 1500 点的段内累加，float32 精度绰绰有余。</p>
+<h3>标准化 + 量化 + 推理</h3>
+<p>这步在 C++ 端复现 python 训练时的 Scaler + 量化逻辑：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">100</span><span style="color:#D4D4D4">; i++) {</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4"> s = (</span><span style="color:#9CDCFE">feats</span><span style="color:#D4D4D4">[i] - </span><span style="color:#9CDCFE">kScalerMeanV2</span><span style="color:#D4D4D4">[i]) / </span><span style="color:#9CDCFE">kScalerScaleV2</span><span style="color:#D4D4D4">[i];</span><span style="color:#6A9955">  // Scaler</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4"> q = s / kInputScale + kInputZeroPoint;</span><span style="color:#6A9955">                   // 量化</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (q > </span><span style="color:#B5CEA8">127.0f</span><span style="color:#D4D4D4">) q = </span><span style="color:#B5CEA8">127.0f</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">       // clip 到 int8 范围</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (q &#x3C; -</span><span style="color:#B5CEA8">128.0f</span><span style="color:#D4D4D4">) q = -</span><span style="color:#B5CEA8">128.0f</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    input</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">int8</span><span style="color:#D4D4D4">[i] = (</span><span style="color:#569CD6">int8_t</span><span style="color:#D4D4D4">)</span><span style="color:#DCDCAA">lroundf</span><span style="color:#D4D4D4">(q);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">Invoke</span><span style="color:#D4D4D4">();</span></span></code></pre><p>TFLM 的初始化也很轻量 — 模型只有全连接和 Softmax，两个 Op 即可：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::MicroMutableOpResolver&#x3C;</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">> resolver;</span></span>
+<span class="line"><span style="color:#9CDCFE">resolver</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AddFullyConnected</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">resolver</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AddSoftmax</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> arena</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">1024</span><span style="color:#D4D4D4">];</span><span style="color:#6A9955">   // Tensor Arena</span></span>
+<span class="line"><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#4EC9B0">MicroInterpreter</span><span style="color:#DCDCAA"> interpreter</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">model</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">resolver</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">arena</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">16</span><span style="color:#569CD6"> *</span><span style="color:#B5CEA8"> 1024</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AllocateTensors</span><span style="color:#D4D4D4">();</span></span></code></pre><h3>Python 与 C 端结果对比</h3>
+<p>同一批测试文件、同一组 Scaler 参数、同一个 TFLite 模型：</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th align="center">python int8</th>
+<th align="center">C++ int8</th>
+<th align="center">差异</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>震动A</td>
+<td align="center">94.3%</td>
+<td align="center">92.4%</td>
+<td align="center">±1.9%</td>
+</tr>
+<tr>
+<td>震动B</td>
+<td align="center">92.0%</td>
+<td align="center">93.9%</td>
+<td align="center">±1.9%</td>
+</tr>
+<tr>
+<td>震动C</td>
+<td align="center">53.4%</td>
+<td align="center">55.7%</td>
+<td align="center">±2.3%</td>
+</tr>
+</tbody></table>
+<p>1-3% 的差异来自 numpy 的优化 FFT 实现 vs 朴素 DFT，以及 float64 和 double 中间精度的微小区别。两端结果高度一致，整条链路验证通过。</p>
+<p>震动C 准确率偏低（~54%），原因是该类样本和震动B 的时域特征高度重叠，仅靠 100 维线性特征难以完全分开。这个方向上的改进空间在特征工程，不在模型结构。</p>
+<h2>资源占用</h2>
+<table>
+<thead>
+<tr>
+<th>资源</th>
+<th align="left">用量</th>
+<th align="center">占 64KB 总量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Flash（模型权重）</td>
+<td align="left">5,024 B</td>
+<td align="center">7.7%</td>
+</tr>
+<tr>
+<td>Flash（含代码）</td>
+<td align="left">~10 KB</td>
+<td align="center">16%</td>
+</tr>
+<tr>
+<td>RAM（Tensor Arena）</td>
+<td align="left">~1,800 B</td>
+<td align="center">2.7%</td>
+</tr>
+<tr>
+<td>RAM（特征+工作缓冲）</td>
+<td align="left">~3,000 B</td>
+<td align="center">4.6%</td>
+</tr>
+</tbody></table>
+<p>Flash 用了 16%，RAM 用了不到 10%。在 64KB/64KB 的 MCU 上还有充裕空间跑传感器驱动和应用层代码。</p>
+<p>适用范围：</p>
+<ul>
+<li>时序信号的三分类，输入几千点以内</li>
+<li>特征维度 100-200，模型参数 2000-5000</li>
+<li>对实时性要求不极端 — 朴素 DFT 在 MCU 上的耗时与采样点数和 bin 数量成正比，64 bin × 6000 点的计算量在秒级分类场景中足够用</li>
+</ul>
+<p>如果需要更低延迟，可以对输入做降采样（如 1024 点）来减少 DFT 计算量。移植到实际 Cortex-M 开发板后，用 CMSIS-NN 的 int8 矩阵乘法内核替换 TFLM 的 Reference Fallback，可以进一步提升推理速度。</p>
+<h2>注意事项</h2>
+<p><strong>Scaler 参数必须一字不差。</strong> python 训练时的 <code>mean</code> 和 <code>scale</code> 要原样导出到 C 头文件。一个特征维度对不上，量化后的 int8 值直接漂到 −128 或 127 饱和，整条推理报废。</p>
+<p><strong>DFT 角度用 double 算。</strong> 长序列下 float32 的角度累加误差会通过 cos/sin 放大，导致幅度谱和 python 端偏差不可忽略。用 double 算角度，结果截回 float。</p>
+<p><strong>校准数据覆盖所有类别。</strong> 量化校准时 <code>representative_dataset</code> 覆盖三类震动，否则某些层的激活范围估计不准，clip 损失大。</p>
+<p><strong>训练前洗数据。</strong> 传感器偶发野值（读数突然飙到天文数字）会污染 Scaler 的统计。过滤掉绝对值异常的样本（比如超过 1000 的读数），用 float64 做特征提取中间计算。</p>
+<p><strong>防除零。</strong> Scaler 拟合后，接近 0 的 <code>scale_</code> 替换为 1.0，避免 C 头文件出现正负无穷。</p>
+<h2>在 STM32L496 上用 X-CUBE-AI 部署</h2>
+<p>前面的 C++ 推理代码先在云端虚拟机上跑通了一遍，确认整条链路（特征提取 → Scaler → 量化 → 推理）和 Python 端结果一致。实际落到 STM32L496 工程时，没有手动移植 TFLM，而是使用 STM32CubeMX 集成的 X-CUBE-AI，把同一个 <code>vibration_model_v2.tflite</code> 转成 ST 官方的 MCU runtime 工程代码。</p>
+<p>CubeMX 里选择 TFLite 模型，runtime 选择 <code>STM32Cube.AI MCU runtime</code>。模型输入仍然是 <code>int8[100]</code>，输出是 <code>int8[3]</code>，核心网络结构没有变化。</p>
+<p><img src="/posts/tiny-ml-vibration-tflm/x-cube-ai-config.webp" alt="X-CUBE-AI 配置"></p>
+<p>X-CUBE-AI 生成后的计算图和训练时一致：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>100 维输入 → Dense(16) → Dense(8) → Dense(3) → Softmax</span></span></code></pre><p><img src="/posts/tiny-ml-vibration-tflm/x-cube-ai-network.webp" alt="X-CUBE-AI 网络结构"></p>
+<p>这条部署路径的职责划分比较清楚：</p>
+<ul>
+<li>特征工程仍然由固件侧 C 代码完成：<code>6000 点原始采样 → 64 维 DFT + 36 维时域特征 → StandardScaler → int8</code>。</li>
+<li>模型推理交给 X-CUBE-AI runtime：全连接层、ReLU、Softmax 和量化参数由生成代码处理。</li>
+<li>验证时同时保留一个手写 <code>tiny_infer</code> 路径，只用于对照每层 int8 计算，不作为最终 runtime。</li>
+</ul>
+<p>真正容易出错的位置在模型输入之前。最初 C 端特征提取把时域特征数组偏移加了两次，导致 <code>feats[64..99]</code> 没有写入正确数据，栈上还发生了越界写。X-CUBE-AI 拿到错误的 100 维输入，预测结果自然和 Python 参考对不上。</p>
+<p>修正后，把三类样本分别烧到 STM32L496 上运行，串口里看到的预测类别和预期类别一致：</p>
+<p><img src="/posts/tiny-ml-vibration-tflm/stm32-serial-log.webp" alt="STM32 串口验证输出"></p>
+<p>最终验证结果：</p>
+<table>
+<thead>
+<tr>
+<th>测试样本</th>
+<th>预期类别</th>
+<th>MCU 预测</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>vib_A</td>
+<td>vib_A</td>
+<td>vib_A</td>
+</tr>
+<tr>
+<td>vib_B</td>
+<td>vib_B</td>
+<td>vib_B</td>
+</tr>
+<tr>
+<td>vib_C</td>
+<td>vib_C</td>
+<td>vib_C</td>
+</tr>
+</tbody></table>
+<p>这说明模型部署到 STM32 后，实际分类结果和桌面端验证结果一致。真正的部署检查重点是：固件端送进模型的 100 个 int8 特征必须和训练/验证端保持同一套特征工程和量化流程。</p>
+<p>如果想看手动移植 TFLite Micro 的做法，可以看这篇更小的正弦模型示例：<a href="/posts/ch585m-tflite-micro-sin-demo">CH585M 上手动移植 TFLite Micro 跑 sin demo</a>。这篇振动分类工程选择 X-CUBE-AI，是为了直接使用 ST 官方生成的 MCU runtime；手动 TFLM 和 X-CUBE-AI 两条路线的目标相同，都是把同一个量化模型稳定地放到 MCU 上运行。</p>
+<p>如果手上有 STM32L496 开发板，也可以直接下载这份编译产物烧录验证：<a href="/posts/tiny-ml-vibration-tflm/stm32l496-vibration-classifier.hex" target="_blank" rel="noopener noreferrer">HEX 固件</a>，或者用 <a href="/posts/tiny-ml-vibration-tflm/stm32l496-vibration-classifier.bin" target="_blank" rel="noopener noreferrer">BIN 固件</a> 从 <code>0x08000000</code> 写入。烧录后打开串口窗口看日志即可，参数是 <code>115200 8N1</code>。</p>
+<h2>总结与改进方向</h2>
+<p>这条路线的优点是可解释、可复现，训练、特征工程、量化和 MCU 端输入都能逐项对齐；缺点也很明显，6000 点特征提取在 MCU 上跑得比较慢，最终分类效果也只能说够用。</p>
+<p>如果想要更好的效果，可以先用 ST 的 NanoEdge AI 跑一轮基准测试。它会给出一个黑盒模型，也会把模型路线流水线暴露出来：中间用了哪些特征提取、有没有 FFT、有没有裁剪、最后用了什么模型。先让 NanoEdge AI 帮你把特征流水线试错一遍，再把这条流水线的核心思路移植成自己的代码，这样就能从黑盒工具里提炼出一个更可控的边缘 AI 模型。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=tiny-ml-vibration-tflm');
+  }
+  </script>
+</body>
+</html>

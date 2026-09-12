@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>基于序号确认与超时重传的双向透传 - CacheRivulet小记</title>
+  <meta name="description" content="半双工链路下的可靠 FIFO 交换设计">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="FIFO">
+  <meta property="article:tag" content="ACK">
+  <meta property="article:tag" content="缓存">
+  <meta property="article:published_time" content="2026-07-19">
+  <meta property="og:title" content="基于序号确认与超时重传的双向透传">
+  <meta property="og:description" content="半双工链路下的可靠 FIFO 交换设计">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/sync-request-response-fifo-exchange/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/sync-request-response-fifo-exchange/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "基于序号确认与超时重传的双向透传",
+  "description": "半双工链路下的可靠 FIFO 交换设计",
+  "datePublished": "2026-07-19",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/sync-request-response-fifo-exchange/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/sync-request-response-fifo-exchange/"
+  },
+  "keywords": "嵌入式, MCU, 通信协议, FIFO, ACK, 缓存"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">基于序号确认与超时重传的双向透传</h1>
+  <article class="article-body">
+<h1>请求应答链路双向透传设计</h1>
+<p>SPI、NFC 的数据块交换通常由一端发起，对端只能应答。对端有数据时也不能主动发送，只能等下一轮请求。</p>
+<p>CH58X 的 NFC-A 实现见 <a href="/posts/ch58x-nfc-p2p-data-exchange">两个 CH58X 芯片通过 NFC-A 实现 FIFO 数据透传</a>。</p>
+<p>协议处理直接写进传输层时，协议变化会牵动 SPI 或 NFC 代码。把协议解析放到上层，SPI 和 NFC 只负责数据透传。</p>
+<p>两端各放一组发送 FIFO 和接收 FIFO：请求带走主机的数据，应答带回从机的数据。原有问答时序不变，上层得到一条双向字节通道。</p>
+<p><img src="/posts/sync-request-response-fifo-exchange/fifo-exchange-sequence.svg" alt="请求应答链路搬运双方 FIFO 数据并捎带确认"></p>
+<h2>半双工：只有主机能主动发</h2>
+<p>SPI 和 NFC 是主从结构。主机发起每一轮通信，从机只能应答，不能主动发送。从机积攒了数据，也必须等主机下一次轮询才能在应答里带出去。</p>
+<h2>一轮搬运两边的 FIFO</h2>
+<p>主机从自己的发送 FIFO 取一批数据发给从机，从机收到后把自己的发送 FIFO 数据打包进应答回给主机。一轮请求-应答，两边的 FIFO 各搬一次。</p>
+<h2>丢包导致交换中断</h2>
+<p>但数据包可能在传输中丢失。主机发了从机没收到，或者从机回了主机没收到。不管哪种情况，交换都断了。主机不知道从机收没收到，两边各少一批数据。</p>
+<h2>用序号确认每批数据</h2>
+<p>解决办法是给每批数据加一个递增的序号。主机从 FIFO 取出数据后不直接丢弃，先放进暂存区，连同序号一起发给从机。</p>
+<p>从机收到后做两件事：把收到的序号原样放进应答作为确认号，同时把自己的发送 FIFO 数据打包带回去。</p>
+<p>FIFO 出队后的保存位置和回写风险，见 <a href="/posts/batch-ack-fifo-cache">FIFO 出队数据应进入消费者暂存区</a>。</p>
+<h2>超时重发，序号不变</h2>
+<p>主机发出后等一段时间，没收到从机应答，就把暂存区里同一批数据、同一个序号再发一次。一直重发，直到从机在应答里把刚才收到的序号原样带了回来。这说明从机确实收到了。主机释放暂存区，从 FIFO 取下一批，序号递增。</p>
+<h2>重传的数据不入队</h2>
+<p>从机收到数据时看一眼序号：这个序号见过没有？见过就是重传，应答里照常回确认号，但数据丢弃，不入队。没见过才是新数据，正常入队。</p>
+<p>两端各维护自己的序号，独立递增，互不干扰。</p>
+<h2>没数据也要发空请求</h2>
+<p>主机没有数据时仍按约定节奏发空请求。序号照常带，数据为空。从机借此机会在应答中送出自己积攒的数据。主机在下一轮请求里带上对从机这批数据的确认号。</p>
+<h2>确认号只表示数据入队</h2>
+<p>接收 FIFO 满时不更新确认号，发送方继续保留当前批次。确认号只说明数据已经进入接收 FIFO，不代表业务命令已经执行。透传层管轮询、分批、序号、确认号、重试和 FIFO 搬运；业务层只管消息含义。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-19 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=sync-request-response-fifo-exchange');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>断电、断网、Broker 掉线：用 iotspool 给 MQTT 设备加一层掉电安全消息队列 - CacheRivulet小记</title>
+  <meta name="description" content="设备凌晨三点重启、WiFi 掉线，不丢一条遥测">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="物联网">
+  <meta property="article:tag" content="MQTT">
+  <meta property="article:tag" content="数据上报">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="断电、断网、Broker 掉线：用 iotspool 给 MQTT 设备加一层掉电安全消息队列">
+  <meta property="og:description" content="设备凌晨三点重启、WiFi 掉线，不丢一条遥测">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/iotspool-mqtt-spool/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/iotspool-mqtt-spool/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "断电、断网、Broker 掉线：用 iotspool 给 MQTT 设备加一层掉电安全消息队列",
+  "description": "设备凌晨三点重启、WiFi 掉线，不丢一条遥测",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/iotspool-mqtt-spool/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/iotspool-mqtt-spool/"
+  },
+  "keywords": "嵌入式, 物联网, MQTT, 数据上报, C语言"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">断电、断网、Broker 掉线：用 iotspool 给 MQTT 设备加一层掉电安全消息队列</h1>
+  <article class="article-body">
+<h1>断电、断网、Broker 掉线：用 iotspool 给 MQTT 设备加一层掉电安全消息队列</h1>
+<blockquote>
+<p><strong>声明：</strong> iotspool 是一个开源项目，作者为 <a href="https://github.com/Vanderhell">Vanderhell</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解嵌入式 MQTT 场景下持久化 store-and-forward 队列的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/iotspool" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/iotspool</a>（MQTT publish 的持久化 store-and-forward 队列，掉电不丢消息）</p>
+<p>做物联网设备的人迟早要踩同一个坑：数据到了发送这一刻，网络断了、Broker 重启了、或者设备自己掉电了。直接 <code>mqtt_publish()</code> 就赌它成功，赌输了就是数据默默消失；自己在 RAM 里攒 FIFO，一掉电全没；往 Flash 里随便写，写一半断电文件就坏。</p>
+<p>iotspool 专门填这个坑：一个零依赖的 C99 库，把 MQTT PUBLISH 消息写进 append-only 日志，CRC 校验，掉电自动截断尾部半截记录，Broker 不可达时指数退避重发，成功后才把 ACK 落到磁盘。支持 Linux、ESP-IDF、STM32 等裸机环境，coreMQTT/Paho/mosquitto/自研 MQTT 客户端都能对接。</p>
+<p><img src="/posts/iotspool-mqtt-spool/arch.svg" alt="iotspool 位置与数据流"></p>
+<h2>它解决什么问题</h2>
+<p>嵌入式 MQTT 上报的常见故障模式：</p>
+<ul>
+<li><strong>瞬时断网</strong>：路由器重启、基站切换，几秒到几十秒恢复。RAM FIFO 能顶一阵，但满了之后丢谁、留谁要自己定策略。</li>
+<li><strong>Broker 不可达</strong>：云端升级、证书轮换，可能持续几分钟到几小时。RAM 顶不住，必须落盘。</li>
+<li><strong>设备意外重启</strong>：看门狗复位、掉电、HardFault。RAM 里未发送的消息全部丢失。</li>
+<li><strong>写入中途断电</strong>：消息写了一半电没了，下次启动不能读到半截脏数据。</li>
+</ul>
+<p>iotspool 给每一条待发消息分配一个单调递增的 <code>msg_id</code>，把 ENQ（入队）记录追加到存储文件，写完后 <code>fsync</code>（或等价操作）；发送成功后再追加一条 ACK 记录标记该 <code>msg_id</code> 已确认。下次启动时 <code>iotspool_recover()</code> 扫一遍日志，尾部 CRC 不完整的半截记录直接丢弃，其余未被 ACK 的 ENQ 重新进入待发队列。</p>
+<h2>五分钟在 Linux 上跑通 Demo</h2>
+<p>下面是最小可运行示例，逻辑对应仓库里的 <code>examples/rpi/main.c</code>，做了精简。</p>
+<h3>1. 编译</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">git</span><span style="color:#CE9178"> clone</span><span style="color:#CE9178"> https://github.com/Vanderhell/iotspool.git</span></span>
+<span class="line"><span style="color:#DCDCAA">cd</span><span style="color:#CE9178"> iotspool</span></span>
+<span class="line"><span style="color:#DCDCAA">cmake</span><span style="color:#569CD6"> -S</span><span style="color:#CE9178"> .</span><span style="color:#569CD6"> -B</span><span style="color:#CE9178"> build</span><span style="color:#569CD6"> -DIOTSPOOL_BUILD_TESTS=ON</span></span>
+<span class="line"><span style="color:#DCDCAA">cmake</span><span style="color:#569CD6"> --build</span><span style="color:#CE9178"> build</span><span style="color:#569CD6"> -j</span></span></code></pre><p>仓库自带 POSIX 存储后端 <code>src/store_posix.c</code>，Linux/macOS/ESP-IDF VFS 都能直接用。STM32 等裸机环境需要自己实现 <code>iotspool_store_t</code> 的 5 个回调（<code>append</code> / <code>read_at</code> / <code>sync</code> / <code>size_bytes</code> / <code>truncate_to</code> / <code>replace</code>），对接到 raw Flash 或 LittleFS。</p>
+<h3>2. 最小发送循环</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "iotspool.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "../../src/store_posix.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdio.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;time.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint32_t</span><span style="color:#DCDCAA"> now_ms</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> timespec ts;</span></span>
+<span class="line"><span style="color:#DCDCAA">    clock_gettime</span><span style="color:#D4D4D4">(CLOCK_MONOTONIC, &#x26;ts);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4">)(</span><span style="color:#9CDCFE">ts</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">tv_sec</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">1000</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">ts</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">tv_nsec</span><span style="color:#D4D4D4"> / </span><span style="color:#B5CEA8">1000000</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 替换成你自己的 MQTT 客户端发布函数，返回 0 表示成功 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> fake_mqtt_publish</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">topic</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> topic_len</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                             const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">payload</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> payload_len</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                             uint8_t</span><span style="color:#9CDCFE"> qos</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"  [MQTT] </span><span style="color:#9CDCFE">%.*s</span><span style="color:#CE9178"> -> </span><span style="color:#9CDCFE">%.*s</span><span style="color:#CE9178"> (qos=</span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178">)</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">           (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4">)topic_len, topic,</span></span>
+<span class="line"><span style="color:#D4D4D4">           (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4">)payload_len, (</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *)payload, qos);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">    /* 1. 打开存储文件 */</span></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_store_t</span><span style="color:#D4D4D4"> store = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">store_posix_open</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"/tmp/spool.bin"</span><span style="color:#D4D4D4">, &#x26;store) != IOTSPOOL_OK) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        fprintf</span><span style="color:#D4D4D4">(stderr, </span><span style="color:#CE9178">"open store failed</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#B5CEA8"> 1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 2. 初始化 + 从磁盘恢复未发送队列 */</span></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_cfg_t</span><span style="color:#D4D4D4"> cfg = </span><span style="color:#DCDCAA">iotspool_cfg_default</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">max_store_bytes</span><span style="color:#D4D4D4">    = </span><span style="color:#B5CEA8">512</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">1024</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">  /* 最多占 512KB */</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">drop_oldest_on_full</span><span style="color:#D4D4D4"> = </span><span style="color:#569CD6">true</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">      /* 满了丢最老的，保新数据 */</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">min_retry_ms</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">1000</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">max_retry_ms</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">60000</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_t</span><span style="color:#D4D4D4"> *spool = </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">    iotspool_init</span><span style="color:#D4D4D4">(&#x26;spool, &#x26;cfg, &#x26;store);</span></span>
+<span class="line"><span style="color:#DCDCAA">    iotspool_recover</span><span style="color:#D4D4D4">(spool);</span><span style="color:#6A9955">   /* 空文件上调用也是安全的 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 3. 业务侧入队：传感器采样后直接 enqueue，不等网络 */</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *payload = </span><span style="color:#CE9178">"{</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">temp</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">:23.7,</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">humi</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">:58}"</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_msg_t</span><span style="color:#D4D4D4"> m = {</span></span>
+<span class="line"><span style="color:#D4D4D4">        .topic       = </span><span style="color:#CE9178">"factory/line1/env"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">        .topic_len   = (</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4">)</span><span style="color:#DCDCAA">strlen</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"factory/line1/env"</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">        .payload     = (</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *)payload,</span></span>
+<span class="line"><span style="color:#D4D4D4">        .payload_len = (</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4">)</span><span style="color:#DCDCAA">strlen</span><span style="color:#D4D4D4">(payload),</span></span>
+<span class="line"><span style="color:#D4D4D4">        .qos         = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">        .retain      = </span><span style="color:#569CD6">false</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    };</span></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_msg_id_t</span><span style="color:#D4D4D4"> id;</span></span>
+<span class="line"><span style="color:#DCDCAA">    iotspool_enqueue</span><span style="color:#D4D4D4">(spool, &#x26;m, &#x26;id);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 4. 网络任务里的发送循环 */</span></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_msg_t</span><span style="color:#D4D4D4"> out = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_msg_id_t</span><span style="color:#D4D4D4"> out_id = IOTSPOOL_MSG_ID_INVALID;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">iotspool_peek_ready</span><span style="color:#D4D4D4">(spool, </span><span style="color:#DCDCAA">now_ms</span><span style="color:#D4D4D4">(), &#x26;out, &#x26;out_id) == IOTSPOOL_OK) {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">fake_mqtt_publish</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">out</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">topic</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">out</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">topic_len</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">                              out</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">payload</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">out</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">payload_len</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">out</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">qos</span><span style="color:#D4D4D4">) == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">            iotspool_ack</span><span style="color:#D4D4D4">(spool, out_id);</span><span style="color:#6A9955">          /* QoS0 在发送成功后调 */</span></span>
+<span class="line"><span style="color:#D4D4D4">        } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#DCDCAA">            iotspool_on_publish_fail</span><span style="color:#D4D4D4">(spool, </span><span style="color:#DCDCAA">now_ms</span><span style="color:#D4D4D4">());</span><span style="color:#6A9955">  /* 触发退避 */</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">    iotspool_stats_t</span><span style="color:#D4D4D4"> st;</span></span>
+<span class="line"><span style="color:#DCDCAA">    iotspool_stats</span><span style="color:#D4D4D4">(spool, &#x26;st);</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"pending=</span><span style="color:#9CDCFE">%u</span><span style="color:#CE9178"> acked=</span><span style="color:#9CDCFE">%u</span><span style="color:#CE9178"> store=</span><span style="color:#9CDCFE">%u</span><span style="color:#CE9178"> bytes</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">           st</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">pending_count</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">st</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">acked_total</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">st</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">store_bytes</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    iotspool_deinit</span><span style="color:#D4D4D4">(spool);</span></span>
+<span class="line"><span style="color:#DCDCAA">    store_posix_close</span><span style="color:#D4D4D4">(&#x26;store);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>运行仓库自带的完整示例：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">./build/example_rpi</span></span></code></pre><p>输出会显示 5 条传感器读数入队、随后被逐个取出、ACK 后统计归零。</p>
+<h3>3. 对接真实 MQTT 客户端的关键约定</h3>
+<table>
+<thead>
+<tr>
+<th>QoS</th>
+<th><code>iotspool_ack()</code> 调用时机</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>传输层确认报文已发出去之后（例如 Paho <code>MQTTClient_publishMessage</code> 返回成功）</td>
+</tr>
+<tr>
+<td>1</td>
+<td>收到 Broker 的 <code>PUBACK</code> 之后</td>
+</tr>
+</tbody></table>
+<p>QoS 2 当前不在库的支持范围内。库保证 QoS 1 跨重启的 at-least-once 语义，重复送达由上层去重。</p>
+<h2>配置项速查</h2>
+<p><code>iotspool_cfg_default()</code> 返回默认值，按需改：</p>
+<ul>
+<li><code>max_pending_msgs</code>：RAM 里索引的最大消息条数（默认 64）。超过这个值再 enqueue 会返回 <code>IOTSPOOL_EFULL</code>，除非开了 <code>drop_oldest_on_full</code>。</li>
+<li><code>max_store_bytes</code>：存储文件最大字节数（默认 256KB）。</li>
+<li><code>max_payload_bytes</code> / <code>max_topic_bytes</code>：单条消息 payload/topic 的上限，用于内部分配 scratch。</li>
+<li><code>min_retry_ms</code> / <code>max_retry_ms</code>：退避区间，默认 1s 到 60s。</li>
+<li><code>drop_oldest_on_full</code>：队列满时是否丢最老消息。设为 <code>false</code> 时 enqueue 直接返回 <code>IOTSPOOL_EFULL</code>，由调用方决定丢还是等。</li>
+<li><code>enable_sha256</code>：是否给每条记录加 SHA-256 校验（默认关，CRC32 已够检测掉电半截）。</li>
+<li><code>lock</code> / <code>unlock</code>：多任务环境下传入互斥锁回调，核心 API 执行前自动加锁。ISR 不可直接调库，除非锁回调能在 ISR 中返回 <code>IOTSPOOL_EBUSY</code>。</li>
+</ul>
+<h2>掉电恢复的启动顺序</h2>
+<p>推荐的开机流程：</p>
+<ol>
+<li>挂载文件系统（或初始化 Flash 驱动）。</li>
+<li>打开 store 后端（<code>store_posix_open</code> 或自定义 vtable）。</li>
+<li><code>iotspool_init</code> / <code>iotspool_init_inplace</code>。</li>
+<li><code>iotspool_recover</code>。</li>
+<li>启动传感器采样任务和 MQTT 发送任务。</li>
+</ol>
+<p>这一步必须放在 MQTT 连接之前，否则连接一建立、publish 任务开始跑，但队列状态还没重建，可能漏发重启前积压的消息。</p>
+<h2>嵌入式无堆环境的用法</h2>
+<p>默认 <code>iotspool_init</code> 会 <code>malloc</code> 内部索引和 scratch 空间。STM32 等不想用堆的场合，用静态内存版本：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#4EC9B0">iotspool_t</span><span style="color:#D4D4D4"> spool;</span></span>
+<span class="line"><span style="color:#4EC9B0">iotspool_entry_t</span><span style="color:#9CDCFE"> entries</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">];</span><span style="color:#6A9955">                     /* RAM 索引 */</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#9CDCFE"> scratch</span><span style="color:#D4D4D4">[</span><span style="color:#DCDCAA">iotspool_required_scratch_bytes</span><span style="color:#D4D4D4">(&#x26;cfg)];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">iotspool_init_inplace</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">spool</span><span style="color:#D4D4D4">, entries, </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">                      scratch, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(scratch),</span></span>
+<span class="line"><span style="color:#D4D4D4">                      &#x26;</span><span style="color:#9CDCFE">cfg</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">store</span><span style="color:#D4D4D4">);</span></span></code></pre><p>大小可以用 <code>iotspool_required_index_bytes(&amp;cfg)</code> 和 <code>iotspool_required_scratch_bytes(&amp;cfg)</code> 在编译期或启动时精确计算，避免多分配。</p>
+<h2>适用边界</h2>
+<p>iotspool 只负责&quot;把 publish 消息可靠地送到 MQTT 客户端手里&quot;，不做以下事情：</p>
+<ul>
+<li><strong>不做 MQTT 协议本身</strong>。连接、保活、重连、TLS、订阅都由你现有的 MQTT 栈负责。</li>
+<li><strong>不做加密</strong>。CRC32/SHA-256 只检测意外损坏，不防篡改；需要机密性请用文件系统级加密或在 payload 层加密。</li>
+<li><strong>不做 QoS 2</strong>。只保证 QoS 1 at-least-once，重复消息去重在 Broker 或业务层。</li>
+<li><strong>不跨设备同步</strong>。日志文件是单设备本地的。</li>
+</ul>
+<p>如果你的设备需要&quot;断网时数据不丢、上电自动续传、Broker 抖动不雪崩&quot;这几件事，这个库刚好是那层缺的组件。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=iotspool-mqtt-spool');
+  }
+  </script>
+</body>
+</html>

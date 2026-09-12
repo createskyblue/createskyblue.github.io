@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCU 私有协议帧解析：FIFO 解耦与逐字节状态机 - CacheRivulet小记</title>
+  <meta name="description" content="半帧、粘包、断包：一个状态机把字节流拼成完整消息">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="FIFO">
+  <meta property="article:tag" content="中断">
+  <meta property="article:published_time" content="2026-08-12">
+  <meta property="og:title" content="MCU 私有协议帧解析：FIFO 解耦与逐字节状态机">
+  <meta property="og:description" content="半帧、粘包、断包：一个状态机把字节流拼成完整消息">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/byte-stream-fsm-frame-parser/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/byte-stream-fsm-frame-parser/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "MCU 私有协议帧解析：FIFO 解耦与逐字节状态机",
+  "description": "半帧、粘包、断包：一个状态机把字节流拼成完整消息",
+  "datePublished": "2026-08-12",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/byte-stream-fsm-frame-parser/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/byte-stream-fsm-frame-parser/"
+  },
+  "keywords": "嵌入式, MCU, 通信协议, FIFO, 中断"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">MCU 私有协议帧解析：FIFO 解耦与逐字节状态机</h1>
+  <article class="article-body">
+<h1>MCU 私有协议帧解析：FIFO 解耦与逐字节状态机</h1>
+<p><strong>背景</strong>：MCU 通信固件收发「帧头 + 长度 + 变长数据 + 校验」私有协议帧，串口、BLE、433MHz 都按字节流到达，半帧、粘包、断包是常态。</p>
+<p><strong>方案</strong>：接收中断只入队不解析，中断外用逐字节状态机拆帧，失败整帧丢弃重新同步。纯 C、定长缓冲、无动态分配，裸机中断环境可用。</p>
+<h2>字节流没有消息边界</h2>
+<p>接收中断一次只拿到一个字节，通道不会告诉你帧从哪开始、到哪结束，直接当消息读全乱。解析器要自己建边界：认帧头、按长度收齐数据、核校验。字节流如何可靠到达上层，见 <a href="/posts/uart-dma-idle-fifo">串口接收为什么会丢数据：从轮询到循环缓冲的改造思路</a>，本篇只讲拆帧。</p>
+<h2>反例：凑够一帧再整体解析</h2>
+<p>按固定长度阻塞读一帧再解析，能消化半帧、粘包，但有两个硬伤：只适配定长帧（变长帧的长度在数据里，阻塞读做不到）；中间丢一个字节就整体错位，按垃圾长度永远等不齐，通道永久卡死。这不是纸上推演：某仪器厂的低功耗分析仪上位机就是固定 64 字节盲切，不找帧头、不做校验，串口丢 1 字节后帧解析永久错位，数据乱跳而软件毫无察觉，复现过程见 <a href="http://localhost:5173/posts/fault-injection-uart-parser">故障注入复现上位机丢字节失步</a>。逐字节流式匹配则不同：丢字节只错一帧，下一帧按帧头重新对齐。</p>
+<h2>FIFO 解耦与逐字节状态机</h2>
+<p>中断里拆帧耗时不可控，中间隔一层字节流队列：中断只入队，解析器在中断外逐字节出队拆帧，解析慢不会丢字节。队列写满时的溢出策略由调用方决定：丢新字节保旧数据，或整段清空重新同步，本文实现取前者。</p>
+<p><img src="/posts/byte-stream-fsm-frame-parser/%E6%9E%B6%E6%9E%84.svg" alt="分层架构：数据源、字节流队列、帧解析器、帧队列、指令解析器"></p>
+<p>状态机一次处理一个字节，接口是 <code>uint8_t data, uint8_t* frame_buf, uint32_t buf_size</code>：帧头匹配后按长度字段收齐数据、核校验，全部通过才返回一帧。长度字段约定为用户数据字节数，不含帧头、长度与校验本身。</p>
+<p>解析器本身平台无关、零依赖：喂进一个字节，拼进缓冲区，拼满返回一帧，仅此而已。FIFO 在哪、中断怎么接、帧缓冲区用完怎么处理，全是调用方的事，组件一概不管，换个平台原样编译。</p>
+<p><img src="/posts/byte-stream-fsm-frame-parser/%E7%8A%B6%E6%80%81%E6%9C%BA.svg" alt="帧解析状态机：帧头、长度、变长数据、校验、返回一帧"></p>
+<p>帧解析与消费分两种组织方式：</p>
+<ul>
+<li>同步：解析出一帧就退出，等这帧被消费完再回来继续解析。帧队列容量实际为 1，实现简单，吞吐偏低</li>
+<li>异步：一进一出两个队列，字节流队列进、帧队列出，解析持续进行，消费者异步取帧，吞吐更高</li>
+</ul>
+<p>两种组织方式都要防吃 CPU：异步的解析任务不能被上游数据喂着跑个不停；同步看似出一帧就退出，但垃圾数据永远拼不出一帧，退出条件永不满足，照样空转。这也是 NASA/JPL 嵌入式 C 规范（Power of Ten）的要求：所有循环必须有静态可确定的退出上界，不允许出现依赖外部数据的死循环。落到这里就是给每次调用设退出条件：限定解析的字节数或帧数，或限定单次占用时间；有 RTOS 就给解析任务分配时间片，到点让出。</p>
+<p>帧头不匹配、长度超界、校验不符，任一步失败都丢弃已收内容、回到匹配帧头重新同步，脏字节不进完整帧。重新同步时不必从空白状态重来：已匹配帧头前缀与后续字节重叠时，回退到最长可续匹配位置即可，多字节帧头选数据区低概率组合可进一步降低误判。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-12 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=byte-stream-fsm-frame-parser');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLE 调试工具读取 ADC 波形时要同时处理确认和前端性能 - CacheRivulet小记</title>
+  <meta name="description" content="BLE透传+TinyFrame协议包装+Web上位机实现命令控制和波形传输">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="TinyFrame">
+  <meta property="article:tag" content="ADC">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="BLE 调试工具读取 ADC 波形时要同时处理确认和前端性能">
+  <meta property="og:description" content="BLE透传+TinyFrame协议包装+Web上位机实现命令控制和波形传输">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ble-adc-waveform-tinyframe/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ble-adc-waveform-tinyframe/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "BLE 调试工具读取 ADC 波形时要同时处理确认和前端性能",
+  "description": "BLE透传+TinyFrame协议包装+Web上位机实现命令控制和波形传输",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ble-adc-waveform-tinyframe/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ble-adc-waveform-tinyframe/"
+  },
+  "keywords": "BLE, TinyFrame, ADC"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">BLE 调试工具读取 ADC 波形时要同时处理确认和前端性能</h1>
+  <article class="article-body">
+<h1>BLE 调试工具读取 ADC 波形时要同时处理确认和前端性能</h1>
+<p>一个 BLE 波形采集项目需要在浏览器调试工具里查看 ADC 原始波形。这个功能看起来只是“从 MCU 取一批样本，再画到前端 canvas 上”，实际要处理两个边界：BLE 大帧分片可能中断，样本被读出后也不能提前从设备 FIFO 删除。</p>
+<p><img src="/posts/ble-adc-waveform-tinyframe/PixPin_2026-06-16_23-16-25.gif" alt="ADC 波形自动读取运行效果"></p>
+<div style="margin: 18px 0; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+  <div style="font-weight: 700; color: #1e293b; margin-bottom: 12px;">排查过程按目标逐层推进</div>
+  <div style="display: grid; grid-template-columns: repeat(6, minmax(108px, 1fr)); gap: 8px; align-items: stretch; font-size: 13px; line-height: 1.45; color: #334155;">
+    <div style="padding: 10px; background: #fee2e2; border-radius: 6px; border: 1px solid #fecaca;">读取即删除<br><strong>断链会丢样本</strong></div>
+    <div style="padding: 10px; background: #fef9c3; border-radius: 6px; border: 1px solid #fde68a;">拆成 GET / ACK<br><strong>先保住数据</strong></div>
+    <div style="padding: 10px; background: #ffedd5; border-radius: 6px; border: 1px solid #fed7aa;">两条异步链路<br><strong>前端状态变复杂</strong></div>
+    <div style="padding: 10px; background: #dcfce7; border-radius: 6px; border: 1px solid #bbf7d0;">下次 GET 顺带 ACK<br><strong>收敛交互</strong></div>
+    <div style="padding: 10px; background: #dbeafe; border-radius: 6px; border: 1px solid #bfdbfe;">长时间运行变慢<br><strong>浏览器成瓶颈</strong></div>
+    <div style="padding: 10px; background: #e0f2fe; border-radius: 6px; border: 1px solid #bae6fd;">限制日志 + 间隔补偿<br><strong>稳住消费节奏</strong></div>
+  </div>
+</div>
+
+<h2>采样模块先独立出来</h2>
+<p>ADC 采样最初和本地计算任务绑在一起。本地算法为了测速或省电被关闭时，ADC 采样也会停掉，前端自然读不到波形。</p>
+<p>这次先把 ADC 采样拆成单独模块：定时器固定触发 ADC0 采样，原始 <code>uint16_t</code> 样本写入 FIFO。BLE 调试工具只消费这个 FIFO，不依赖本地计算任务是否启用。</p>
+<p>拆分后，ADC 采样、上层处理任务、BLE 调试指令变成三个层次。采样层只保证数据进入 FIFO，应用层再决定如何读取和确认。</p>
+<h2>大 TinyFrame 要排队发送</h2>
+<p>一次读取 120 个 ADC 样本时，TinyFrame 响应已经明显大于单个 BLE ATT Notify 的有效载荷。MTU 仍是 23 时，一个应用响应会被拆成多个 20 字节左右的 Notify 分片。</p>
+<p>最初直接在 TinyFrame 发送出口连续发送所有分片。小包可以通过，大包会出现浏览器 CRC 错误和等待超时。日志看起来像 TinyFrame 校验失败，实际是后半帧没有稳定发完。</p>
+<p>修正方式是在协议层增加 TinyFrame Notify 发送队列。TinyFrame 生成完整帧后先进入发送缓冲，主循环和连接事件回调按 MTU 分片推进；协议栈忙时保留 offset，下次继续发送。浏览器仍然按一帧应用响应解析，底层分片由队列保证补齐。</p>
+<h2>读取后立即删除会丢样本</h2>
+<p>发送队列只能保证设备侧尽量把完整帧发出去，不能证明浏览器已经解析成功。ADC FIFO 如果在组响应时直接推进读指针，后续只要发生断链、超时、前端刷新或 ACK 丢失，这批样本就已经从设备侧消失。</p>
+<p>这对波形调试也不能接受。FIFO 里保存的是采样时间序列，批量读取只是一次传输尝试，不应该等同于删除。</p>
+<p>因此 ADC 读取改成待确认语义：读取指令只把当前批次复制到待确认缓存，并返回 <code>batch_id</code>。前端收到完整 TinyFrame、完成 CRC 校验、解析出样本并画到波形图后，再发送 ACK。MCU 只有收到匹配的 <code>batch_id</code>，才推进 FIFO 读指针删除这批样本。</p>
+<h2>FIFO 满时也不能覆盖未确认数据</h2>
+<p>旧实现为了保持实时波形，FIFO 满时会覆盖最旧样本。这个策略适合“只看最新趋势”的场景，但不适合用户明确要求不可丢包的采集链路。</p>
+<p>现在 FIFO 满时保留旧数据，丢弃新来的样本并累计 overflow 计数。这样至少不会把已经进入待确认链路的数据覆盖掉。前端如果消费速度不足，应通过 FIFO 剩余数量和 overflow 计数暴露出来，避免静默删除旧样本。</p>
+<h2>前端也要参与确认</h2>
+<p>前端自动读取不能只循环发 GET。它必须等待上一批 GET 响应完成，再发送对应 ACK；ACK 返回成功后，才允许进入下一轮读取。</p>
+<p>这个流程把责任边界分清楚：</p>
+<ul>
+<li>MCU 负责采样、缓存、返回待确认批次。</li>
+<li>BLE 发送队列负责把 TinyFrame 分片发完整。</li>
+<li>浏览器负责校验、绘图，并对已消费批次发送 ACK。</li>
+<li>MCU 收到 ACK 后才删除 FIFO 中对应样本。</li>
+</ul>
+<h2>GET 和 ACK 分开后状态会变复杂</h2>
+<p>把读取和确认拆成两个指令后，设备侧的数据安全边界清楚了，但前端状态机变复杂了。一次完整消费要经历 GET、接收大 TinyFrame、解析、绘图、发送 ACK、等待 ACK 响应这几个步骤。任何一步被浏览器后台节流、BLE 写入失败、页面连点或旧响应延迟打断，前端都可能和设备侧状态错开。</p>
+<p>实际调试时可以复现这个问题：手动连续点击几次读取 ADC，再打开自动读取，FIFO 剩余数量会长期降不下来。原因并不在 FIFO 本身。前端同时启动了多个 ADC 读取流程，等待响应对象会被后一次操作覆盖；旧 GET 或旧 ACK 响应回来后，又可能被新的等待者接收。页面刷新后状态清空，所以现象会临时恢复。</p>
+<p>这个阶段暴露出另一个设计边界：ACK 单独成帧虽然语义直接，但它让浏览器必须维护两条相关的异步链路。GET 和 ACK 的先后顺序、帧 ID、超时清理、断线恢复都要处理。对一个持续采集工具来说，这个复杂度会直接影响稳定性。</p>
+<div style="margin: 18px 0; padding: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;">
+  <div style="font-weight: 700; color: #1e293b; margin-bottom: 10px;">GET 和 ACK 分成两条链路时，前端要同时维护两个等待状态</div>
+  <svg viewBox="0 0 760 260" role="img" aria-label="GET 和 ACK 分离时序图" style="width: 100%; height: auto; display: block;">
+    <defs>
+      <marker id="arrow-split" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#64748b"></path>
+      </marker>
+    </defs>
+    <rect x="0" y="0" width="760" height="260" fill="#f8fafc" rx="8"></rect>
+    <text x="110" y="34" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="700">浏览器前端</text>
+    <text x="380" y="34" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="700">BLE / TinyFrame</text>
+    <text x="650" y="34" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="700">MCU FIFO</text>
+    <line x1="110" y1="48" x2="110" y2="230" stroke="#cbd5e1" stroke-width="2"></line>
+    <line x1="380" y1="48" x2="380" y2="230" stroke="#cbd5e1" stroke-width="2"></line>
+    <line x1="650" y1="48" x2="650" y2="230" stroke="#cbd5e1" stroke-width="2"></line>
+    <line x1="120" y1="76" x2="640" y2="76" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-split)"></line>
+    <text x="380" y="68" text-anchor="middle" fill="#334155" font-size="13">GET：读取一批样本</text>
+    <line x1="640" y1="116" x2="120" y2="116" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-split)"></line>
+    <text x="380" y="108" text-anchor="middle" fill="#334155" font-size="13">返回 batch_id + samples</text>
+    <rect x="38" y="132" width="144" height="40" rx="6" fill="#dbeafe" stroke="#bfdbfe"></rect>
+    <text x="110" y="157" text-anchor="middle" fill="#1e40af" font-size="13">绘图后等待 ACK</text>
+    <line x1="120" y1="190" x2="640" y2="190" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-split)"></line>
+    <text x="380" y="182" text-anchor="middle" fill="#334155" font-size="13">ACK：确认删除上一批</text>
+    <line x1="640" y1="224" x2="120" y2="224" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-split)"></line>
+    <text x="380" y="216" text-anchor="middle" fill="#334155" font-size="13">ACK 响应</text>
+  </svg>
+</div>
+
+<h2>下一次读取顺带确认上一批</h2>
+<p>后续把 ADC 读取流程收敛成单条主链路。前端收到一批 ADC 样本并成功绘图后，先记录这批 <code>batch_id</code>。下一次发送 GET 时，把上一次已经消费的 <code>batch_id</code> 一起带给设备。</p>
+<p>设备收到新的 GET 后，先尝试确认上一批，再返回当前待确认批次或新批次。这样前端的主循环只需要维护“发起读取、等待对应帧 ID 的响应、绘图、记录下一次要确认的 batch_id”。确认动作跟下一次读取绑定在一起，减少一次 BLE 往返，也减少一个容易和 GET 交叉的异步状态。</p>
+<p>这个方案还要做成可恢复语义。浏览器可能没有收到上一轮响应，但设备可能已经处理过其中的确认动作。下一次 GET 再带旧 <code>batch_id</code> 时，设备不能让链路停在错误状态，而应继续返回当前待确认批次，让前端重新对齐到设备侧状态。</p>
+<p>前端侧也同步收紧状态机：</p>
+<ul>
+<li>ADC 读取过程加互斥，手动连点时忽略重复触发。</li>
+<li>ADC 响应按 TinyFrame 帧 ID 匹配，过期响应直接丢弃。</li>
+<li>发送失败时立即清理 pending 状态，避免必须刷新页面。</li>
+<li>页面进入后台时暂停自动读取，回到前台后再补一轮读取。</li>
+</ul>
+<div style="margin: 18px 0; padding: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;">
+  <div style="font-weight: 700; color: #1e293b; margin-bottom: 10px;">合并后只有一条主链路：下一次 GET 顺带确认上一批</div>
+  <svg viewBox="0 0 760 250" role="img" aria-label="GET 携带上一批确认的时序图" style="width: 100%; height: auto; display: block;">
+    <defs>
+      <marker id="arrow-merge" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#0f766e"></path>
+      </marker>
+    </defs>
+    <rect x="0" y="0" width="760" height="250" fill="#f8fafc" rx="8"></rect>
+    <text x="110" y="34" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="700">浏览器前端</text>
+    <text x="380" y="34" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="700">BLE / TinyFrame</text>
+    <text x="650" y="34" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="700">MCU FIFO</text>
+    <line x1="110" y1="48" x2="110" y2="225" stroke="#cbd5e1" stroke-width="2"></line>
+    <line x1="380" y1="48" x2="380" y2="225" stroke="#cbd5e1" stroke-width="2"></line>
+    <line x1="650" y1="48" x2="650" y2="225" stroke="#cbd5e1" stroke-width="2"></line>
+    <rect x="38" y="62" width="144" height="40" rx="6" fill="#dcfce7" stroke="#bbf7d0"></rect>
+    <text x="110" y="86" text-anchor="middle" fill="#166534" font-size="13">记录上一批 batch_id</text>
+    <line x1="120" y1="122" x2="640" y2="122" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrow-merge)"></line>
+    <text x="380" y="114" text-anchor="middle" fill="#0f766e" font-size="13">GET：携带上一批 ACK + 请求下一批</text>
+    <rect x="578" y="140" width="144" height="42" rx="6" fill="#fef9c3" stroke="#fde68a"></rect>
+    <text x="650" y="157" text-anchor="middle" fill="#854d0e" font-size="13">先删除已确认批次</text>
+    <text x="650" y="175" text-anchor="middle" fill="#854d0e" font-size="13">再准备当前批次</text>
+    <line x1="640" y1="205" x2="120" y2="205" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrow-merge)"></line>
+    <text x="380" y="197" text-anchor="middle" fill="#0f766e" font-size="13">返回新的 batch_id + samples</text>
+  </svg>
+</div>
+
+<p>这张状态转移图来自手动连续读取 ADC 的三次前端截图。第一次读取拿到一个待确认批次；第二次读取会带上上一批 <code>batch_id</code>，设备先确认上一批，再返回下一批；前端继续记录新的待确认批次。</p>
+<p><img src="/posts/ble-adc-waveform-tinyframe/ack-state-transition.webp" alt="ACK 状态转移"></p>
+<h2>长时间运行后前端也会拖慢采集</h2>
+<p>合并 ACK 后，短时间自动读取可以把 FIFO 剩余数量从高位追到 0。但继续长时间运行后，又出现了新的现象：页面没有切到后台，FIFO 仍会慢慢升高。这个现象说明 BLE 链路和设备侧一开始是够用的，后面变慢更可能发生在浏览器前端。</p>
+<p>排查后发现，调试页面本身也在消耗采集能力。每批 ADC 数据都会产生 TX、Notify、RX、ADC 摘要等多条日志。日志区不断追加 DOM 节点，每次写日志还会滚动到底部。运行时间越久，日志节点越多，浏览器主线程处理日志和布局的开销越大，自动读取的实际间隔就会被拉长。采样端还在持续产出数据，前端消费速度下降后，FIFO 剩余数量自然又会涨回去。</p>
+<p>这次处理对象转到前端调试工具的运行成本。第一项改动是限制日志数量：日志只保留固定行数，超过后删除旧节点；ADC 自动读取时减少 TX、Notify、RX 细节输出，只保留低频摘要。这样日志仍能观察状态，也不会无限增长拖慢页面。</p>
+<p>第二项改动是给自动读取做间隔补偿。原来用固定定时器触发读取，当前一轮读取、绘图或日志处理变慢时，后续节奏会跟着漂移。现在改成上一轮完成后再安排下一轮，并根据这一轮实际耗时扣减等待时间。目标间隔是 200 ms，如果这一轮已经花了 80 ms，下一轮就等待约 120 ms；如果这一轮已经超时，就尽快进入下一轮。这样可以减少前端主线程抖动对采集节奏的影响。</p>
+<p>这个阶段的收获是，通信链路调通以后，瓶颈不一定还在设备或 BLE。浏览器调试工具也属于采集链路的一部分，日志、绘图、DOM 更新都会吃掉时间预算。持续采集类工具要把“可观察性”和“采集性能”分开设计，调试信息不能无限制地占用主线程。</p>
+<div style="margin: 18px 0; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+  <div style="font-weight: 700; color: #1e293b; margin-bottom: 12px;">前端变慢的因果链和对应修复</div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 13px; line-height: 1.5; color: #334155;">
+    <div style="padding: 14px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;">
+      <div style="font-weight: 700; color: #9a3412; margin-bottom: 8px;">退化链路</div>
+      <div>日志持续增长 → DOM 节点变多 → 主线程处理变慢 → 自动读取间隔被拉长 → FIFO 剩余重新升高</div>
+    </div>
+    <div style="padding: 14px; background: #ecfdf5; border: 1px solid #bbf7d0; border-radius: 8px;">
+      <div style="font-weight: 700; color: #166534; margin-bottom: 8px;">修复链路</div>
+      <div>限制日志数量 → 降低高频日志 → 自调度读取 → 按实际耗时补偿间隔 → 稳住消费节奏</div>
+    </div>
+  </div>
+</div>
+
+<h2>结论</h2>
+<p>BLE 链路带宽足够时，仍然可能因为发送节奏和删除时机造成数据丢失。ADC 波形读取不能在批量读取后立即删除，必须先把读取和删除拆开。</p>
+<p>拆开以后还要继续收敛前端状态机。最终结构是：ADC FIFO 保存原始样本，TinyFrame 返回待确认批次，Notify 队列保证大帧分片发送，前端解析成功后记录 <code>batch_id</code>，下一次 GET 顺带确认上一批，MCU 再删除样本。这样才能把“浏览器已经消费”和“设备允许删除”绑定在一起，同时避免 GET 和 ACK 两条异步链路互相干扰。</p>
+<p>解决不丢包后，还要继续观察长时间运行。前端日志无限增长和固定定时器漂移也会让消费速度下降。最终处理围绕同一个目标逐层收敛：先保证数据不提前删除，再减少确认链路状态，再降低浏览器前端运行成本。工程调试经常就是这个过程，每解决一层问题，下一层瓶颈才会暴露出来。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ble-adc-waveform-tinyframe');
+  }
+  </script>
+</body>
+</html>

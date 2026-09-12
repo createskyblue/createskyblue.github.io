@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>7种降采样算法一站式交互对比，附在线演示 - CacheRivulet小记</title>
+  <meta name="description" content="7种降采样算法一站式对比，含低通滤波抗混叠演示">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="降采样">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:published_time" content="2026-07-18">
+  <meta property="og:title" content="7种降采样算法一站式交互对比，附在线演示">
+  <meta property="og:description" content="7种降采样算法一站式对比，含低通滤波抗混叠演示">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/downsampling-demo/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/downsampling-demo/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "7种降采样算法一站式交互对比，附在线演示",
+  "description": "7种降采样算法一站式对比，含低通滤波抗混叠演示",
+  "datePublished": "2026-07-18",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/downsampling-demo/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/downsampling-demo/"
+  },
+  "keywords": "降采样, 信号处理"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">7种降采样算法一站式交互对比，附在线演示</h1>
+  <article class="article-body">
+<h1>7种降采样算法一站式交互对比，附在线演示</h1>
+<p>做了一个纯前端的降采样算法交互演示页面，把七种常见算法放在一起、用同一份数据实时对比，方便直观感受每种算法的取舍。</p>
+<p><a href="https://createskyblue.github.io/downsampling-demo/" target="_blank" rel="noopener noreferrer">🌐 在线体验</a> · <a href="https://github.com/createskyblue/downsampling-demo" target="_blank" rel="noopener noreferrer">📂 GitHub 仓库</a></p>
+<iframe id="downsampling-frame" data-auto-height="true" scrolling="no" src="/posts/downsampling-demo/downsampling-demo.html" title="7 种降采样算法交互对比演示" style="width: 100%; height: 1600px; border: 1px solid #dbe2ec; border-radius: 8px; background: #f3f4f8; overflow: hidden;"></iframe>
+<script>
+(() => {
+  const frame = document.getElementById('downsampling-frame');
+  if (!frame) return;
+  const measure = () => {
+    let h = 0;
+    try {
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      // 只认 .wrap：body 带 min-height:100vh，scrollHeight 会被 iframe 自身高度带偏，导致高度只增不减
+      const wrap = doc.querySelector('.wrap');
+      h = wrap
+        ? wrap.getBoundingClientRect().height
+        : Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+    } catch (e) { return; }
+    if (h > 0) frame.style.height = `${Math.ceil(h) + 24}px`;
+  };
+  const schedule = () => requestAnimationFrame(() => requestAnimationFrame(measure));
+  frame.addEventListener('load', () => {
+    schedule();
+    try {
+      const doc = frame.contentDocument;
+      if (doc && doc.documentElement && window.ResizeObserver) {
+        new ResizeObserver(schedule).observe(doc.documentElement);
+      }
+    } catch (e) {}
+  });
+  window.addEventListener('resize', schedule);
+})();
+</script>
+
+<h2>七种算法覆盖</h2>
+<p>页面内置七种降采样算法，从最简单的等间隔到自适应精度，覆盖了实际工程中常见的策略：</p>
+<table>
+<thead>
+<tr>
+<th>算法</th>
+<th>一句话</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>直接抽样</strong></td>
+<td>等间隔取点，O(1) 决策，最快但也最容易丢特征</td>
+</tr>
+<tr>
+<td><strong>均值降采样</strong></td>
+<td>分桶取平均，自带抗混叠效果，但会削平尖峰</td>
+</tr>
+<tr>
+<td><strong>中位数降采样</strong></td>
+<td>分桶取中位数，对异常尖峰免疫</td>
+</tr>
+<tr>
+<td><strong>Min-Max</strong></td>
+<td>每桶保留最大+最小值，包络带可视化</td>
+</tr>
+<tr>
+<td><strong>LTTB</strong></td>
+<td>最大三角形三桶法，视觉保真度最优</td>
+</tr>
+<tr>
+<td><strong>分段线性</strong></td>
+<td>分段做线性回归逼近，适合趋势分析</td>
+</tr>
+<tr>
+<td><strong>RDP</strong></td>
+<td>Ramer–Douglas–Peucker，按容差自适应：平坦区域少留点，波动区域多留点</td>
+</tr>
+</tbody></table>
+<p>除了 RDP 是按精度（容差 ε）控制输出，其余六种都是固定目标点数。两种范式放在一起对比，降采样的取舍一目了然。</p>
+<h2>低通滤波抗混叠</h2>
+<p>页面提供了一个可选的低通滤波器（滑动窗口平均），在降采样之前对原始信号做预处理。</p>
+<p>开/关滤波、调窗口大小都是实时生效，可以直观看到：哪些算法本身就抗混叠（均值），哪些算法需要前置滤波配合（直接抽样），以及 Min-Max 和 LTTB 在滤波前后的包络变化。</p>
+<h2>五种内置信号</h2>
+<p>预置了五组不同特征的测试信号，比单一正弦波更能暴露算法的差异：</p>
+<ul>
+<li><strong>复合正弦波 + 噪声</strong>：多频叠加，考验抗混叠和噪声抑制</li>
+<li><strong>阶跃信号</strong>：测试对突变边缘的保留能力</li>
+<li><strong>尖峰脉冲</strong>：对比均值和 Median 对离群点的处理</li>
+<li><strong>模拟心电</strong>：类真实场景，LTTB 和 Min-Max 表现有参考价值</li>
+<li><strong>随机游走</strong>：无周期结构，只靠统计特征降采样</li>
+</ul>
+<h2>技术实现</h2>
+<p>单 HTML 文件，零构建、零依赖。Canvas 绑制双图对比，左侧控制面板右侧实时渲染，自适应 DPR 保证 Retina 屏清晰。</p>
+<p><a href="https://createskyblue.github.io/downsampling-demo/" target="_blank" rel="noopener noreferrer">🌐 在线体验</a> · <a href="https://github.com/createskyblue/downsampling-demo" target="_blank" rel="noopener noreferrer">📂 GitHub 仓库</a></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-18 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=downsampling-demo');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio-Triangulation 用三麦克风做低成本声学相机 - CacheRivulet小记</title>
+  <meta name="description" content="三麦克风TDOA声源定位">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="声音定位">
+  <meta property="article:tag" content="TDOA">
+  <meta property="article:tag" content="RP2040">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="Audio-Triangulation 用三麦克风做低成本声学相机">
+  <meta property="og:description" content="三麦克风TDOA声源定位">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/audio-triangulation-tdoa/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/audio-triangulation-tdoa/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Audio-Triangulation 用三麦克风做低成本声学相机",
+  "description": "三麦克风TDOA声源定位",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/audio-triangulation-tdoa/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/audio-triangulation-tdoa/"
+  },
+  "keywords": "声音定位, TDOA, RP2040, 信号处理"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Audio-Triangulation 用三麦克风做低成本声学相机</h1>
+  <article class="article-body">
+<h1>Audio-Triangulation 用三麦克风做低成本声学相机</h1>
+<p>原始项目仓库：<a href="https://github.com/Sam-Belliveau/Audio-Triangulation">https://github.com/Sam-Belliveau/Audio-Triangulation</a></p>
+<p>Audio-Triangulation 是一个基于 Raspberry Pi Pico 的声音定位项目。项目介绍页把它称为 20 美元级声学相机：三个麦克风监听声音，Pico 在片上计算声音到达时间差，再把声源可能位置画成 VGA 热图。</p>
+<p><img src="/posts/audio-triangulation-tdoa/final_board.webp" alt="三麦克风、低通滤波、Pico 和 VGA 的硬件结构"></p>
+<p>这篇项目最值得学习的地方，是它把“声音从哪里来”这个问题拆成了三个层次：先用 TDOA 得到距离差，再用互相关估计时间差，最后用网格评分避开难解的非线性方程。</p>
+<h2>被动声源定位拿不到绝对距离</h2>
+<p>声音定位容易让人先想到“画几个圆相交”。如果知道声音从什么时候发出，就可以用到达时间乘以声速，得到声源到每个麦克风的绝对距离。二维里是圆，三维里是球面，几个圆或球面的交点就是声源位置。</p>
+<p>被动监听场景没有这个条件。人说话、物体敲击、环境里突然响了一声，系统通常不知道发声时刻。麦克风只能比较同一段声音先到谁、后到谁。</p>
+<p>这时能得到的是相对信息：</p>
+<ul>
+<li>声音到 A 和 B 的时间差。</li>
+<li>时间差乘以声速得到距离差。</li>
+<li>距离差只能说明声源到两个麦克风的距离相差多少。</li>
+</ul>
+<p>距离差不能直接变成两个确定半径的圆。假设声源到 A 的距离是 10cm，B 的距离可能是 15cm；假设 A 是 50cm，B 就可能是 55cm。距离差相同，绝对距离可以有很多组。</p>
+<p>所以被动声音定位不能按“已知半径的圆相交”来理解。它的核心约束是“到两个麦克风的距离差固定”。</p>
+<h2>TDOA 对应的是双曲线</h2>
+<p>平面上到两个定点距离差固定的点，会形成双曲线。两个麦克风就是双曲线的两个焦点。声音到达 A、B 的时间差越大，说明声源越偏向其中一侧；时间差接近 0，说明声源大致在两者的垂直平分线附近。</p>
+<p>三个麦克风可以形成三对约束：</p>
+<ul>
+<li>A-B 约束一条双曲线。</li>
+<li>A-C 约束一条双曲线。</li>
+<li>B-C 约束一条双曲线。</li>
+</ul>
+<p>理想情况下，三组双曲线共同指向同一个声源位置。Audio-Triangulation 的数学核心就是这个：它使用 TDOA，把未知发声时刻的问题转化为相对时间差问题。</p>
+<p>另一个现实限制是：时间差是离散采样得到的。项目采样率为 50kHz，一个采样点是 20 微秒。声速按 343m/s 计算，一个采样点对应约 6.86mm 的传播距离。延迟估计只能落在整数采样点上，因此声源位置也会被量化成有限的可区分区域。</p>
+<h2>远处声源会让双曲线变密</h2>
+<p>麦克风阵列越小，远处声源越难定位。原因是远处声源移动一小段距离时，到三个麦克风的距离差变化很小，几组双曲线会挤在一起。</p>
+<p>这张图的价值在于提醒：定位精度同时受算法、采样率、麦克风间距、声源距离和空间几何限制。</p>
+<p>提升分辨率有两条常见路径：</p>
+<ul>
+<li>提高采样率，让时间差量化更细。</li>
+<li>增大麦克风间距，让同一方向变化产生更大的时间差。</li>
+</ul>
+<p>两条路都有代价。提高采样率会增加数据处理压力；增大间距会让设备变大，也会放大布线、同步和环境误差。这个项目选择 50kHz 和三麦克风面包板阵列，是一个低成本实时演示的平衡点。</p>
+<h2>互相关从波形里找时间差</h2>
+<p>有了 TDOA 思路，还需要从三路麦克风波形里估计“到底差了几个采样点”。Audio-Triangulation 用互相关完成这一步。</p>
+<p>互相关的直觉是滑动对齐。拿 A、B 两段波形，把 B 向前或向后移动若干采样点，每移动一次就逐点相乘并求和。某个偏移下得分最高，说明两段波形在这个偏移下最相似，这个偏移就是时间差估计。</p>
+<div style="margin: 18px 0; padding: 16px; border: 1px solid #dbe3ef; border-radius: 8px; background: #f8fafc; color: #1e293b;">
+  <div style="font-weight: 700; margin-bottom: 8px;">互相关可以理解成“固定 A，把延后的 B 往回滑”</div>
+  <div style="font-size: 13px; color: #475569; line-height: 1.65; margin-bottom: 12px;">
+    下面假设 B 比 A 晚到 2 个采样点。A 的脉冲固定在第 3-5 格，B 原始脉冲在第 5-7 格；只有把 B 左移 2 格，两个脉冲才完全重合。
+  </div>
+  <div style="display: grid; gap: 14px;">
+    <div style="display: grid; grid-template-columns: 96px 1fr 96px; gap: 10px; align-items: center;">
+      <div style="font-size: 13px; color: #475569;">B 不移动</div>
+      <div style="display: grid; gap: 4px;">
+        <div style="display: grid; grid-template-columns: 22px repeat(9, 1fr); gap: 4px;">
+          <div style="font-size: 12px; color: #2563eb;">A</div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 22px repeat(9, 1fr); gap: 4px;">
+          <div style="font-size: 12px; color: #16a34a;">B</div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+        </div>
+      </div>
+      <div style="font-size: 13px; color: #64748b;">只重合 1 格</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 96px 1fr 96px; gap: 10px; align-items: center;">
+      <div style="font-size: 13px; color: #475569;">B 左移 1 格</div>
+      <div style="display: grid; gap: 4px;">
+        <div style="display: grid; grid-template-columns: 22px repeat(9, 1fr); gap: 4px;">
+          <div style="font-size: 12px; color: #2563eb;">A</div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 22px repeat(9, 1fr); gap: 4px;">
+          <div style="font-size: 12px; color: #16a34a;">B</div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+        </div>
+      </div>
+      <div style="font-size: 13px; color: #64748b;">重合 2 格</div>
+    </div>
+    <div style="display: grid; grid-template-columns: 96px 1fr 96px; gap: 10px; align-items: center;">
+      <div style="font-size: 13px; color: #475569;">B 左移 2 格</div>
+      <div style="display: grid; gap: 4px; background: #fef9c3; border-radius: 6px; padding: 6px;">
+        <div style="display: grid; grid-template-columns: 22px repeat(9, 1fr); gap: 4px;">
+          <div style="font-size: 12px; color: #2563eb;">A</div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #60a5fa; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 22px repeat(9, 1fr); gap: 4px;">
+          <div style="font-size: 12px; color: #16a34a;">B</div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #22c55e; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+          <div style="height: 20px; background: #e2e8f0; border-radius: 4px;"></div>
+        </div>
+      </div>
+      <div style="font-size: 13px; color: #15803d; font-weight: 700;">完全重合</div>
+    </div>
+  </div>
+  <div style="margin-top: 12px; font-size: 13px; color: #475569; line-height: 1.65;">
+    互相关就是把这些“左移几格”的情况全部试一遍。左移 2 格时 A、B 的脉冲完全重合，逐点相乘后的总和最大，所以时间差就是 2 个采样点。
+  </div>
+</div>
+
+<p>项目源码会遍历 <code>-MAX_SHIFT_SAMPLES</code> 到 <code>+MAX_SHIFT_SAMPLES</code> 的整数偏移，分别计算 A-B、A-C、B-C 三对互相关。每一对都会得到一条“偏移量到相似度”的曲线，而不仅仅是一个延迟数字。</p>
+<p>这很重要，因为后面的热图评分会直接使用整条互相关曲线。某个候选位置预测出的延迟，如果刚好落在互相关峰值附近，它的得分就高。</p>
+<h2>为什么没有用 FFT</h2>
+<p>介绍页提到他们考虑过 FFT 相关方法。理论上，卷积和相关可以通过频域乘法加速，复杂度从平方级降到 <code>N log N</code>。</p>
+<p>但这个项目的缓冲区规模是 1024 点，实际收益不明显。更麻烦的是，FFT 方法会把滤波相位、三路采样时序和频域处理细节引进来，调试难度上升。</p>
+<p>最终项目选择直接在时域做互相关。这个选择看起来朴素，但适合 RP2040：整数累加容易实现，计算范围受物理最大延迟限制，结果也更容易和波形显示对应起来。</p>
+<h2>位置求解反过来做</h2>
+<p>理论上可以写出双曲线方程组，然后求交点。但实际系统里会遇到几个麻烦：</p>
+<ul>
+<li>双曲线有两支，可能出现多个候选位置。</li>
+<li>测量误差会让几条曲线无法精确相交。</li>
+<li>牛顿法一类解析求解依赖初值，可能不收敛。</li>
+<li>嵌入式系统需要可预测的运行时间。</li>
+</ul>
+<p>Audio-Triangulation 的做法很工程化：避开直接求交点，反过来枚举候选位置。</p>
+<p>初始化 VGA 热图时，它会遍历显示区域里的每个点。对每个候选点，先计算它到三个麦克风的距离，再换算成 A-B、A-C、B-C 应该出现的样本延迟，并把这些延迟索引存起来。</p>
+<p>实时显示时，它拿当前互相关结果给每个候选点打分：</p>
+<p><code>候选点得分 = A-B 在理论延迟处的互相关值 + A-C 在理论延迟处的互相关值 + B-C 在理论延迟处的互相关值</code></p>
+<div style="margin: 18px 0; padding: 16px; border: 1px solid #dbe3ef; border-radius: 8px; background: #f8fafc; color: #1e293b;">
+  <div style="font-weight: 700; margin-bottom: 12px;">位置求解被改成“每个候选点查三张延迟得分表”</div>
+  <div style="display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr); gap: 14px; align-items: stretch;">
+    <div style="padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+      <div style="font-size: 12px; color: #475569; margin-bottom: 8px;">候选位置网格：逐格计算 P 点理论延迟</div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(30px, 1fr)); gap: 6px;">
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #dcfce7; border: 2px solid #22c55e; border-radius: 50%; display: grid; place-items: center; font-weight: 700;">C</div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #fef9c3; border: 2px solid #eab308; border-radius: 7px; display: grid; place-items: center; font-weight: 700;">P</div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #fff7ed; border: 1px dashed #f59e0b; border-radius: 6px; display: grid; place-items: center; font-size: 12px; color: #92400e;">算分</div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #fee2e2; border: 2px solid #ef4444; border-radius: 50%; display: grid; place-items: center; font-weight: 700;">A</div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #dbeafe; border: 2px solid #3b82f6; border-radius: 50%; display: grid; place-items: center; font-weight: 700;">B</div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+        <div style="aspect-ratio: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;"></div>
+      </div>
+    </div>
+    <div style="display: grid; gap: 10px; align-content: center;">
+      <div style="padding: 10px; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0;">
+        <div style="font-weight: 700; color: #334155;">预计算：P 到三对麦克风的理论延迟</div>
+        <div style="margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 13px; text-align: center;">
+          <div style="padding: 8px; background: #fee2e2; border-radius: 6px;">A-B<br><strong>+2</strong></div>
+          <div style="padding: 8px; background: #dcfce7; border-radius: 6px;">A-C<br><strong>-1</strong></div>
+          <div style="padding: 8px; background: #dbeafe; border-radius: 6px;">B-C<br><strong>-3</strong></div>
+        </div>
+      </div>
+      <div style="padding: 10px; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0;">
+        <div style="font-weight: 700; color: #334155;">实时：到互相关曲线里取对应分数</div>
+        <div style="margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 13px; text-align: center;">
+          <div style="padding: 8px; background: #fff7ed; border-radius: 6px;">R<sub>AB</sub>[+2]<br><strong>91</strong></div>
+          <div style="padding: 8px; background: #f0fdf4; border-radius: 6px;">R<sub>AC</sub>[-1]<br><strong>84</strong></div>
+          <div style="padding: 8px; background: #eff6ff; border-radius: 6px;">R<sub>BC</sub>[-3]<br><strong>88</strong></div>
+        </div>
+      </div>
+      <div style="padding: 10px; border-radius: 8px; background: #fef9c3; border: 1px solid #fde68a; font-weight: 700; text-align: center;">
+        P 点总分 = 91 + 84 + 88 = 263
+      </div>
+    </div>
+  </div>
+  <div style="margin-top: 12px; font-size: 13px; color: #475569; line-height: 1.65;">
+    热图里的每个格子都按同样方式算一次。总分最高的区域，表示这个位置预测出的三组时间差最接近当前麦克风实际测到的互相关峰值。
+  </div>
+</div>
+
+<p>分数越高，说明这个点预测出的三组延迟越接近当前波形测到的延迟。热图显示的就是这个匹配度。</p>
+<p><img src="/posts/audio-triangulation-tdoa/control_flow_diagram.webp" alt="Pico 上的采样、触发、互相关和显示流程"></p>
+<p>这个设计的好处是稳定。每个网格点独立评分，计算量由网格大小决定，不需要初值，不存在收敛失败。代价是分辨率受网格大小限制，但对实时热图来说，这个取舍很合理。</p>
+<h2>硬件链路服务于实时性</h2>
+<p>硬件部分使用三个 MAX4466 麦克风，摆在面包板上形成三角阵列。每路麦克风输出经过二阶 20kHz 低通滤波，再接到 Pico 的 ADC 0、1、2 通道。</p>
+<p>采样侧使用 ADC round-robin 和 DMA。DMA 把三路 8 位样本持续搬到一个小数组里，计算循环按 50kHz 节奏读出，转换成 16 位样本并推入三路滚动缓冲区。</p>
+<p>声音事件由能量变化触发。系统维护滚动缓冲区的新旧两段能量，检测到明显声音事件后，再取出完整帧做互相关和热图更新。这能减少安静时的无效计算。</p>
+<p>VGA 输出也由 Pico 完成。项目用 PIO 和 DMA 生成 VGA 信号，让同一块 RP2040 同时负责采样、定位和显示。</p>
+<p><img src="/posts/audio-triangulation-tdoa/cover.webp" alt="VGA 上的波形、延迟和热图界面"></p>
+<h2>这篇项目的真正启发</h2>
+<p>Audio-Triangulation 的精彩点在于它把数学问题压成了适合 MCU 的流程：</p>
+<ul>
+<li>被动监听拿不到发声时刻，所以使用 TDOA。</li>
+<li>TDOA 产生的是双曲线约束，所以不能套用绝对距离的圆相交。</li>
+<li>互相关把波形对齐问题变成整数偏移评分。</li>
+<li>网格评分把双曲线求交变成候选点查表。</li>
+<li>预计算让实时阶段只做数组取值、加法和颜色映射。</li>
+</ul>
+<p>这个项目也很适合提醒自己：信号处理要同时看公式、采样、阵列和环境。采样率决定时间分辨率，阵列尺寸决定空间分辨率，环境噪声和混响决定互相关峰值是否可靠。算法、硬件和可视化必须一起设计。</p>
+<h2>边界和扩展</h2>
+<p>当前实现主要把声源映射到一个预设平面。声源高度变化较大时，二维热图会把三维位置投影到该平面，结果会带系统偏差。</p>
+<p>如果要做完整三维定位，可以增加搜索维度，或者使用非共面的麦克风阵列。网格评分方法本身可以扩展，但内存、刷新率、显示方式和标定难度都会上升。</p>
+<p>实际工程还需要处理麦克风增益差异、几何尺寸误差、混响、多声源和环境噪声。VGA 热图表达的是候选位置匹配度，不能直接当成带置信区间的精确坐标。</p>
+<h2>结论</h2>
+<p>Audio-Triangulation 把 TDOA 声源定位做成了一个完整的嵌入式演示。三路麦克风提供相对时间差，互相关从波形里估计延迟，网格评分把延迟变成位置热图，VGA 让整个过程可以直接观察。</p>
+<p>它的核心是一组非常清楚的工程转化：绝对距离不可得，就用距离差；双曲线难求解，就用网格评分；实时算力有限，就把候选点延迟提前算好。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=audio-triangulation-tdoa');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>量产 Modbus 数据重组网关项目复盘 - CacheRivulet小记</title>
+  <meta name="description" content="量产 Modbus 网关：多型号仪表排成一张寄存器表，换型号不改 PLC 程序">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="RT-Thread">
+  <meta property="article:tag" content="Modbus">
+  <meta property="article:tag" content="寄存器映射">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:published_time" content="2026-06-30">
+  <meta property="og:title" content="量产 Modbus 数据重组网关项目复盘">
+  <meta property="og:description" content="量产 Modbus 网关：多型号仪表排成一张寄存器表，换型号不改 PLC 程序">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/n320a-modbus-gateway/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/n320a-modbus-gateway/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "量产 Modbus 数据重组网关项目复盘",
+  "description": "量产 Modbus 网关：多型号仪表排成一张寄存器表，换型号不改 PLC 程序",
+  "datePublished": "2026-06-30",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/n320a-modbus-gateway/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/n320a-modbus-gateway/"
+  },
+  "keywords": "嵌入式, STM32, RT-Thread, Modbus, 寄存器映射, 系统设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">量产 Modbus 数据重组网关项目复盘</h1>
+  <article class="article-body">
+<h1>量产 Modbus 数据重组网关项目复盘</h1>
+<p><strong>项目背景</strong>：本网关基于 STM32F103 + RT-Thread 实现。PLC 通过 RS-485 接多台 Modbus 仪表，同厂家不同型号的同一种业务数据（如当前温度）寄存器地址也各不相同。设备一多，PLC 侧要为每型号写一套地址映射，现场换一台设备就可能要改 PLC 程序。本网关把这些分散寄存器收敛成一张统一寄存器表，PLC 只按固定偏移读写，不关心底层接了什么型号，换型号不改 PLC 程序。</p>
+<p><strong>职责</strong>：独立设计并实现网关固件与寄存器映射架构。</p>
+<p><strong>核心技术</strong></p>
+<ul>
+<li><strong>业务语义连续表</strong>：PLC 要分多次通讯读不同型号零散寄存器、效率低<ul>
+<li>解决：按业务语义排连续地址分区，PLC 一次连续读拿齐同语义数据。</li>
+</ul>
+</li>
+<li><strong>虚拟地址解耦</strong>：设备型号差异让上位机强耦合从机，换型号要改程序<ul>
+<li>解决：映射表把虚拟地址翻译回&quot;通道+真实寄存器&quot;，差异封装在网关，新增型号只加配置。</li>
+</ul>
+</li>
+<li><strong>缓存解耦</strong>：RS-485 半双工慢，上位机直轮询被阻塞、实时性崩<ul>
+<li>解决：后台轮询刷缓存，PLC 读缓存零等待，总线往返不阻塞上位机。</li>
+</ul>
+</li>
+<li><strong>读写冲突隔离</strong>：轮询旧值冲掉刚写入的值，写操作悄悄失效<ul>
+<li>解决：位图拦截误写、保护待同步寄存器，写后回读真实值清标记。</li>
+</ul>
+</li>
+<li><strong>总线带宽调度</strong>：多设备抢总线，报警高优数据来不及回、零散读浪费带宽<ul>
+<li>解决：行动点数分优先级、相邻地址合并单包、单次 ≤124 寄存器守上限。</li>
+</ul>
+</li>
+<li><strong>配置掉电保护</strong>：配置掉电损坏=网关变砖，保存中途断电文件半截<ul>
+<li>解决：延迟保存 + A/B 双分区交叉修复 + 拨码兜底，任意时刻至少一份完整配置。</li>
+</ul>
+</li>
+<li><strong>RT-Thread RTOS 多任务架构</strong>：基于 RT-Thread 把采集/缓存刷新/上位机交互分任务并发，半双工等待不阻塞；消息队列/信号量同步数据。</li>
+</ul>
+<h2>同厂家多型号寄存器地址不一致，PLC 程序失控</h2>
+<p>同样是&quot;当前温度&quot;，A 型号可能在 0x2000，B 型号在 0x2004。PLC 每接一种新型号都要加一套地址映射逻辑，差异散落在 PLC 程序里，换设备即改程序、不可复用。</p>
+<p>解决方向是把差异收敛到网关：对下适配不同型号地址差异，对上输出统一寄存器表。PLC 读的是网关整理好的地址空间，不是物理设备的原始寄存器。</p>
+<h2>业务语义连续表：把零散寄存器排成可整块读的统一地址空间</h2>
+<p><img src="/posts/n320a-modbus-gateway/modbus-address-reorg.webp" alt="地址碎片整理成连续表">
+<em>把被打散的数据，按业务语义重新排成连续分区。</em></p>
+<h2>虚拟地址解耦：映射表把设备差异封装在网关内</h2>
+<p>虚拟地址如何落到真实设备？网关维护两张静态配置表：<strong>采集任务表</strong>描述每台下位机的物理寄存器起始地址、长度与读写权限，<strong>映射规则表</strong>描述这些物理寄存器投递到虚拟空间的哪个分区和通道偏移。</p>
+<p>上位机只访问统一虚拟地址，网关按表翻译回&quot;具体通道 + 真实寄存器&quot;，设备型号差异彻底封装在网关内——换型号只改配置、不动 PLC 程序。</p>
+<p><img src="/posts/n320a-modbus-gateway/modbus-virtual-mapping.webp" alt="虚拟地址映射异构设备">
+<em>用虚拟地址屏蔽设备差异，对上统一成一张寄存器表。</em></p>
+<h2>慢速半双工总线阻塞上位机：后台轮询缓存换零等待读取</h2>
+<p>若 PLC 每次读取都透传到 RS-485，系统很慢：多设备共享半双工总线，报文往返时延大。</p>
+<p>做法：后台按采集任务表持续轮询下位机刷进缓存，PLC 直接读缓存。</p>
+<p><img src="/posts/n320a-modbus-gateway/modbus-polling-cache.webp" alt="慢速总线变成快速读取">
+<em>后台轮询负责采集，缓存负责对上快速返回。</em></p>
+<p>为榨干总线性能，做三项核心处理：</p>
+<ol>
+<li><strong>优先级与行动点数调度</strong>：高优先级（温度、报警）和普通优先级分别建轮询任务；通过&quot;行动点数&quot;分配总线使用权，高优先级执行一定次数后把点数让给普通任务，实现带宽精细化分配。</li>
+<li><strong>相邻地址自动粘黏合并</strong>：轮询时状态机自动检测相邻且物理地址连续的规则，合并成一次批量读取；单次合并严格 ≤124 寄存器，大幅减少总线碎片化往返。</li>
+<li><strong>精准失效标记</strong>：通信失败时不保留旧值，改按出错任务块规则向缓存填对应异常状态值，让上位机准确知道哪块数据当前不可信。</li>
+</ol>
+<h2>写缓存被旧值冲掉：位图隔离读写冲突并写后回读校验</h2>
+<p>PLC 刚把新设定值写进网关，若后台轮询刚好读回下位机旧值，就会把缓存里的新值冲掉——读写路径在争抢同一份数据。</p>
+<p>设计引入位图机制分开两个概念：</p>
+<ul>
+<li><strong>读写权限拦截</strong>：初始化时按配置表标记所有可写区域，直接拦截对只读寄存器的误写。</li>
+<li><strong>待同步状态保护</strong>：刚被上位机写过但未同步到下位机的寄存器，位图置位标记；后台轮询拿回的旧值无法覆盖被标记的寄存器。</li>
+<li><strong>写后回读校验</strong>：网关向下位机推送写缓存时，写入成功立即发起回读，用真实值更新本地缓存并清除标记，确保数据一致性。</li>
+</ul>
+<h2>配置掉电损坏：延迟保存 + A/B 双分区 + 拨码兜底</h2>
+<p>配置保存最怕频繁写废 Flash，以及断电导致配置损坏：</p>
+<ol>
+<li><strong>延迟保存与软重启</strong>：配置变更后不立即落盘，经事件机制累积写操作；超时无新操作才触发落盘并执行软重启，避免运行时热切换参数的边界问题。</li>
+<li><strong>双分区交叉修复</strong>：Flash 分 A/B 两独立分区；读取时若 A 校验损坏，自动读 B 并尝试修复 A；写入时总是先擦写已知损坏分区，再擦写另一分区，确保任意时刻断电至少一份完整配置。</li>
+<li><strong>硬件拨码兜底</strong>：启动时优先读硬件拨码开关初始化基础从机地址和波特率，即使 Flash 配置彻底损坏，设备仍能被上位机访问并重新配置。</li>
+</ol>
+<h2>设计取舍与可复用边界</h2>
+<ol>
+<li><strong>静态配置</strong>：映射规则编译时静态定义，不支持动态下发；牺牲远程加设备灵活性，换确定性与防误操作。</li>
+<li><strong>内存换速度</strong>：全量数据缓存到 RAM，占用内存换 PLC 侧零等待。</li>
+<li><strong>复杂度集中</strong>：适配逻辑集中在网关单点，PLC 程序标准化；现场设备远多于网关，更划算。</li>
+<li><strong>设备适配成本</strong>：新增型号只需加一套物理地址与映射偏移描述配置，架构不动；成本从&quot;改 PLC 程序&quot;降为&quot;加一行配置&quot;。</li>
+</ol>
+<p>现场效果：PLC 面对固定格式寄存器表；下位机换型号不改 PLC 程序；调好的 PLC 程序可复用到不同现场。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-30 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=n320a-modbus-gateway');
+  }
+  </script>
+</body>
+</html>

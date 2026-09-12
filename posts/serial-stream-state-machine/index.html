@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>错位、丢尾、永久失步：三态状态机把串口字节流拼成完整帧 - CacheRivulet小记</title>
+  <meta name="description" content="低功耗分析仪上位机卡死溯源：64 字节整块读的缺陷与流式状态机替代方案">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="嵌入式调试">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-08-10">
+  <meta property="og:title" content="错位、丢尾、永久失步：三态状态机把串口字节流拼成完整帧">
+  <meta property="og:description" content="低功耗分析仪上位机卡死溯源：64 字节整块读的缺陷与流式状态机替代方案">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/serial-stream-state-machine/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/serial-stream-state-machine/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "错位、丢尾、永久失步：三态状态机把串口字节流拼成完整帧",
+  "description": "低功耗分析仪上位机卡死溯源：64 字节整块读的缺陷与流式状态机替代方案",
+  "datePublished": "2026-08-10",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/serial-stream-state-machine/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/serial-stream-state-machine/"
+  },
+  "keywords": "嵌入式, 通信协议, 嵌入式调试, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">错位、丢尾、永久失步：三态状态机把串口字节流拼成完整帧</h1>
+  <article class="article-body">
+<h1>错位、丢尾、永久失步：三态状态机把串口字节流拼成完整帧</h1>
+<p>EMK850+ 是一台低功耗分析仪：经 USB 虚拟串口（115200）连电脑，持续回传电流/电压采样流，nA 到 mA 自动换挡。低功耗测试的常态是让被测设备长时间挂机，看完整的功耗曲线，采样数据只能经配套上位机读取。</p>
+<p>但这个上位机撑不住挂机：连续运行接近 1 小时就卡死。我反编译了它的接收代码定位缺陷，再重写了一个流式解析器替换。</p>
+<ul>
+<li><strong>问题</strong>：上位机按 64 字节整块读取，流中间丢一个字节，之后每帧永久错位；另一处阻塞读没有超时，USB 断流时线程挂死。</li>
+<li><strong>我的工作</strong>：反编译厂商上位机（.NET 4.7.2，ilspycmd）取证；搭两级线缆衰减链路复现故障；用 Python 重写解析器，三态状态机逐字节同步。</li>
+<li><strong>结果</strong>：校验失败每次只丢一个字节，自动回到帧头扫描；实测约 400 帧/秒持续采样，无失步、无挂死。</li>
+</ul>
+<h2>串口字节流没有帧边界</h2>
+<p>串口物理层按字节连续传输，协议层把若干字节聚成帧。帧边界只能由帧头特征和长度字段给出：本协议帧头是 <code>0x33</code>，第 3 字节 <code>len</code> 声明载荷长度。接收端拿到的是不断流出的字节序列，线上没有&quot;这条消息结束&quot;的信号。</p>
+<p>按固定长度切块因此是一种强假设：缓冲区起点恰好是帧起点。这个假设不由协议保证。接收端读得快、事件在帧边界触发，假设成立；读慢一拍、事件在帧中间触发，假设失效。</p>
+<h2>反编译取证：上位机接收的两类缺陷</h2>
+<p>反编译 EMK850+ 上位机（.NET 4.7.2，ilspycmd），主接收函数 <code>MainWindow.SysReceiveData</code> 按 64 字节整块读取：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">while</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">serialPort</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">BytesToRead</span><span style="color:#D4D4D4"> >= </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">    serialPort</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">Read</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">array</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#4EC9B0">    Protocol</span><span style="color:#9CDCFE"> prot</span><span style="color:#D4D4D4"> = (</span><span style="color:#4EC9B0">Protocol</span><span style="color:#D4D4D4">)</span><span style="color:#9CDCFE">Utils</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">BytesToStruct</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">array</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">typeof</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">Protocol</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#DCDCAA">    HandleProtocol</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">prot</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">array</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">serialPort</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">BytesToRead</span><span style="color:#D4D4D4"> > </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4"> &#x26;&#x26; </span><span style="color:#9CDCFE">serialPort</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">BytesToRead</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">    serialPort</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">Read</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">array</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">serialPort</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">BytesToRead</span><span style="color:#D4D4D4">);   </span><span style="color:#6A9955">// 尾包直接丢弃</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>主路径上每次 <code>Read(array, 0, 64)</code> 都能凑满 64 字节，读取本身从不失败。真正的脆弱点是：这 64 字节未必等于完整一帧。字节流中间一旦出错，读到的 64 字节就变成跨帧的错位窗口，内容全是错的。</p>
+<p>接收逻辑的缺陷分两类。第一类是错位：整块读取有三个具体缺陷点。</p>
+<ol>
+<li>无帧头扫描、无重新同步。主接收路径拿到 64 字节直接按 <code>cmd</code> 分发，不校验 <code>0x33</code>；采样数据分支（<code>cmd</code> 33/132）同样不看帧头。个别配置响应分支里虽有 <code>buffer[0]==51</code> 的判断，失败仅静默丢帧，不构成重新同步。对齐一错，后面每帧都错。</li>
+<li>尾包无条件丢弃。每个接收事件结束时缓冲被清空，不足 64 字节的残段直接丢掉（源码日志原文就是&quot;抛掉 N 字节数据&quot;），既丢数据又加重失步。</li>
+<li>结构体盲解。<code>Utils.BytesToStruct</code> 直接 <code>Marshal.Copy</code> 64 字节；错位后 <code>cmd</code> 是垃圾，按它分发即静默误判。</li>
+</ol>
+<p>第二类是挂死：无超时的阻塞读。<code>calWindow</code> 直接 <code>Read(array, 0, 64)</code> 不检查 <code>BytesToRead</code>，且全代码未设 <code>ReadTimeout</code>（.NET 默认无限超时）。USB 流中断、凑不满 64 字节时，该事件线程永久挂起。错位导致数据损坏，阻塞导致挂死，两类缺陷独立。</p>
+<h2>一次错位引发的永久失步</h2>
+<p>每次 <code>Read(array, 0, 64)</code> 都能凑满 64 字节。而且正常情况下对齐是白捡的：设备一帧正好 64 字节，经 USB 送达时一帧一个包；USB 自带校验和重传，坏包不会交付半个，丢也是整包丢，而整包丢失不破坏对齐，只是数据少一帧。但这只是观察到的行为，不是契约：虚拟串口对应用层就是一根字节流管道，操作系统和驱动从不承诺按包交付，经过驱动缓冲、集线器、隔离器之后，<code>BytesToRead</code> 出现任何字节数都合法，换个电脑、换个驱动版本行为就可能变。把解析正确性押在传输层的实现细节上，本身就是隐患。真正会坏的是字节流脱离 64 网格的情况：设备复位瞬态往流里吐杂讯、固件发送被截断，字节数不再是 64 的整数倍，流的对齐从此永久偏移。</p>
+<p><img src="/posts/serial-stream-state-machine/desync-timeline.svg" alt="错位时间线"></p>
+<p>读窗口固定是 64 字节，帧变短也不会让窗口调整位置。字节丢在某个帧的中间时，这一帧变短，它后面的所有帧整体前移。上位机仍按原来的 64 字节位置读，于是每个读窗口都跨在两帧之间：<code>0x33</code> 落在错误位置，<code>cmd</code> 读错，整帧报废。块读没有任何手段把偏移找回来，错位持续到重连。</p>
+<p>错位一旦发生，代码里没有任何路径把同步找回来：不扫描帧头，不清空缓冲从下一字节继续。</p>
+<p>实测复现：我搭的测试链路是 电脑 → USB 延长线 → USB 隔离线 → 分析仪，两级线缆叠加让 USB 信号衰减、链路更容易出错。设备经该链路连续挂机，官方上位机接近 1 小时卡死。该设备是 STM32 USB CDC 虚拟串口，对连续流没有硬件流控，链路劣化让设备反复复位：复位杂讯让字节流脱离 64 网格造成错位，断流撞上无超时的阻塞读造成挂起，错位无法自愈，挂起不可恢复，最终都表现为卡死。</p>
+<p>要公允地说一句：正常链路、正常固件下，这套块读不会出错，它的对齐是传输层免费提供的。缺陷不在&quot;会出错&quot;，在&quot;出错时零防御、零感知&quot;：概率低，但现场挂机总会撞上，撞上就是永久失步，软件自己还毫无察觉。</p>
+<h2>三态状态机：等帧头、收头部、收载荷</h2>
+<p>流式解析的核心：任何时刻只维护少量状态，逐字节推进，校验失败只丢弃当前这一个字节，然后继续。</p>
+<p><img src="/posts/serial-stream-state-machine/stream-state-machine.svg" alt="三态状态机"></p>
+<p>三个状态（括号里是代码里的状态名）：</p>
+<ul>
+<li>等帧头（<code>WAIT_MAGIC</code>）：逐字节扫描，遇到 <code>0x33</code> 进入收头部。其他字节直接丢弃。</li>
+<li>收头部（<code>HEADER</code>）：收 <code>cmd / len / seq</code> 三字节，校验 <code>len &lt;= 60</code>。通过进入收载荷；失败丢弃当前这一字节，回等帧头继续。</li>
+<li>收载荷（<code>PAYLOAD</code>）：收满整帧 64 字节（<code>len</code> 之外自动补零），出帧并回等帧头。帧级不设累加和校验，校验只做在收头部的 <code>len &lt;= 60</code>。</li>
+</ul>
+<p>三条纪律：</p>
+<ol>
+<li>每次只丢一个字节，绝不整帧丢弃。</li>
+<li>校验失败不清空缓冲，从下一字节继续扫描。</li>
+<li>收完整帧回到等帧头，处理流中下一帧。</li>
+</ol>
+<p>状态机解决错位，超时解决挂起。串口读必须带超时：项目实现用 <code>serial.Serial(port, 115200, timeout=0.2)</code>，读不到就超时返回，USB 断流时只是没有数据，不会永久阻塞。</p>
+<p>项目实现见 <code>tools/emk850_proto.py</code> 两段式解析：<code>FrameDecoder</code> 逐字节状态机出 64 字节帧，<code>ProtocolParser</code> 按 <code>cmd</code> 分发。实测高速数据流约 400 帧/秒持续采样，无失步。</p>
+<h2>流式解析的适用边界</h2>
+<p>整块读取在某些条件够用：设备固定节奏发满定长帧、接收端跟得上、错位后重连成本可接受。这类场景块读代码简单，是务实选择。</p>
+<p>需要流式解析的场景：复位瞬态吐出杂讯、半帧、多帧交错，或数据速率高、接收端可能瞬时滞后。这类场景任何一次错位都会让块读永久失步。</p>
+<p>本协议判断完整帧的要素是帧头字节 + 长度字段；累加和只用于配置大块数据的重组，帧级不校验。换其他协议，把等帧头状态的匹配字节换成对应帧头即可，三态结构不变。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-10 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=serial-stream-state-machine');
+  }
+  </script>
+</body>
+</html>

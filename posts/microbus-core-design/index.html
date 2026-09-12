@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>microbus 核心实现：分发快照让回调再入队也不失控 - CacheRivulet小记</title>
+  <meta name="description" content="microbus 实现思想：入口快照保证单次分发有界">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="Cortex-M">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="microbus 核心实现：分发快照让回调再入队也不失控">
+  <meta property="og:description" content="microbus 实现思想：入口快照保证单次分发有界">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/microbus-core-design/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/microbus-core-design/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "microbus 核心实现：分发快照让回调再入队也不失控",
+  "description": "microbus 实现思想：入口快照保证单次分发有界",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/microbus-core-design/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/microbus-core-design/"
+  },
+  "keywords": "嵌入式, MCU, C语言, Cortex-M, 系统设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">microbus 核心实现：分发快照让回调再入队也不失控</h1>
+  <article class="article-body">
+<h1>microbus 核心实现：分发快照让回调再入队也不失控</h1>
+<blockquote>
+<p><strong>声明：</strong> microbus 是一个开源项目，作者为 <a href="https://github.com/Vanderhell/microbus">Peter Vanderhell</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解嵌入式事件总线在裸机上的确定性实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/microbus" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/microbus</a></p>
+<p>这篇文章讲 microbus 源码里的三个实现思想：状态归调用者、分发确定性优先、队列用快照保证有界。不重复入门用法，直接看机制。</p>
+<h2>核心思想</h2>
+<p>microbus 的全部设计围绕一个目标：在单上下文裸机上提供确定性的发布订阅。三个落点：</p>
+<ul>
+<li>状态归调用者：<code>mbus_t</code> 由调用者分配，库内没有全局变量，可多实例、可放栈上</li>
+<li>分发确定性：遍历订阅表按固定顺序，分发期间锁定订阅表</li>
+<li>队列有界性：dispatch 入口快照队列计数，单次分发绝不失控</li>
+</ul>
+<h2>订阅表与投递期锁定</h2>
+<p>订阅表就是 <code>mbus_t</code> 里的 <code>subs[16]</code> 数组，每个槽是 <code>{topic, handler, ctx, active}</code>。分发时 <code>mbus_deliver</code> 从下标 0 升序扫到 <code>MBUS_MAX_SUBSCRIBERS</code>，话题匹配或命中 <code>MBUS_TOPIC_ANY</code> 就调用回调。</p>
+<p>确定性从哪来：<code>mbus_deliver</code> 进出时维护 <code>delivery_depth</code> 计数。深度大于 0 期间，<code>subscribe</code>、<code>unsubscribe</code>、<code>unsubscribe_topic</code> 直接返回 <code>MBUS_ERR_BUSY</code>。效果是分发期间订阅表不可变，遍历顺序和结果都可预测。代价是回调里不能改订阅，只能等分发结束再改。</p>
+<p><img src="/posts/microbus-core-design/subs-lock.svg" alt="订阅表与投递期锁定"></p>
+<h2>环形队列的单调计数</h2>
+<p>队列是 <code>queue[8]</code> 加 <code>q_head</code>、<code>q_tail</code>，两个 32 位计数器只增不减，用 <code>(head &amp; (DEPTH-1))</code> 取模定位槽位，所以深度必须是 2 的幂。满判定是 <code>head - tail &gt;= DEPTH</code>，空判定是 <code>head == tail</code>。</p>
+<p>单调计数的好处：不需要单独的 count 字段；32 位计数要入队 2^32 次才回绕；单生产者单消费者下 head 和 tail 各自只被一方写，配合临界区宏就能构成 ISR 与主循环的通道。</p>
+<h2>dispatch 入口快照</h2>
+<p>队列存在的意义是解耦产生事件和处理事件。<code>mbus_dispatch</code> 的实现思想是快照：</p>
+<ol>
+<li>入口取 <code>eligible = 当前队列计数</code></li>
+<li>循环最多处理 eligible 个：pop 到局部事件，分发，<code>eligible--</code></li>
+<li>回调里再入队的事件本回合不处理，留到下次 dispatch</li>
+</ol>
+<p>没有快照的版本，回调再入队会让循环追着队尾跑，可能无限执行。快照把单次 dispatch 的执行时间变成有界：最多 eligible 次回调，回调里入队再多也只增长 head。</p>
+<p><img src="/posts/microbus-core-design/dispatch-snapshot.svg" alt="dispatch 入口快照"></p>
+<h2>ABI 校验与统计计数</h2>
+<ul>
+<li><code>mbus_impl_init</code> 校验 <code>bus_size == sizeof(*bus)</code>：库和消费者配置不一致时编译出不同大小的结构，运行期直接拒绝，避免踩坏调用者内存</li>
+<li><code>publish_count</code>、<code>deliver_count</code>、<code>drop_count</code> 三个计数器，drop 记录队列满丢事件，丢事件率可观测</li>
+<li><code>MBUS_ISR_SAFE_QUEUE</code> 开启时 push、pop、计数都用临界区宏包裹，构成 SPSC 模式</li>
+</ul>
+<h2>设计取舍与边界</h2>
+<ul>
+<li>拷贝换安全：payload 拷进事件对象，调用方缓冲可复用，代价是 40 B 事件对象加一次 memcpy</li>
+<li>确定性换灵活：分发期锁定订阅表，回调内改订阅被拒绝</li>
+<li>有界换吞吐：单次 dispatch 只处理入口快照，回调密集入队时事件延迟到下次</li>
+<li>边界：默认单上下文，多线程访问要外部加锁；话题空间 uint8 只有 256 个</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=microbus-core-design');
+  }
+  </script>
+</body>
+</html>

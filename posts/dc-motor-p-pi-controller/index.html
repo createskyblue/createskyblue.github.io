@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>在 PY32 上实现单向直流电机的级联 P-PI 定位控制 - CacheRivulet小记</title>
+  <meta name="description" content="单向直流电机用位置环、速度环与减速约束控制过冲，检测堵转后增加PWM补偿">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="电机控制">
+  <meta property="article:tag" content="控制论">
+  <meta property="article:tag" content="霍尔信号">
+  <meta property="article:tag" content="AI辅助开发">
+  <meta property="article:published_time" content="2026-07-14">
+  <meta property="og:title" content="在 PY32 上实现单向直流电机的级联 P-PI 定位控制">
+  <meta property="og:description" content="单向直流电机用位置环、速度环与减速约束控制过冲，检测堵转后增加PWM补偿">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/dc-motor-p-pi-controller/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/dc-motor-p-pi-controller/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "在 PY32 上实现单向直流电机的级联 P-PI 定位控制",
+  "description": "单向直流电机用位置环、速度环与减速约束控制过冲，检测堵转后增加PWM补偿",
+  "datePublished": "2026-07-14",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/dc-motor-p-pi-controller/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/dc-motor-p-pi-controller/"
+  },
+  "keywords": "嵌入式, MCU, 电机控制, 控制论, 霍尔信号, AI辅助开发"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">在 PY32 上实现单向直流电机的级联 P-PI 定位控制</h1>
+  <article class="article-body">
+<h1>在 PY32 上实现单向直流电机的级联 P-PI 定位控制</h1>
+<p>单向直流电机只支持正向驱动，发生过冲后无法通过反转校正。控制器通过霍尔脉冲计算位置；提高运行速度会同步增加断开 PWM 后的滑行距离，因此控制目标需要同时覆盖定位误差、停车距离与堵转恢复。</p>
+<p>本文记录一套在 PY32 上实现的级联 P-PI 控制：位置 P 环生成目标速度，速度 PI 环调节 PWM，减速约束根据剩余距离限制速度，堵转检测提供受限的 PWM 增量补偿。</p>
+<h2>位置环与速度环的级联控制</h2>
+<p>直接用位置误差调节 PWM，难以同时处理机械惯性和负载变化。控制结构在位置与 PWM 之间引入目标速度，将定位和调速分成两个职责明确的环节。</p>
+<p>“级联”表示前一级控制器为后一级提供目标。各环节的职责如下：</p>
+<table>
+<thead>
+<tr>
+<th>环节</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>位置 P 环</td>
+<td>根据剩余距离生成目标速度，接近目标时主动降速</td>
+</tr>
+<tr>
+<td>速度 P 环节</td>
+<td>根据当前速度偏差快速修正 PWM</td>
+</tr>
+<tr>
+<td>速度 I 环节</td>
+<td>累计持续存在的偏差，补偿负载变化</td>
+</tr>
+<tr>
+<td>速度前馈</td>
+<td>根据目标速度预先给出基础 PWM</td>
+</tr>
+</tbody></table>
+<p>位置环可以简化为：</p>
+<p><code>目标速度 = 位置误差 × 位置系数</code></p>
+<p>位置误差越大，目标速度越高；巡航上限用于限制最高速度。速度环可以写成：</p>
+<p><code>PWM = 前馈输出 + 当前速度偏差修正 + 持续偏差修正</code></p>
+<p>前馈提供目标速度对应的基础输出，P 环节负责即时纠偏，I 环节负责补偿长期偏差。该结构减少了积分从零开始建立输出的时间，也让位置控制和速度控制保持清晰边界。</p>
+<h2>基于停车距离的减速约束</h2>
+<p>电机断开驱动后仍会继续滑行。控制器需要根据剩余距离限制目标速度，避免减速开始过晚。该约束来自经典的匀减速运动关系：</p>
+<p><code>末速度² = 初速度² - 2 × 减速度 × 行驶距离</code></p>
+<p>将目标位置的末速度设为零，并把行驶距离换成剩余距离，可得到：</p>
+<p><code>初速度 = √(2 × 减速度 × 剩余距离)</code></p>
+<p>控制器把这个初速度作为当前位置允许的最高速度，再加入安全系数，让减速提前开始：</p>
+<p><code>允许速度 = √(2 × 减速度 × 剩余距离 ÷ 安全系数)</code></p>
+<p>该关系可以直接理解为：</p>
+<ul>
+<li>剩余距离越短，允许速度越低。</li>
+<li>速度增加一倍，停车通常需要约四倍距离。</li>
+</ul>
+<p>这段推导假设电机的减速度大致稳定。实际减速度会受供电、负载和机械摩擦影响，因此减速度需要通过实测取得，安全系数用于覆盖测量延迟和工况变化。进入减速阶段后，控制器还会加快 PI 积分泄放，避免历史补偿延迟 PWM 下降。</p>
+<h2>堵转检测与 PWM 增量补偿</h2>
+<p>控制器周期性检查位置脉冲。当 PWM 已经输出、电机速度接近零、位置没有变化时，控制器逐步增加 PWM 补偿，尝试克服起动阻力或短时卡滞。</p>
+<p>该机制用于有限度地恢复运动。完整的堵转保护还需要超时停机、故障记录以及温度或电流保护。</p>
+<h2>样机测试结果与实现边界</h2>
+<p>现有样机测试记录显示，提高 PWM 上限后，运行速度约为原来的 2.5 倍；多组远近目标测试中的最大过冲为 2 个位置脉冲。这些数据说明当前样机在已测范围内保持了较小过冲，不代表所有负载和工况都能得到相同结果。</p>
+<p>代码审查还发现两处需要修正：</p>
+<ul>
+<li>停车速度公式需要计算平方根。当前快速近似只迭代两次，输入较大时结果会偏高数倍，可能导致减速开始过晚。应改用 <code>sqrtf</code> 或经过误差验证的平方根算法，再重新测试。</li>
+<li>程序经过零点做速度校准时，只读取一个时刻的速度。单次读数可能受霍尔脉冲时机影响，建议在稳定运行区间取多次平均值。</li>
+</ul>
+<h2>AI 自动化测试与参数调优</h2>
+<p>控制参数需要通过真实电机反复验证。常规流程包括修改代码、重新编译、烧录、运行、采集数据和分析结果。为减少重复人工操作，我将 AI 接入可操作的硬件环境，向它提供电源控制、烧录器、串口和断点调试能力。</p>
+<p>一轮自动测试包含以下步骤：</p>
+<p><code>修改程序 → 编译并烧录 → 上电运行 → 串口触发测试并读取日志 → 必要时断点调试 → 对比结果并进入下一轮</code></p>
+<p>每轮测试后，AI 根据速度、停止位置、过冲量和堵转表现确定下一次修改。修改内容包括控制参数和影响结果的程序逻辑。经过多轮迭代，最终得到当前使用的参数组合。</p>
+<p>该闭环得到的是当前硬件和测试范围内的结果。电源、负载或机械结构发生变化后，仍需重新验证。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-14 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=dc-motor-p-pi-controller');
+  }
+  </script>
+</body>
+</html>

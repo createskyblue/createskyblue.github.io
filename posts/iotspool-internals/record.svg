@@ -1,0 +1,30 @@
+<svg viewBox="0 0 720 230" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;background:#f8fafc;border-radius:8px;">
+  <text x="20" y="28" fill="#334155" font-size="13" font-weight="bold">入队 ENQ：收下这条消息</text>
+  <rect x="20" y="40" width="70" height="48" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="55" y="68" text-anchor="middle" fill="#1e293b" font-size="13">起点</text>
+  <rect x="90" y="40" width="90" height="48" rx="4" fill="#dbeafe" stroke="#60a5fa"/>
+  <text x="135" y="62" text-anchor="middle" fill="#1e293b" font-size="13">编号</text>
+  <text x="135" y="78" text-anchor="middle" fill="#475569" font-size="11">#3</text>
+  <rect x="180" y="40" width="250" height="48" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="305" y="68" text-anchor="middle" fill="#1e293b" font-size="13">主题 + 正文</text>
+  <rect x="430" y="40" width="80" height="48" rx="4" fill="#dcfce7" stroke="#22c55e"/>
+  <text x="470" y="68" text-anchor="middle" fill="#1e293b" font-size="13">校验</text>
+
+  <text x="20" y="128" fill="#334155" font-size="13" font-weight="bold">确认 ACK：已经发出去了</text>
+  <rect x="20" y="140" width="70" height="48" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="55" y="168" text-anchor="middle" fill="#1e293b" font-size="13">起点</text>
+  <rect x="90" y="140" width="90" height="48" rx="4" fill="#dbeafe" stroke="#60a5fa"/>
+  <text x="135" y="162" text-anchor="middle" fill="#1e293b" font-size="13">编号</text>
+  <text x="135" y="178" text-anchor="middle" fill="#475569" font-size="11">#3</text>
+  <rect x="180" y="140" width="80" height="48" rx="4" fill="#dcfce7" stroke="#22c55e"/>
+  <text x="220" y="168" text-anchor="middle" fill="#1e293b" font-size="13">校验</text>
+
+  <line x1="135" y1="88" x2="135" y2="140" stroke="#60a5fa" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="148" y="118" fill="#2563eb" font-size="12">同一个编号串起来，不回头改原来那条</text>
+  <text x="20" y="214" fill="#64748b" font-size="12">校验盖住整条记录。半截或校验失败的尾巴，恢复时丢掉。</text>
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#60a5fa"/>
+    </marker>
+  </defs>
+</svg>

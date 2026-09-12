@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>在 PY32F002A 上实测 TinyFrame 的 Flash 和 RAM 静态消耗 - CacheRivulet小记</title>
+  <meta name="description" content="TinyFrame 在 PY32F002A 上编译的 Flash 和 RAM 增量与可调开关">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="TinyFrame">
+  <meta property="article:tag" content="PY32F002A">
+  <meta property="article:tag" content="Cortex-M">
+  <meta property="article:published_time" content="2026-07-08">
+  <meta property="og:title" content="在 PY32F002A 上实测 TinyFrame 的 Flash 和 RAM 静态消耗">
+  <meta property="og:description" content="TinyFrame 在 PY32F002A 上编译的 Flash 和 RAM 增量与可调开关">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/tinyframe-footprint-py32f002a/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/tinyframe-footprint-py32f002a/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "在 PY32F002A 上实测 TinyFrame 的 Flash 和 RAM 静态消耗",
+  "description": "TinyFrame 在 PY32F002A 上编译的 Flash 和 RAM 增量与可调开关",
+  "datePublished": "2026-07-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/tinyframe-footprint-py32f002a/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/tinyframe-footprint-py32f002a/"
+  },
+  "keywords": "嵌入式, TinyFrame, PY32F002A, Cortex-M"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">在 PY32F002A 上实测 TinyFrame 的 Flash 和 RAM 静态消耗</h1>
+  <article class="article-body">
+<h1>在 PY32F002A 上实测 TinyFrame 的 Flash 和 RAM 静态消耗</h1>
+<p>选一个通信库之前，通常想知道它到底占多少 Flash 和 RAM。文档里写的&quot;轻量级&quot;不解决实际问题——3KB RAM 的芯片上能不能跑，CRC16 查找表有多大，缓冲区参数调到多少合适，这些需要实际编译一次才知道。</p>
+<p>这次用 IOsetting/py32f0-template 模板，把 TinyFrame 加到 PY32F002A 工程里，用 ARM GCC 编译，测出静态增量。Demo 实现了三个 UART 查询-响应指令：PING、STATUS 和 ECHO。</p>
+<h2>测试方法</h2>
+<p>在空白模板上先编译一次作为基线，再加入 TinyFrame 编译第二次，差值就是库本身的静态开销。</p>
+<p>环境：</p>
+<ul>
+<li>模板：<a href="https://github.com/IOsetting/py32f0-template">IOsetting/py32f0-template</a></li>
+<li>芯片：PY32F002A（Cortex-M0+, 20KB Flash, 3KB RAM）</li>
+<li>编译器：<code>arm-none-eabi-gcc 13.2.1</code>，<code>-Os -ffunction-sections -fdata-sections -Wl,--gc-sections</code></li>
+<li>HAL 库：PY32F0xx HAL Driver（UART + GPIO + printf）</li>
+<li>TinyFrame：<a href="https://github.com/MightyPork/TinyFrame">MightyPork/TinyFrame</a></li>
+</ul>
+<p>基线工程只做 LED 闪烁 + UART printf。加入 TinyFrame 后，Demo 在 UART 上接收 TinyFrame 帧，按 TYPE 字段分发到三个监听器并返回响应。两次编译除了 TinyFrame 相关代码外，HAL 和 BSP 部分完全一致。</p>
+<h2>TinyFrame 配置</h2>
+<p>这份配置是针对 3KB RAM 裁剪过的，也是本次测量的实际参数：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>TF_MAX_PAYLOAD_RX</code></td>
+<td>128</td>
+<td>最大接收 payload，也是最大的单块 RAM 消耗</td>
+</tr>
+<tr>
+<td><code>TF_SENDBUF_LEN</code></td>
+<td>64</td>
+<td>发送缓冲区</td>
+</tr>
+<tr>
+<td><code>TF_MAX_TYPE_LST</code></td>
+<td>5</td>
+<td>Type 监听器槽位数</td>
+</tr>
+<tr>
+<td><code>TF_MAX_ID_LST</code></td>
+<td>3</td>
+<td>ID 监听器槽位数</td>
+</tr>
+<tr>
+<td><code>TF_MAX_GEN_LST</code></td>
+<td>1</td>
+<td>通用监听器槽位数</td>
+</tr>
+<tr>
+<td><code>TF_ID_BYTES</code> / <code>TF_TYPE_BYTES</code></td>
+<td>1</td>
+<td>ID 和类型字段宽度</td>
+</tr>
+<tr>
+<td><code>TF_LEN_BYTES</code></td>
+<td>2</td>
+<td>长度字段宽度</td>
+</tr>
+<tr>
+<td><code>TF_CKSUM_TYPE</code></td>
+<td><code>TF_CKSUM_CRC16</code></td>
+<td>校验类型</td>
+</tr>
+<tr>
+<td><code>TF_USE_SOF_BYTE</code></td>
+<td>1</td>
+<td>启用帧首字节</td>
+</tr>
+<tr>
+<td><code>TF_USE_MUTEX</code></td>
+<td>0</td>
+<td>单线程，不加锁</td>
+</tr>
+</tbody></table>
+<p>Demo 注册了三个 Type 监听器和一个 Generic 监听器，初始化时调用 <code>TF_InitStatic()</code> 静态分配。UART 接收字节通过 <code>TF_Accept()</code> 喂入解析器，<code>TF_WriteImpl()</code> 用 <code>HAL_UART_Transmit()</code> 阻塞发送。</p>
+<h2>测量结果</h2>
+<p>两次编译的 <code>arm-none-eabi-size</code> 对比：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Flash (text+data)</th>
+<th>RAM (data+bss)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>基线（HAL + UART + printf）</td>
+<td>9,988 B</td>
+<td>1,496 B</td>
+</tr>
+<tr>
+<td>加入 TinyFrame</td>
+<td>12,836 B</td>
+<td>1,856 B</td>
+</tr>
+<tr>
+<td><strong>TinyFrame 净增量</strong></td>
+<td><strong>+2,848 B</strong></td>
+<td><strong>+360 B</strong></td>
+</tr>
+</tbody></table>
+<p>Flash 多出约 2.8KB，RAM 多出 360B。对于 20KB/3KB 的 PY32F002A，加上 HAL 基线后总共用掉 63% Flash 和 60% RAM，还有空间给业务逻辑。</p>
+<h2>增量拆解</h2>
+<p>从 linker map 里把 TinyFrame 相关的符号挑出来：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>大小</th>
+<th>存储</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>tf</code> 实例（含 128B RX buf + 64B TX buf + 监听器槽位）</td>
+<td>352 B</td>
+<td>RAM (.bss)</td>
+</tr>
+<tr>
+<td>CRC16 查找表 <code>crc16_table</code></td>
+<td>512 B</td>
+<td>Flash (.rodata)</td>
+</tr>
+<tr>
+<td><code>TF_HandleReceivedMessage</code> 解析核心</td>
+<td>336 B</td>
+<td>Flash (.text)</td>
+</tr>
+<tr>
+<td>其余 TF 函数（Init, Send, Query, Listener 管理, Tick...）</td>
+<td>~1,680 B</td>
+<td>Flash (.text)</td>
+</tr>
+</tbody></table>
+<p>最大的单块 Flash 开销是 CRC16 的 512 字节查找表——占 TinyFrame 增量的 18%。RAM 开销的大头是 <code>tf</code> 实例本身，其中 RX 缓冲区和 TX 缓冲区合计 192 字节。</p>
+<h2>可调开关</h2>
+<p>如果 Flash 或 RAM 更紧张，可以从这几个方向压：</p>
+<p><strong>校验类型。</strong> CRC16 → CRC8 省掉 500B Flash（512B 查找表换成 256B），换 XOR 或 None 再省约 20B。代价是检错能力下降，在 UART 等本身有一定误码率的链路上不建议关掉。</p>
+<p><strong>缓冲区大小。</strong> <code>TF_MAX_PAYLOAD_RX</code> 从 128 降到 64，直接省 64B RAM。<code>TF_SENDBUF_LEN</code> 从 64 降到 32，再省 32B。这两个参数要和实际业务帧大小匹配——如果最大指令 payload 只有 20 字节，128 的缓冲区就是浪费。</p>
+<p><strong>监听器槽位。</strong> <code>TF_MAX_TYPE_LST</code>、<code>TF_MAX_ID_LST</code>、<code>TF_MAX_GEN_LST</code> 每个槽位在 <code>tf</code> 实例中占十几个字节（指针 + 标志位）。按实际需要的最大并发监听数设置，多余的槽位是纯浪费。</p>
+<p><strong>字段宽度。</strong> <code>TF_LEN_BYTES</code> 从 2 降到 1（如果 payload 不超过 255 字节），省少量 Flash 和几个字节 RAM。<code>TF_ID_BYTES</code> 同理。</p>
+<p><strong>去掉 SOF。</strong> <code>TF_USE_SOF_BYTE</code> 设为 0，省掉帧首字节检查和相关的几行代码。在本身有帧边界机制的链路上（如 BLE Notify 每次一个完整包），SOF 可以省略。</p>
+<p>压缩到极限后的估算（CRC8 + RX 64 + TX 32 + 最简监听器）：</p>
+<table>
+<thead>
+<tr>
+<th>配置</th>
+<th>Flash 增量</th>
+<th>RAM 增量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本文配置（CRC16, RX128, TX64）</td>
+<td>~2,848 B</td>
+<td>360 B</td>
+</tr>
+<tr>
+<td>极限压榨（CRC8, RX64, TX32）</td>
+<td>~2,100 B</td>
+<td>264 B</td>
+</tr>
+</tbody></table>
+<h2>结论</h2>
+<p>TinyFrame 在 Cortex-M0+ 上的静态增量约 <strong>2.8KB Flash + 360B RAM</strong>（CRC16 配置），压到极限约 <strong>2.1KB Flash + 264B RAM</strong>（CRC8 配置）。对于 20KB/3KB 的 PY32F002A 这种级别的芯片，加上 HAL 后还剩约 7KB Flash 和 1.1KB RAM 给业务层，完全够用。</p>
+<p>这个测量方法的要点是：在真实 MCU 工程里编译，拿基线差分，不看 <code>.o</code> 文件大小或文档里的估算。选了芯片和工具链之后跑一次，数字比任何&quot;轻量级&quot;的描述都可靠。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=tinyframe-footprint-py32f002a');
+  }
+  </script>
+</body>
+</html>

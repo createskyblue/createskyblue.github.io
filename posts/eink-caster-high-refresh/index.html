@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>墨水屏高刷的秘密：Caster 给每个像素配独立计时器 - CacheRivulet小记</title>
+  <meta name="description" content="如何用 FPGA 实现墨水屏高刷">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:published_time" content="2026-08-06">
+  <meta property="og:title" content="墨水屏高刷的秘密：Caster 给每个像素配独立计时器">
+  <meta property="og:description" content="如何用 FPGA 实现墨水屏高刷">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/eink-caster-high-refresh/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/eink-caster-high-refresh/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "墨水屏高刷的秘密：Caster 给每个像素配独立计时器",
+  "description": "如何用 FPGA 实现墨水屏高刷",
+  "datePublished": "2026-08-06",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/eink-caster-high-refresh/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/eink-caster-high-refresh/"
+  },
+  "keywords": "嵌入式, 系统设计, 性能优化"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">墨水屏高刷的秘密：Caster 给每个像素配独立计时器</h1>
+  <article class="article-body">
+<h1>墨水屏高刷的秘密：Caster 给每个像素配独立计时器</h1>
+<blockquote>
+<p><strong>声明：</strong> Modos-Labs 的 Glider 与 Caster 是开源项目，作者为 Wenting Zhang（GitHub: Modos-Labs）。本文是阅读该项目源码和文档后整理的学习笔记，用于理解墨水屏高刷的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p><img src="/posts/eink-caster-high-refresh/cover.svg" alt="封面：每个像素一个独立计时器"></p>
+<p>项目仓库：<a href="https://github.com/Modos-Labs" target="_blank" rel="noopener noreferrer">github.com/Modos-Labs</a>（Glider 开源墨水屏显示器 / Caster Verilog EPD 控制器）</p>
+<h2>微胶囊电泳与双稳保持</h2>
+<p><img src="/posts/eink-caster-high-refresh/microcapsule.svg" alt="微胶囊：电场驱动黑白双色颗粒"></p>
+<p>墨水屏每个像素由无数微胶囊组成，胶囊内悬浮着带相反电荷的黑白颜料颗粒，浸泡在透明油中。给像素施加正电压，一种颜色的颗粒被吸向观察面、另一种沉底；反压则相反。寻址使用 2D TFT 阵列加电场，行列扫描方式与 TN/IPS 液晶同源。</p>
+<p>与液晶的本质差别在保持机制：液晶易失，撤掉电场后分子松弛回原点，必须每帧持续刷新并耗电；墨水屏双稳，驱动完成撤场后图像自行保持，零场零功耗。Kindle 关机仍显封面即源于此。</p>
+<h2>控制器按波形表逐帧驱动</h2>
+<p>真实驱动并非恒定直流电压。为得到干净灰度，控制器从波形表（waveform LUT）读出一串时序脉冲，逐帧发给每个像素，每像素跑自己的状态机直到抵达目标灰阶。</p>
+<p>颗粒在油中电泳迁移需要时间，单次黑白翻转约 9 个驱动帧、物理上约 150ms。这一段是流体迁移下限，控制器无法突破。控制器还要做 DC 平衡、整屏闪刷清残影、防过驱欠驱。因此刷新是控制器主动逐帧编排的过程，并非面板自主完成。</p>
+<h2>全局计数器造成的帧率排队</h2>
+<p><img src="/posts/eink-caster-high-refresh/arch-compare.svg" alt="架构对比：全局时间线 vs 每像素时间线"></p>
+<p>普通 EPD 控制器（EPDC）用一条全局计数器查波形表，整屏共用一条时间线。上一次整屏刷新未走完，新画面不受理。一次刷新约 100ms，把图像可受理速率钉在约 10Hz。这 100ms 里颗粒早已停下，延迟纯属架构排队。</p>
+<p>用户感知的卡顿多来自这层排队，并非 150ms 物理迁移。</p>
+<h2>每像素局部计数器与早取消</h2>
+<p><img src="/posts/eink-caster-high-refresh/early-cancel.svg" alt="早取消：驱动半途反悔按已走比例算返程"></p>
+<p>Caster 删掉全局计数器，给每个像素在自己的显存里塞一个 6-bit 局部计数器，各自独立记帧序、各自查波形。</p>
+<p>早取消（early cancellation）：像素驱动到一半目标变了，不必先走完全程再掉头。控制器按已走比例重算返程帧数（csr_b2wframe - pixel_framecnt + 1），省下的正是排队时间。</p>
+<p>混合灰阶：变化时用 fast-binary 以 85Hz 跟手，静止约 1 秒（AUTOLUT_QUIET_FRAMES=60）后自动用 LUT 重绘 16 级干净灰阶。</p>
+<p>FPGA 在此处的本职是并行与确定性低延迟：每像素独立状态机为纯组合逻辑，4 像素/时钟，抖动为零；视频流直通处理低于 20µs，因此走 DVI/DP，不走 USB/SPI。每像素每帧读改写 16bit 状态，1080p 约需 540MB/s 带宽，板上因此挂 DDR3-800。</p>
+<p>硬件并不夸张：仅用 Spartan-6 LX16 的 1704 个触发器。物理 150ms 没有突破，高刷消掉的是卡顿感：输入零排队、每像素随时掉头、停下才精绘。看书场景下这套优化无收益，当显示器才需要。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-06 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=eink-caster-high-refresh');
+  }
+  </script>
+</body>
+</html>

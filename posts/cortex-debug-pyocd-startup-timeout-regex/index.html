@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cortex-Debug 1.12.1 无法识别 pyOCD 0.44.1 启动日志的修复 - CacheRivulet小记</title>
+  <meta name="description" content="Cortex-Debug启动pyOCD后仍然超时">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="VSCode">
+  <meta property="article:tag" content="Air001">
+  <meta property="article:published_time" content="2026-07-15">
+  <meta property="og:title" content="Cortex-Debug 1.12.1 无法识别 pyOCD 0.44.1 启动日志的修复">
+  <meta property="og:description" content="Cortex-Debug启动pyOCD后仍然超时">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/cortex-debug-pyocd-startup-timeout-regex/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/cortex-debug-pyocd-startup-timeout-regex/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Cortex-Debug 1.12.1 无法识别 pyOCD 0.44.1 启动日志的修复",
+  "description": "Cortex-Debug启动pyOCD后仍然超时",
+  "datePublished": "2026-07-15",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/cortex-debug-pyocd-startup-timeout-regex/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/cortex-debug-pyocd-startup-timeout-regex/"
+  },
+  "keywords": "嵌入式, 工程调试, 故障诊断, VSCode, Air001"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Cortex-Debug 1.12.1 无法识别 pyOCD 0.44.1 启动日志的修复</h1>
+  <article class="article-body">
+<h1>Cortex-Debug 1.12.1 无法识别 pyOCD 0.44.1 启动日志的修复</h1>
+<p>在 Air001 项目中，Cortex-Debug 已经启动 pyOCD，终端也显示 GDB server 正在监听端口，VS Code 仍在等待，最后报错：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Failed to launch PyOCD GDB Server: Timeout.</span></span></code></pre><p>这次现场使用的是 <strong>pyOCD</strong>。OpenOCD 是另一个 GDB server，两者不能混用名称。报错文字和 <code>servertype: &quot;pyocd&quot;</code> 都能确认实际对象。</p>
+<p>修复只需覆盖 Cortex-Debug 用来判断 server 已就绪的正则表达式：</p>
+<pre><code>"overrideGDBServerStartedRegex": "GDB server listening on port"</code></pre><h2>故障现象</h2>
+<p>环境为 Cortex-Debug 1.12.1、pyOCD 0.44.1 和 Air001。执行 F5 后，pyOCD 输出：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>GDB server listening on port 3333 (core 0)</span></span></code></pre><p>这行日志说明 pyOCD 已经运行，3333 端口也已进入监听状态。此时出现 Timeout，排查重点应放在 Cortex-Debug 的“就绪判断”，无需继续折腾探针驱动或增加等待时间。</p>
+<h2>启动日志与内置正则</h2>
+<p>Cortex-Debug 启动 GDB server 后，会等待一行符合内置正则的日志。1.12.1 中 pyOCD 的内置正则是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">GDB server started </span><span style="color:#CE9178">(</span><span style="color:#D4D4D4">at|on</span><span style="color:#CE9178">)</span><span style="color:#D4D4D4"> port</span></span></code></pre><p>pyOCD 0.44.1 的实际文字是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">GDB server listening on port</span></span></code></pre><p><code>started at/on</code> 与 <code>listening on</code> 无法匹配。进程虽然已经启动，Cortex-Debug 收不到“已就绪”信号，只能一直等待到超时。</p>
+<h2>最小修复配置</h2>
+<p>下面是可以直接放进 <code>.vscode/launch.json</code> 的最小示例：</p>
+<pre><code>{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Air001: Cortex-Debug with pyOCD",
+      "type": "cortex-debug",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Project.elf",
+      "servertype": "pyocd",
+      "targetId": "Air001",
+
+      // 本次修复的核心配置
+      "overrideGDBServerStartedRegex": "GDB server listening on port",
+
+      "runToEntryPoint": "main"
+    }
+  ]
+}</code></pre><p>如果 <code>pyocd</code> 没有加入 PATH，可再通过 Cortex-Debug 的 <code>serverpath</code> 或全局 <code>cortex-debug.pyocdPath</code> 指定可执行文件。路径配置与本次超时根因属于两件事。</p>
+<h2>修复生效机制</h2>
+<p><code>overrideGDBServerStartedRegex</code> 不负责启动 pyOCD，也不会修改 GDB 端口。它只替换 Cortex-Debug 的就绪匹配规则。</p>
+<p>修改前的流程停在第二步：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>启动 pyOCD → 等待旧日志文字 → 超时</span></span></code></pre><p>修改后的流程能够继续：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>启动 pyOCD → 匹配 listening on port → GDB 连接 3333 端口</span></span></code></pre><p>因此，这项修复不依赖 PowerShell、后台进程或固定时长的 sleep。pyOCD 真正启动失败时不会输出匹配文字，Cortex-Debug 仍会正常报错。</p>
+<h2>验证结果与适用边界</h2>
+<p>加入覆盖正则后，Cortex-Debug 能越过 GDB server 启动阶段，不再报告 <code>Failed to launch PyOCD GDB Server: Timeout</code>。</p>
+<p>这项修复只解决 Cortex-Debug 1.12.1 与 pyOCD 0.44.1 的启动日志不兼容。项目最终按调试需求采用 VS Code C/C++ 扩展的 <code>cppdbg</code>，入口断点和 GDB 启动时序记录在另一篇文章中。</p>
+<p>如果日志明确写的是 OpenOCD，应先查看 OpenOCD 的实际启动文字，再为 <code>overrideGDBServerStartedRegex</code> 编写对应规则。不要直接复制本文的 pyOCD 正则。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-15 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=cortex-debug-pyocd-startup-timeout-regex');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>光感突变遥测设备的低功耗采样与射频时序取舍 - CacheRivulet小记</title>
+  <meta name="description" content="光感遥测设备：周期唤醒采样、射频脉宽修正">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="PY32F002A">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="ADC">
+  <meta property="article:tag" content="433MHz">
+  <meta property="article:tag" content="射频">
+  <meta property="article:tag" content="传感器">
+  <meta property="article:published_time" content="2026-07-19">
+  <meta property="og:title" content="光感突变遥测设备的低功耗采样与射频时序取舍">
+  <meta property="og:description" content="光感遥测设备：周期唤醒采样、射频脉宽修正">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/air001-light-sensing-mutation-switch-433rf/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/air001-light-sensing-mutation-switch-433rf/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "光感突变遥测设备的低功耗采样与射频时序取舍",
+  "description": "光感遥测设备：周期唤醒采样、射频脉宽修正",
+  "datePublished": "2026-07-19",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/air001-light-sensing-mutation-switch-433rf/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/air001-light-sensing-mutation-switch-433rf/"
+  },
+  "keywords": "PY32F002A, 低功耗, ADC, 433MHz, 射频, 传感器"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">光感突变遥测设备的低功耗采样与射频时序取舍</h1>
+  <article class="article-body">
+<h1>光感突变遥测设备的低功耗采样与射频时序取舍</h1>
+<p>该设备用于监测环境光突变，并通过 433MHz 上报遥测事件。检测到光线快速变暗时，立即发送光线下降遥测信号；计时到 30 分钟时发送结束信号；期间检测到光线上升时，发送光线上升遥测信号。项目使用 PY32F002A，实测平均电流 12µA。</p>
+<p>工程重点只有两个：平时怎样以足够低的功耗识别光照变化，事件发生时怎样稳定发出接收端能识别的脉冲。具体外设配置会随平台变化，本文只保留影响设计选择的部分。</p>
+<h2>STOP 模式无法让 ADC 持续值守</h2>
+<p>最直观的做法是让 ADC 模拟看门狗持续监测，越过阈值后再唤醒 CPU。问题是深度睡眠会关闭 ADC 及其时钟，模拟看门狗也随之停止；保留 ADC 工作只能使用功耗更高的睡眠模式。</p>
+<p>本项目检测的是秒级光照变化，没有必要为毫秒级响应长期供电。因此 MCU 平时进入 STOP 模式，由低功耗定时器每秒唤醒一次，完成 ADC 采样后立即回睡。信号变化速度决定采样策略，具体 MCU 型号不改变这项判断。</p>
+<h2>秒级采样下的光突变判定</h2>
+<p>每次唤醒后连续采样并取平均，用于压低随机噪声；最近三个结果组成滑动窗口，窗口首尾差同时满足幅度和方向条件时才累计确认。连续两次命中后发送对应方向的遥测信号，单个尖刺不会直接触发。</p>
+<p>判断采用相对变化量，因此不要求把传感器电压换算成绝对照度。发送光线下降遥测信号后先暂停一次判断，再以新光照重建基准，避免后续波动立刻被误判为光线上升。30 分钟结束信号由独立超时计时负责。</p>
+<p>这套思路适合变化缓慢、允许秒级延迟的场景。需要快速响应时，应重新评估采样周期和睡眠模式。</p>
+<h2>HAL GPIO 操作让射频脉宽偏长</h2>
+<p>最初的发码逻辑先调用 <code>HAL_GPIO_WritePin</code> 翻转电平，再延时 325µs 或 950µs。4MHz 主频下，GPIO 调用本身约耗时 40µs，这段时间被算进了脉冲，325µs 短脉冲实测接近 365µs。</p>
+<p>修正分为两步：先缩短 GPIO 翻转路径，本项目直接写置位和复位寄存器；再按定时器的目标时刻切换每个边沿。后一条更重要，因为每个边沿都对齐预定时间，某次执行开销只影响当前等待，不会沿整帧累积。</p>
+<p>可迁移的结论很简单：软件生成脉冲时，延时函数只控制调用后的等待时间，GPIO 操作和循环开销同样属于脉宽。最终应以示波器看到的边沿为准。</p>
+<p><img src="/posts/air001-light-sensing-mutation-switch-433rf/img/%E5%AE%9A%E6%97%B6%E5%99%A8%E8%BE%B9%E6%B2%BF%E5%AF%B9%E9%BD%90.svg" alt="相对延时会累积 GPIO 开销，绝对时间对齐可阻止误差传递"></p>
+<h2>外设断电与 GPIO 漏电控制</h2>
+<p>未使用的 IO 若保留数字输入功能，悬空电平或外部干扰会使输入缓冲器中的施密特触发器反复翻转，产生额外功耗。待机时应把这些 IO 配置为模拟输入，或用芯片提供的方式关闭数字输入通道，同时关闭内部上下拉。</p>
+<p>射频模块等非必要外设直接断电。外设断电后，连接到该外设的 IO 也要关闭数字输入和上下拉，避免信号脚反向供电或形成漏电路径；相邻的未使用 IO 同样按模拟输入处理。需要工作时再恢复外设供电和引脚功能，结束后重新关闭。</p>
+<p>低功耗测试不能只测 MCU 的睡眠电流，还要检查外设供电、指示灯和所有 IO 状态。事件很少时，长期漏电通常比一次短暂发射更影响电池寿命。</p>
+<h2>低功耗实测结果</h2>
+<p><img src="/posts/air001-light-sensing-mutation-switch-433rf/img/%E5%8A%9F%E7%8E%87%E5%88%86%E6%9E%90%E4%BB%AA%E6%B3%A2%E5%BD%A2%E5%9B%BE.webp" alt="STOP 模式下每秒一次的唤醒电流尖峰"></p>
+<p><img src="/posts/air001-light-sensing-mutation-switch-433rf/img/%E5%8A%9F%E7%8E%87%E5%88%86%E6%9E%90%E4%BB%AA%E6%95%B0%E6%8D%AE%E9%A1%B5%E9%9D%A2.webp" alt="功率分析仪统计页面"></p>
+<p>功率分析仪测得平均电流 12µA，STOP 模式基线最低 8µA，每秒采样的唤醒峰值约 1.7mA。结果说明周期唤醒适合本项目的秒级信号，射频发射虽有较高瞬时电流，但事件频率低，不主导长期平均功耗。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-19 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=air001-light-sensing-mutation-switch-433rf');
+  }
+  </script>
+</body>
+</html>

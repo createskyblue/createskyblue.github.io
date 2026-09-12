@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>在 51 单片机上用中断捕获 12 路微秒级脉宽，软件双边沿会碰到实时性边界 - CacheRivulet小记</title>
+  <meta name="description" content="12路微秒级脉宽软件捕获，实时性不足会误计数">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="中断">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="脉宽判定">
+  <meta property="article:tag" content="定时器">
+  <meta property="article:published_time" content="2026-07-03">
+  <meta property="og:title" content="在 51 单片机上用中断捕获 12 路微秒级脉宽，软件双边沿会碰到实时性边界">
+  <meta property="og:description" content="12路微秒级脉宽软件捕获，实时性不足会误计数">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/software-dual-edge-pulse-filter/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/software-dual-edge-pulse-filter/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "在 51 单片机上用中断捕获 12 路微秒级脉宽，软件双边沿会碰到实时性边界",
+  "description": "12路微秒级脉宽软件捕获，实时性不足会误计数",
+  "datePublished": "2026-07-03",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/software-dual-edge-pulse-filter/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/software-dual-edge-pulse-filter/"
+  },
+  "keywords": "嵌入式, 中断, MCU, 脉宽判定, 定时器"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">在 51 单片机上用中断捕获 12 路微秒级脉宽，软件双边沿会碰到实时性边界</h1>
+  <article class="article-body">
+<h1>在 51 单片机上用中断捕获 12 路微秒级脉宽，软件双边沿会碰到实时性边界</h1>
+<p>这是一个中途接手的项目。原方案基于 51 单片机，6 个电机各有 2 路霍尔反馈信号，一共 12 路外部脉冲，最初直接用 GPIO 下降沿中断捕获；后来现场发现输入容易受到干扰，我在这个基础上引入了软件脉宽过滤。继续排查计数抖动问题时，才发现这个过滤方案本身也受限于既有硬件资源和中断实时性。</p>
+<p>脉宽过滤本身没有复杂：下降沿来了先记时间，上升沿来了再算宽度；宽度够，就提交一次有效脉冲。麻烦出在要捕获的是微秒级脉宽，留给 ISR 响应和软件切边沿的时间预算很短。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>高电平 ─────┐      ┌───── 高电平</span></span>
+<span class="line"><span>             │      │</span></span>
+<span class="line"><span>低电平       └──────┘</span></span>
+<span class="line"><span>             A      B</span></span>
+<span class="line"><span>           下降沿   上升沿</span></span></code></pre><p>真正的问题在实现方式。读者如果习惯了资源完整的 MCU，可能会默认 GPIO 可以直接开双边沿触发；但部分 51 单片机的中断能力比较受限，只能配置单边沿，或者不同 IO 的边沿能力受限。硬件没有给每一路输入独立的双边沿捕获、脉冲计数或去抖资源时，软件只能在对应 GPIO 中断 ISR 里模拟：A 点进中断，记录时间，把这个 IO 切到等 B 点；B 点再进中断，计算脉宽，再切回等 A 点。</p>
+<h2>12 路输入挤在几个中断里</h2>
+<p>如果只有一路信号，这个软件状态机已经依赖 ISR 响应速度。脉宽长到毫秒级时，软件通常还有余量；脉宽压到微秒级时，余量会迅速消失。</p>
+<p>12 路 IO 不会都在同一个 port 上。更常见的情况是：多个 port 各有自己的中断入口，每个 port 内的多个 IO 共用同一个中断服务函数。每一路又都要在这个 ISR 里模拟双边沿，实时性压力会放大：</p>
+<ul>
+<li>ISR 先读一次中断标志寄存器。</li>
+<li>软件逐位判断是哪一路 IO 触发。</li>
+<li>每一路都有自己的“等下降沿 / 等上升沿”状态。</li>
+<li>每一路都要在 ISR 里切换触发模式。</li>
+</ul>
+<p>这相当于在低主频 51 单片机上，分散在几个 GPIO 中断里，用软件模拟 12 个小型输入捕获外设。</p>
+<h2>漏边沿发生在哪里</h2>
+<p>理想时序是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>下降沿 A</span></span>
+<span class="line"><span>MCU 进入 ISR</span></span>
+<span class="line"><span>软件切到等上升沿</span></span>
+<span class="line"><span>上升沿 B</span></span>
+<span class="line"><span>MCU 再进 ISR</span></span>
+<span class="line"><span>软件验证脉宽</span></span></code></pre><p>实时性不够时，时序可能变成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>下降沿 A</span></span>
+<span class="line"><span>上升沿 B</span></span>
+<span class="line"><span>MCU 才进入 ISR</span></span></code></pre><p>这时同一个 IO 的中断标志只有一个 bit。它只能表示“这个脚触发过”，不能表示“这个脚连续触发了两次”。软件已经拿不到 A 和 B 的完整历史，这个真实脉冲就可能被当成毛刺丢掉。</p>
+<p>多个 IO 共用同一个 port 的中断入口不一定有错。风险来自“多个 IO 共用 ISR + 12 路软件双边沿 + 低主频 + 单 bit 标志”。只要其中一路边沿间隔接近或短于 ISR 最坏响应时间，软件模拟的双边沿过滤就没有足够时间完成状态切换。脉宽越短，这个风险越明显。</p>
+<h2>受控脉冲实验</h2>
+<p>为了验证软件边沿捕获的实时性，可以用受控信号源产生固定数量、固定脉宽的脉冲序列，再检查 MCU 侧捕获数量是否完整。</p>
+<p>这次测试使用 10 个脉冲作为一组手动触发序列：9 个合法脉冲宽度为 260us，1 个非法脉冲宽度为 240us。软件过滤阈值设为 <code>&gt;= 250us</code> 有效。触发前后保持低电平。</p>
+<p><img src="/posts/software-dual-edge-pulse-filter/img/signal-generator-260us-240us.webp" alt="信号发生器多脉冲输出设置"></p>
+<p>少量触发时，计数结果基本符合预期，说明边沿切换和脉宽判断在低压力条件下可以工作。重复触发多次后，打印日志出现了两路计数分叉：</p>
+<p><img src="/posts/software-dual-edge-pulse-filter/img/pulse-capture-log.webp" alt="重复触发后的 FB / FBZ 打印日志"></p>
+<p>当 <code>FBZ = 55</code> 时，按当前显示滞后关系计算，理论 FB 有效计数为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>(55 + 1) * 9 - 1 = 503</span></span></code></pre><p>实测结果为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>LM FB = 512</span></span>
+<span class="line"><span>RM FB = 503</span></span>
+<span class="line"><span>FBZ   = 55</span></span></code></pre><p>RM 与理论值一致，LM 多计 9。这个结果说明至少有一路在长时间重复触发后发生了误计数。</p>
+<p>这组实验暴露的是阈值附近的实时性余量不足。合法脉宽 260us、非法脉宽 240us，都只距离 250us 阈值 10us。多个 IO 共用同一个中断服务函数，并在 ISR 内软件切换边沿模式时，中断响应延迟、处理顺序差异、边沿模式切换延迟都会改变测得脉宽。部分 240us 非法脉冲可能被测成有效脉冲，最终表现为多计数。</p>
+<p>两路结果不同也很有参考价值。共享 ISR 下，不同 IO 接收同一组测试脉冲，实际软件捕获条件并不完全一致。排在 ISR 后面的分支、和其他 IO 同时触发的分支，会承受额外的软件处理延迟。</p>
+<h2>提主频以后还要看 ISR 开销</h2>
+<p>第一反应通常是提高 CPU 主频。主频从 24MHz 提到 40MHz 后，指令执行变快，中断响应也会变短，理论上可以给软件双边沿捕获争取更多余量。</p>
+<p>但这次测试又暴露了另一个细节：时间戳换算本身也在 ISR 路径里。24MHz、12T 模式下，Timer11 原始计数频率为 2MHz，1 tick 等于 0.5us，换算成微秒只需要除以 2。40MHz、12T 模式下，Timer11 原始计数频率为 3.333MHz，1 tick 等于 0.3us，换算成微秒会变成 <code>raw * 3 / 10</code>。</p>
+<p>放在 51 单片机上，32 位除法和取模很重。CPU 主频提高带来的收益，可能被 ISR 内的实时换算吃掉一部分。软件捕获路径里，最贵的地方不该放在边沿到来的瞬间。</p>
+<p>后续把 ISR 改成直接使用 Timer11 原始 tick：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>rise_tick = T11_raw</span></span>
+<span class="line"><span>width_tick = now_raw - rise_tick</span></span></code></pre><p>阈值在编译期换算成 tick 后再比较：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>40MHz / 12T: 1 tick = 0.3us</span></span>
+<span class="line"><span>250us = 833.33 tick</span></span>
+<span class="line"><span>向上取整后，阈值取 834 tick</span></span></code></pre><p>这样 ISR 热路径只剩下读计数器、<code>uint16_t</code> 减法、<code>uint16_t</code> 比较和计数更新。微秒单位只用于调试打印，不再参与实时判定。</p>
+<p>再次测试后，260us 合法脉冲被测到 261<del>264us，240us 非法脉冲被测到 241</del>244us，并稳定进入 reject 统计。这个结果把方向指得很清楚：信号源精度可以信任，单纯提高主频仍然不够，实时路径里的昂贵换算必须移出去，阈值比较要回到原始 tick 域。</p>
+<h2>硬件捕获和软件模拟的差别</h2>
+<p>有些 MCU 的定时器或专用输入捕获外设可以直接做这些事：</p>
+<ul>
+<li>硬件双边沿捕获。</li>
+<li>硬件脉冲计数。</li>
+<li>输入滤波或去抖。</li>
+<li>捕获时刻锁存。</li>
+</ul>
+<p>这些能力的价值在于：边沿先由硬件抓住，软件晚一点处理也不会立刻丢历史。</p>
+<p>用 GPIO 中断软件模拟时，边沿历史只剩一个标志 bit。软件来晚了，硬件不会帮你补记录。</p>
+<h2>工程结论</h2>
+<p>这个问题不适合只靠调脉宽阈值解决。阈值只能决定什么宽度算有效，不能恢复已经错过的边沿。</p>
+<p>如果系统没有足够的定时器、输入捕获通道或带滤波能力的专用 IO，那么软件模拟双边沿必须接受一个边界：真实脉冲宽度要明显大于 ISR 最坏响应时间。微秒级脉宽已经接近这个边界，不能只按普通 GPIO 中断来理解。</p>
+<p>如果脉宽确实这么短，工程上只有几条路：提高 CPU 主频，换取更短的中断响应时间；减少每个中断服务函数里软件模拟的输入路数；或者把关键输入迁到硬件双边沿捕获、定时器输入捕获、硬件计数和硬件滤波资源上。</p>
+<p>当 12 路信号都依赖 51 的 GPIO 中断软件模拟双边沿，漏边沿就不再是偶然 bug，它是硬件资源不足和软件实时性边界叠加后的自然结果。</p>
+<h2>一点个人观点</h2>
+<p>站在 2026 年看，51 单片机不该继续作为新项目的默认选择。成本敏感场景已经有大量 RISC-V MCU，也有成熟的 ARM Cortex-M0/M0+ MCU：价格低，外设新，工具链新，C 语言支持也正常。</p>
+<p>51 的问题不只是主频低。很多型号 C99 支持不完整，编译器、调试器、工程体系都停在旧时代，外设能力也很弱。最后省下来的物料成本，很容易变成中断实时性、工具链兼容、维护成本和现场调试成本。</p>
+<p>工程要给自己留余量。算力余量、外设余量、定时器余量、调试余量，看起来都不直接出现在 BOM 上，但被省掉以后，不确定性不会消失，只会转成风险。风险再拖下去，就会变成技术债，持续计息，后面每一次改需求、查现场、补兼容都要还。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-03 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=software-dual-edge-pulse-filter');
+  }
+  </script>
+</body>
+</html>

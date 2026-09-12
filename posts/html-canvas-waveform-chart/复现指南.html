@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实时波形图表示例</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #eef2f7; color: #172033;
+    font-family: Arial, 'Microsoft YaHei', sans-serif;
+  }
+  main { width: min(900px, 100%); margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+
+  .panel { background: #fff; border-radius: 12px; padding: 14px; }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 8px; color: #5c6878; font-size: 13px;
+  }
+  .panel-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+  }
+  .panel-meta span + span { border-left: 1px solid #e2e8f0; padding-left: 8px; }
+
+  .threshold-panel { padding: 12px; display: grid; gap: 10px; }
+  .threshold-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    color: #5c6878; font-size: 12px;
+  }
+  .threshold-value { color: #172033; font-weight: 700; white-space: nowrap; }
+  input[type=range].range-control {
+    --range-fill: 0%;
+    appearance: none; height: 28px; padding: 0; border: 0;
+    background: transparent; cursor: pointer;
+  }
+  input[type=range].range-control:focus { border-color: transparent; box-shadow: none; }
+  input[type=range].range-control:focus-visible {
+    outline: 2px solid rgba(29,78,216,.35); outline-offset: 2px; border-radius: 999px;
+  }
+  input[type=range].range-control::-webkit-slider-runnable-track {
+    height: 8px; border-radius: 999px;
+    background: linear-gradient(to right, rgb(255,85,95) 0 var(--range-fill), #ffe4e8 var(--range-fill) 100%);
+  }
+  input[type=range].range-control::-webkit-slider-thumb {
+    appearance: none; width: 20px; height: 20px; margin-top: -6px;
+    border: 3px solid #fff; border-radius: 50%;
+    background: rgb(255,85,95); box-shadow: 0 1px 4px rgba(31,41,55,.22);
+  }
+
+  .chart-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 12px;
+    color: #5c6878; font-size: 12px; align-items: center;
+  }
+  .chart-legend-item {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .chart-legend-swatch {
+    width: 18px; height: 3px; border-radius: 999px; background: currentColor;
+  }
+
+  canvas {
+    display: block; width: 100%; height: 260px; border: 0;
+    border-radius: 10px; background: #fff;
+  }
+  .tall-canvas { height: 300px; }
+</style>
+</head>
+<body>
+<main>
+
+  <section class="panel threshold-panel">
+    <div class="threshold-head">
+      <div>质量阈值</div>
+      <div class="threshold-value"><span id="qualityThresholdValue">30</span></div>
+    </div>
+    <input id="qualityThresholdRange" class="range-control" type="range" min="0" max="100" step="1" aria-label="质量阈值">
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <span>原始采样（纯折线，自适应范围）</span>
+      <div class="panel-meta">
+        <span id="adcInfo">0 点 / 值 --</span>
+      </div>
+    </div>
+    <canvas id="adcCanvas" width="1000" height="260"></canvas>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <span>实时趋势（分段着色 + 中位线）</span>
+      <div class="panel-meta">
+        <span id="chartBpmText">BPM --</span>
+        <span id="chartStatusText">--</span>
+      </div>
+    </div>
+    <canvas id="bpmCanvas" class="tall-canvas" width="1000" height="300"></canvas>
+    <div class="chart-legend">
+      <span class="chart-legend-item" style="color:rgb(255,85,95)"><span class="chart-legend-swatch"></span>可信区间</span>
+      <span class="chart-legend-item" style="color:rgba(255,85,95,.38)"><span class="chart-legend-swatch"></span>近期中位</span>
+      <span class="chart-legend-item" style="color:#cbd5e1"><span class="chart-legend-swatch"></span>质量过滤</span>
+    </div>
+  </section>
+
+</main>
+<script>
+(function() {
+  var CHART_RIGHT_GUTTER = 34, CHART_TOP_PAD = 16, CHART_BOTTOM_PAD = 12;
+  var CHART_LINE_WIDTH = 1.2, BPM_TICKS = [40, 60, 80, 100, 120];
+  var adcSamples = [], bpmSamples = [], qualityThreshold = 30;
+
+  // ========== 辅助函数 ==========
+  function resizeCanvas(canvas) {
+    var r = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var w = Math.max(1, Math.floor(r.width * dpr));
+    var h = Math.max(1, Math.floor(r.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h; return true;
+    }
+    return false;
+  }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function chartArea(canvas) {
+    var dpr = window.devicePixelRatio || 1;
+    var g = CHART_RIGHT_GUTTER * dpr;
+    var top = CHART_TOP_PAD * dpr;
+    var bottom = canvas.height - CHART_BOTTOM_PAD * dpr;
+    var right = Math.max(1, canvas.width - g);
+    return { left: 0, right: right, width: right, top: top, bottom: bottom,
+             height: Math.max(1, bottom - top), gutter: g };
+  }
+
+  function yForValue(v, min, max, a) { return a.bottom - ((v - min) / (max - min)) * a.height; }
+
+  function fillTextInGutter(ctx, area, text, y) {
+    ctx.fillText(text, area.right + (area.gutter - ctx.measureText(text).width) / 2, y);
+  }
+
+  // ========== 绘图函数 ==========
+  function drawGrid(ctx, area) {
+    ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1;
+    for (var i = 1; i < 5; i++) {
+      var y = area.top + area.height * i / 5;
+      ctx.beginPath(); ctx.moveTo(area.left, y); ctx.lineTo(area.right, y); ctx.stroke();
+    }
+  }
+
+  function drawTimelineTicks(ctx, area, ticks, min, max) {
+    ctx.save();
+    ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1;
+    ctx.fillStyle = "#64748b";
+    var dpr = window.devicePixelRatio || 1;
+    ctx.font = Math.max(11, Math.floor(11 * dpr)) + "px Arial,sans-serif";
+    for (var i = 0; i < ticks.length; i++) {
+      var y = clamp(yForValue(ticks[i], min, max, area), area.top, area.bottom);
+      ctx.beginPath(); ctx.moveTo(area.left, y); ctx.lineTo(area.right, y); ctx.stroke();
+      fillTextInGutter(ctx, area, String(ticks[i]), y);
+    }
+    ctx.restore();
+  }
+
+  function drawTimelineLine(ctx, area, samples, sampleFn, min, max, style) {
+    if (samples.length < 2) return;
+    ctx.save();
+    var dpr = window.devicePixelRatio || 1;
+    ctx.strokeStyle = style.strokeStyle;
+    ctx.lineWidth = (style.lineWidth || CHART_LINE_WIDTH) * dpr;
+    if (style.lineDash) ctx.setLineDash(style.lineDash.map(function(d) { return d * dpr; }));
+    ctx.beginPath();
+    var v0 = sampleFn(samples[0]);
+    if (!isFinite(v0)) return;
+    var x0 = area.left;
+    var y0 = clamp(yForValue(v0, min, max, area), area.top, area.bottom);
+    ctx.moveTo(x0, y0);
+    for (var i = 1; i < samples.length; i++) {
+      var v = sampleFn(samples[i]);
+      if (!isFinite(v)) continue;
+      var x = area.left + i * area.width / (samples.length - 1);
+      var y = clamp(yForValue(v, min, max, area), area.top, area.bottom);
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawHorizontalLine(ctx, area, value, min, max, style) {
+    if (!isFinite(value) || value <= 0) return;
+    var dpr = window.devicePixelRatio || 1;
+    var y = clamp(yForValue(value, min, max, area), area.top, area.bottom);
+    ctx.save();
+    ctx.strokeStyle = style.strokeStyle;
+    ctx.lineWidth = (style.lineWidth || CHART_LINE_WIDTH) * dpr;
+    ctx.setLineDash([6 * dpr, 5 * dpr]);
+    ctx.beginPath(); ctx.moveTo(area.left, y); ctx.lineTo(area.right, y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTimelineWaveform(canvas, samples, opts) {
+    resizeCanvas(canvas);
+    var ctx = canvas.getContext("2d"), area = chartArea(canvas);
+    var dpr = window.devicePixelRatio || 1;
+
+    // 白底
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 刻度样式
+    ctx.fillStyle = "#64748b";
+    ctx.font = Math.max(11, Math.floor(11 * dpr)) + "px Arial,sans-serif";
+
+    var sampleFn = opts.sampleValue || function(s) { return s; };
+
+    // 计算 Y 轴范围
+    var min, max;
+    if (opts.fixedRange) {
+      min = opts.fixedRange[0]; max = opts.fixedRange[1];
+    } else if (samples.length > 0) {
+      min = sampleFn(samples[0]); max = min;
+      for (var j = 1; j < samples.length; j++) {
+        var sv = sampleFn(samples[j]);
+        if (sv < min) min = sv; if (sv > max) max = sv;
+      }
+      if (max === min) max = min + 1;
+      var pad = Math.max((max - min) * 0.12, 1);
+      min -= pad; max += pad;
+    } else {
+      min = 0; max = 100;
+    }
+
+    // 网格 / 刻度
+    if (opts.ticks) {
+      drawTimelineTicks(ctx, area, opts.ticks, min, max);
+    } else {
+      drawGrid(ctx, area);
+      fillTextInGutter(ctx, area, max.toFixed(0), area.top);
+      fillTextInGutter(ctx, area, min.toFixed(0), area.bottom);
+    }
+
+    if (samples.length < 2) return { min: min, max: max };
+
+    // 绘制数据
+    if (opts.segmentOk) {
+      ctx.save();
+      ctx.lineWidth = CHART_LINE_WIDTH * dpr;
+      for (var k = 1; k < samples.length; k++) {
+        var prev = samples[k - 1], next = samples[k];
+        var x1 = area.left + (k - 1) * area.width / (samples.length - 1);
+        var x2 = area.left + k * area.width / (samples.length - 1);
+        var y1 = clamp(yForValue(sampleFn(prev), min, max, area), area.top, area.bottom);
+        var y2 = clamp(yForValue(sampleFn(next), min, max, area), area.top, area.bottom);
+        var ok = opts.segmentOk(next, prev);
+        var sColor = ok ? opts.strokeStyle : (opts.mutedStrokeStyle || "#cbd5e1");
+        var fColor = ok ? opts.areaFill : (opts.mutedAreaFill || null);
+
+        if (fColor) {
+          var g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+          g.addColorStop(0, fColor);
+          g.addColorStop(1, ok ? "rgba(255,85,95,0)" : "rgba(203,213,225,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.moveTo(x1, area.bottom); ctx.lineTo(x1, y1);
+          ctx.lineTo(x2, y2); ctx.lineTo(x2, area.bottom);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.strokeStyle = sColor;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      if (opts.areaFill) {
+        var g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        g.addColorStop(0, opts.areaFill); g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g; ctx.beginPath();
+        var x0 = area.left, v0 = sampleFn(samples[0]);
+        var y0 = clamp(yForValue(v0, min, max, area), area.top, area.bottom);
+        ctx.moveTo(x0, area.bottom); ctx.lineTo(x0, y0);
+        for (var m = 1; m < samples.length; m++) {
+          var x = area.left + m * area.width / (samples.length - 1);
+          var y = clamp(yForValue(sampleFn(samples[m]), min, max, area), area.top, area.bottom);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(area.right, area.bottom); ctx.closePath(); ctx.fill();
+      }
+      drawTimelineLine(ctx, area, samples, sampleFn, min, max, { strokeStyle: opts.strokeStyle });
+    }
+
+    // 叠加图层
+    if (opts.overlays) {
+      for (var o = 0; o < opts.overlays.length; o++) {
+        var ov = opts.overlays[o];
+        if (ov.type === "horizontal") {
+          drawHorizontalLine(ctx, area, ov.value, min, max, ov);
+        } else {
+          drawTimelineLine(ctx, area, ov.samples, sampleFn, min, max, ov);
+        }
+      }
+    }
+
+    // 最新点高亮
+    if (opts.showLatest && samples.length) {
+      var latest = samples[samples.length - 1];
+      var ly = clamp(yForValue(sampleFn(latest), min, max, area), area.top, area.bottom);
+      var lx = area.right - 5 * dpr;
+      var lColor = opts.latestStrokeStyle ? opts.latestStrokeStyle(latest) : opts.strokeStyle;
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = lColor; ctx.beginPath();
+      ctx.arc(lx, ly, 5.5 * dpr, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    }
+
+    return { min: min, max: max };
+  }
+
+  // ========== 阈值滑动条 ==========
+  var rangeEl = document.getElementById("qualityThresholdRange");
+  var valueEl = document.getElementById("qualityThresholdValue");
+  var adcCanvas = document.getElementById("adcCanvas");
+  var bpmCanvas = document.getElementById("bpmCanvas");
+  var adcInfo = document.getElementById("adcInfo");
+  var bpmText = document.getElementById("chartBpmText");
+  var statusText = document.getElementById("chartStatusText");
+
+  function setThreshold(val) {
+    var rmin = Number(rangeEl.min) || 0, rmax = Number(rangeEl.max) || 100;
+    var next = clamp(Number(val) || 30, rmin, rmax);
+    var fill = (next - rmin) / (rmax - rmin) * 100;
+    rangeEl.value = String(next);
+    rangeEl.style.setProperty("--range-fill", clamp(fill, 0, 100) + "%");
+    valueEl.textContent = String(next);
+    qualityThreshold = next;
+    drawBpmChart();
+  }
+  setThreshold(30);
+  rangeEl.addEventListener("input", function(e) { setThreshold(e.target.value); });
+
+  // ========== 数据质量判断 ==========
+  function isValidSample(s) {
+    return s && isFinite(s.bpm) && s.bpm > 0 && isFinite(s.quality) && s.quality < qualityThreshold;
+  }
+  function averageBpm(seconds) {
+    if (!bpmSamples.length) return NaN;
+    var now = bpmSamples[bpmSamples.length - 1].ts, cutoff = now - seconds;
+    var valid = [];
+    for (var i = 0; i < bpmSamples.length; i++) {
+      if (bpmSamples[i].ts >= cutoff && isValidSample(bpmSamples[i])) valid.push(bpmSamples[i].bpm);
+    }
+    if (!valid.length) return NaN;
+    var sum = 0; for (var j = 0; j < valid.length; j++) sum += valid[j];
+    return sum / valid.length;
+  }
+
+  // ========== 初始化：预填 2 个点，确保首帧有线段可见 ==========
+  var now0 = Date.now() / 1000;
+  adcSamples.push(2048, 2060);
+  bpmSamples.push(
+    { bpm: 72, quality: 8, ts: now0 - 1 },
+    { bpm: 74, quality: 12, ts: now0 }
+  );
+
+  // ========== 绘制：ADC 原始采样 ==========
+  function drawAdcChart() {
+    var range = drawTimelineWaveform(adcCanvas, adcSamples, {
+      strokeStyle: "#0284c7",
+      showLatest: false
+    });
+    var lastVal = adcSamples.length ? adcSamples[adcSamples.length - 1] : "--";
+    adcInfo.textContent = adcSamples.length + " 点 / 值 " + (typeof lastVal === "number" ? lastVal.toFixed(0) : lastVal) +
+      (range ? " / 范围 " + range.min.toFixed(0) + ".." + range.max.toFixed(0) : "");
+  }
+
+  // ========== 绘制：BPM 趋势图 ==========
+  function drawBpmChart() {
+    var avg = averageBpm(60);
+    var latest = bpmSamples.length ? bpmSamples[bpmSamples.length - 1] : null;
+    drawTimelineWaveform(bpmCanvas, bpmSamples, {
+      sampleValue: function(s) { return s.bpm; },
+      strokeStyle: "rgb(255,85,95)",
+      mutedStrokeStyle: "#cbd5e1",
+      areaFill: "rgba(255,85,95,.16)",
+      mutedAreaFill: "rgba(203,213,225,.16)",
+      fixedRange: [40, 120],
+      ticks: BPM_TICKS,
+      showLatest: true,
+      segmentOk: function(next) { return isValidSample(next); },
+      latestStrokeStyle: function(s) { return isValidSample(s) ? "rgb(255,85,95)" : "#cbd5e1"; },
+      overlays: [
+        { type: "horizontal", value: avg, strokeStyle: "rgba(255,85,95,.38)" }
+      ]
+    });
+    if (latest) {
+      bpmText.textContent = "BPM " + latest.bpm.toFixed(1);
+      statusText.textContent = isValidSample(latest) ? "OK" : "Filtered";
+    }
+  }
+
+  // ========== 定时更新 ==========
+  function simulateAdc() {
+    var t = Date.now() / 1000;
+    var v = 2048 + 1800 * Math.sin(t * 0.8) + 300 * Math.sin(t * 3.1) + (Math.random() - 0.5) * 200;
+    adcSamples.push(v);
+    if (adcSamples.length > 200) adcSamples.shift();
+    drawAdcChart();
+  }
+
+  function simulateBpm() {
+    var now = Date.now() / 1000, base = 72, noise = (Math.random() - 0.5) * 8;
+    var cycle = now % 20;
+    var quality = cycle < 3 ? 35 + Math.random() * 25 : 5 + Math.random() * 20;
+    var bpm = base + noise + (quality > qualityThreshold ? 12 * Math.random() : 0);
+    bpmSamples.push({ bpm: bpm, quality: quality, ts: now });
+    if (bpmSamples.length > 120) bpmSamples.shift();
+    drawBpmChart();
+  }
+
+  // 立即绘制首帧
+  drawAdcChart();
+  drawBpmChart();
+
+  setInterval(simulateAdc, 200);
+  setInterval(simulateBpm, 1000);
+})();
+</script>
+</body>
+</html>

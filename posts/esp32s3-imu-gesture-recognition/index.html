@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>边缘AI 姿态识别 振动故障诊断（异常检测、震动分类、传感器融合、回归标定） - CacheRivulet小记</title>
+  <meta name="description" content="">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ESP32">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:tag" content="异常检测">
+  <meta property="article:tag" content="震动检测">
+  <meta property="article:tag" content="姿态识别">
+  <meta property="article:tag" content="EdgeAI">
+  <meta property="article:tag" content="TFLite">
+  <meta property="article:tag" content="TFLM">
+  <meta property="article:published_time" content="2026-08-18">
+  <meta property="og:title" content="边缘AI 姿态识别 振动故障诊断（异常检测、震动分类、传感器融合、回归标定）">
+  <meta property="og:description" content="">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32s3-imu-gesture-recognition/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32s3-imu-gesture-recognition/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "边缘AI 姿态识别 振动故障诊断（异常检测、震动分类、传感器融合、回归标定）",
+  "description": "",
+  "datePublished": "2026-08-18",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32s3-imu-gesture-recognition/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32s3-imu-gesture-recognition/"
+  },
+  "keywords": "嵌入式, ESP32, 边缘AI, 异常检测, 震动检测, 姿态识别, EdgeAI, TFLite, TFLM"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">边缘AI 姿态识别 振动故障诊断（异常检测、震动分类、传感器融合、回归标定）</h1>
+  <article class="article-body">
+<h1>边缘AI 姿态识别 振动故障诊断（异常检测、震动分类、传感器融合、回归标定）</h1>
+<h2>项目背景</h2>
+<p>项目原型来自本人负责的低功耗安防量产设备，安装在城市街道，设备一次性电池长效供电，依靠 IMU 震动事件唤醒 MCU，端侧完成风险研判后按需 4G 上报。</p>
+<p>受量产项目涉密限制，搭建简化 DEMO 复现整套技术链路。设备以 50Hz 采样窗口采集 2 秒加速度时序数据，支持样本标注本地存储与网页导出；PC 端完成算法训练后，将推理逻辑以纯 C 形式部署到终端，实现本地实时分类。</p>
+<p>整套技术可迁移至振动异常检测、故障诊断、传感器标定等工业场景。</p>
+<h2>核心工作</h2>
+<ol>
+<li><strong>数据采集</strong>：设定50Hz/2s采集窗口，完成IMU运动姿态时序样本采集与标注，本地SD卡存储、网页后台导出数据。</li>
+<li><strong>AutoML算法选型</strong>：基于时序数据自动遍历预处理、特征与分类算法组合，确定最优推理流水线。演示版采用轻量化简易特征；量产方案搭载全套时域、频域复合特征工程，适配复杂工业场景。</li>
+<li><strong>算法复刻</strong>：AutoML 输出绑定特定芯片的黑盒静态库，无法跨平台运行。基于其输出的算法技术路线，借助 AI 工具逐级重建预处理、特征提取、推理全流程逻辑，经输入比对校验，复刻得到输出对齐的干净模型。</li>
+<li><strong>MCU推理优化</strong>：实现纯C无依赖算法部署，全程静态内存设计，无动态内存分配；模型体积仅3.1KB，极低资源占用，实现毫秒级端侧离线推理。</li>
+<li><strong>LVGL交互界面</strong>：基于LVGL搭建设备交互界面，实时展示三轴时序数据波形，配置姿态分类、实时推理功能按键，实现数据采集、算法推理的可视化闭环调试。</li>
+</ol>
+<h2>设备效果</h2>
+<table>
+<thead>
+<tr>
+<th>数据采集</th>
+<th>实时推理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/posts/esp32s3-imu-gesture-recognition/img/%E6%95%B0%E6%8D%AE%E9%87%87%E9%9B%86%E5%AE%9E%E6%8B%8D.webp" alt="设备采集加速度数据"></td>
+<td><img src="/posts/esp32s3-imu-gesture-recognition/img/%E6%8E%A8%E7%90%86%E5%AE%9E%E6%8B%8D.webp" alt="设备端实时推理"></td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th>A 类手势</th>
+<th>B 类手势</th>
+<th>C 类手势</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/posts/esp32s3-imu-gesture-recognition/img/%E6%8E%A8%E7%90%86A.webp" alt="A 类手势推理结果"></td>
+<td><img src="/posts/esp32s3-imu-gesture-recognition/img/%E6%8E%A8%E7%90%86B.webp" alt="B 类手势推理结果"></td>
+<td><img src="/posts/esp32s3-imu-gesture-recognition/img/%E6%8E%A8%E7%90%86C.webp" alt="C 类手势推理结果"></td>
+</tr>
+</tbody></table>
+<video controls loop playsinline width="100%" style="border-radius: 12px;">
+  <source src="/posts/esp32s3-imu-gesture-recognition/1911524140.mp4" type="video/mp4">
+  您的浏览器不支持视频播放。
+</video>
+
+<h2>技术路线</h2>
+<p><img src="/posts/esp32s3-imu-gesture-recognition/img/architecture.svg" alt="ESP32-S3 手势识别端侧推理链路"></p>
+<h2>边缘AI 使用场景</h2>
+<p>这套&quot;时序采集 + 特征工程 + 轻量化模型 + 纯 C 端侧部署&quot;的骨架，是一套<strong>端侧信号处理模板</strong>，分类、回归都能覆盖，换传感器、换场景都能快速复用：</p>
+<ul>
+<li><strong>异常振动检测</strong>：电机、风机、泵体等旋转设备，识别轴承磨损、不平衡、松动等故障类型。</li>
+<li><strong>多传感器融合诊断</strong>：融合温度、电流、振动、声纹等多路传感器，在 MCU 本地预测设备异常并分类故障原因。</li>
+<li><strong>电弧故障检测</strong>：从电流波形中提取特征，在断路器端侧实时识别串联/并联电弧。</li>
+<li><strong>运动姿态识别</strong>：基于腕部/腰部 IMU 识别走路、跑步、跌倒、骑行等动作，应用于健康穿戴设备。</li>
+<li><strong>传感器回归标定</strong>：输入单路或多路传感器原始值，回归估算标定后的物理量，例如把气体传感器原始读数换算为浓度单位。</li>
+</ul>
+<p><a href="https://github.com/createskyblue/esp32s3-imu-gesture-recognition">GitHub Demo仓库</a> · <a href="https://www.bilibili.com/video/BV1oSbX6DEbN">演示视频</a></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-18 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32s3-imu-gesture-recognition');
+  }
+  </script>
+</body>
+</html>

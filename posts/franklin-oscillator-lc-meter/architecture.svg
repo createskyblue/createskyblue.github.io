@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" width="100%" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect x="0" y="0" width="720" height="340" fill="#f8fafc"/>
+  <text x="20" y="28" font-size="16" font-weight="700" fill="#0f172a">信号链：阻抗到频率的物理映射，MCU 只数频率</text>
+  <rect x="20" y="70" width="190" height="110" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="115" y="116" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">待测 L / C</text>
+  <text x="115" y="138" font-size="13" fill="#475569" text-anchor="middle">接入 LC 谐振槽</text>
+  <text x="115" y="160" font-size="12" fill="#64748b" text-anchor="middle">（侵入式）</text>
+  <line x1="210" y1="125" x2="256" y2="125" stroke="#94a3b8" stroke-width="2"/>
+  <polygon points="256,125 248,120 248,130" fill="#94a3b8"/>
+  <rect x="260" y="44" width="200" height="162" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="360" y="78" font-size="14" font-weight="700" fill="#1d4ed8" text-anchor="middle">74HCU04 振荡器</text>
+  <text x="360" y="104" font-size="13" fill="#1e3a8a" text-anchor="middle">阻抗 → 频率</text>
+  <text x="360" y="128" font-size="13" fill="#1e3a8a" text-anchor="middle" font-family="monospace">f = 1/(2π√(LC))</text>
+  <text x="360" y="154" font-size="12" fill="#334155" text-anchor="middle">物理定律完成映射</text>
+  <text x="360" y="178" font-size="11" fill="#64748b" text-anchor="middle">模拟前端，零 MCU 介入</text>
+  <line x1="460" y1="125" x2="506" y2="125" stroke="#94a3b8" stroke-width="2"/>
+  <polygon points="506,125 498,120 498,130" fill="#94a3b8"/>
+  <text x="483" y="115" font-size="11" fill="#64748b" text-anchor="middle">方波→Pin5</text>
+  <rect x="510" y="44" width="190" height="162" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="605" y="78" font-size="14" font-weight="700" fill="#334155" text-anchor="middle">Arduino 计数</text>
+  <text x="605" y="104" font-size="13" fill="#475569" text-anchor="middle">Timer1 闸门 1 秒</text>
+  <text x="605" y="128" font-size="13" fill="#475569" text-anchor="middle">数上升沿</text>
+  <text x="605" y="152" font-size="12" fill="#334155" text-anchor="middle" font-family="monospace">FreqCount→freq</text>
+  <text x="605" y="176" font-size="11" fill="#64748b" text-anchor="middle">无 ADC / 无波形生成</text>
+  <rect x="20" y="248" width="680" height="68" rx="10" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="360" y="278" font-size="13" font-weight="600" fill="#0f172a" text-anchor="middle">校准 / 测量方程 → 解 L 或 C</text>
+  <text x="360" y="300" font-size="12" fill="#475569" text-anchor="middle">复杂度下沉到模拟电路，MCU 退化为一个计数器：全程无 ADC · 无同步采样 · 无浮点 DSP</text>
+</svg>

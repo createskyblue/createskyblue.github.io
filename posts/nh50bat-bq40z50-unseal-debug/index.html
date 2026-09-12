@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>电脑闲置两个月后电量 0% 充不进电：读取 BQ40Z50 状态并尝试解锁 - CacheRivulet小记</title>
+  <meta name="description" content="闲置后电量 0% 充不进电，先读 BQ40Z50 再决定换芯">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="I2C">
+  <meta property="article:tag" content="复盘">
+  <meta property="article:published_time" content="2026-09-03">
+  <meta property="og:title" content="电脑闲置两个月后电量 0% 充不进电：读取 BQ40Z50 状态并尝试解锁">
+  <meta property="og:description" content="闲置后电量 0% 充不进电，先读 BQ40Z50 再决定换芯">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/nh50bat-bq40z50-unseal-debug/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/nh50bat-bq40z50-unseal-debug/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "电脑闲置两个月后电量 0% 充不进电：读取 BQ40Z50 状态并尝试解锁",
+  "description": "闲置后电量 0% 充不进电，先读 BQ40Z50 再决定换芯",
+  "datePublished": "2026-09-03",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/nh50bat-bq40z50-unseal-debug/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/nh50bat-bq40z50-unseal-debug/"
+  },
+  "keywords": "嵌入式, 工程调试, 故障诊断, STM32, I2C, 复盘"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">电脑闲置两个月后电量 0% 充不进电：读取 BQ40Z50 状态并尝试解锁</h1>
+  <article class="article-body">
+<h1>电脑闲置两个月后电量 0% 充不进电：读取 BQ40Z50 状态并尝试解锁</h1>
+<p>这块 NH50BAT-4 笔记本电池闲置约两个月后，电脑显示电量 0%，接上充电器也充不进去。拆包逐节测量，其中一颗电芯是 0 V。</p>
+<p>电芯坏掉只是其中一层，保护板有没有跟着锁死才决定这个包还值不值得修。下面按实际排查顺序记录：从电池接口飞线接 STM32L496 读 BQ40Z50，尝试解锁，最后按解锁结果和电芯成本决定换芯还是买整包。</p>
+<p><img src="/posts/nh50bat-bq40z50-unseal-debug/cover.webp" alt="NH50BAT-4 电池包与保护板全景">
+<img src="/posts/nh50bat-bq40z50-unseal-debug/assets/diagnostic-flow.svg" alt="NH50BAT-4 维修诊断流程"></p>
+<h2>闲置后的电池包故障现象</h2>
+<p>开机后电量一直显示 0%，插充电器也没有反应。拆包逐节测量，其中一颗电芯 0 V；单独拆出来再量还是 0 V，用可调电源设 2.7 V、200 mA 试着激活，没有充电电流，这颗按失效处理。</p>
+<p>电芯失效之外还有一层要单独验证：保护板有没有因为故障或保护状态拒绝工作。这就是后面要直接读 BQ40Z50 的原因。</p>
+<h2>超声波焊接与四颗电芯更换边界</h2>
+<p>这个电池包的外壳使用了超声波焊接，无法像螺丝固定的外壳那样无损打开。要看到内部电池和保护板，需要先对外壳进行破坏性拆解，再重新处理外壳的固定和密封。</p>
+<p>四串电池包也不适合只换一颗。新电芯和剩下三颗旧电芯的容量、内阻、电压状态都不一样，混装会带来不均衡风险，正式更换必须四颗一起换，装配前查一致性。后面为了先验证保护板，我只临时换了一颗，这组混装电芯不能当成能正常充放电的成品，全程没有对它充电或大电流放电。</p>
+<h2>保护板上的 BQ40Z50 电池管理芯片</h2>
+<p><img src="/posts/nh50bat-bq40z50-unseal-debug/assets/bq40z50-chip-closeup.webp" alt="BQ40Z50 保护板芯片近照"></p>
+<p>保护板上的主控是 BQ40Z50，负责采集电芯信息、保存电池状态，并参与充放电保护控制。电脑显示 0% 又充不进电，光看电芯电压判断不了保护板还能不能工作，所以得直接读这颗芯片。</p>
+<h2>电池接口飞线接入 STM32L496</h2>
+<p>不用焊 BQ40Z50 的引脚，直接从电池接口飞线到 STM32L496，就能通过 SMBus/I²C 访问保护板。电源、地和通信线按接口丝印和实物走线确认。
+<img src="/posts/nh50bat-bq40z50-unseal-debug/assets/battery-interface-flying-wire.webp" alt="NH50BAT-4 电池接口局部图">
+<img src="/posts/nh50bat-bq40z50-unseal-debug/assets/cover.webp" alt="NH50BAT-4 电池包、保护板和 STM32L496 调试板"></p>
+<h2>I²C 地址扫描与电池数据读取</h2>
+<p>先做地址扫描确认保护板在线，扫到 BQ40Z50 的标准 7 位地址 <code>0x0B</code>，接着读标准电池数据，串口输出如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Manufacturer: SMP-LGC-2750</span></span>
+<span class="line"><span>Device: C41</span></span>
+<span class="line"><span>Chemistry: LION</span></span>
+<span class="line"><span>Pack Voltage: 13247 mV</span></span>
+<span class="line"><span>Relative SOC: 0 %</span></span></code></pre><p>四节电芯的读数：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Cell1: 3025 mV</span></span>
+<span class="line"><span>Cell2: 3435 mV</span></span>
+<span class="line"><span>Cell3: 3802 mV</span></span>
+<span class="line"><span>Cell4: 2986 mV</span></span>
+<span class="line"><span>Cell Sum: 13248 mV</span></span>
+<span class="line"><span>Pack Voltage Difference: -1 mV</span></span></code></pre><p>四节之和与总压只差 1 mV，采样和通信链路是可信的。816 mV 的最大压差来自刚换上的那颗新电芯和三颗旧电芯混装，不代表四颗新电芯配组后的结果。</p>
+<h2>BQ40Z50 状态读取结果</h2>
+<p>能读通不代表允许充放电，状态寄存器才是关键：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>SafetyStatus:    0x00000000</span></span>
+<span class="line"><span>PFStatus:        0x00000801</span></span>
+<span class="line"><span>OperationStatus: 0x00007381</span></span>
+<span class="line"><span>SEC:             3</span></span>
+<span class="line"><span>XCHG:            SET</span></span></code></pre><p><code>SEC=3</code> 是 Sealed 状态，<code>PFStatus</code> 置了故障位，<code>XCHG</code> 表示充电被禁。芯片在线和电池不能用，这两件事同时成立。</p>
+<h2>常见 Unseal Key 的发送结果</h2>
+<p>先试 BQ40Z50 常见的两组默认 Unseal Key：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>0x0414</span></span>
+<span class="line"><span>0x3672</span></span></code></pre><p>按 ManufacturerBlockAccess <code>0x44</code> 编码后发出去：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>[44 02 14 04]</span></span>
+<span class="line"><span>[44 02 72 36]</span></span></code></pre><p>发完回读 OperationStatus，没有变化：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Post-unseal OperationStatus: 0x00007381, SEC=3</span></span>
+<span class="line"><span>Unseal result: still Sealed (SEC=3); key pair was not accepted</span></span></code></pre><p>两组 key 都没被接受，说明这块的量产配置换过密钥。没有正确的 key，标准解锁流程走不下去，这也证明不了芯片本身坏了。</p>
+<h2>暴力搜 key 这条路走不通</h2>
+<p>两组 16 位 key 合起来是约 <code>2^32</code>（42.9 亿）种组合。只按两次 4 字节写入加地址应答的理想传输时间算，100 kHz 传完一轮是 45 天量级，1 MHz 也要 4.5 天，还没算芯片处理时间、状态回读和失败等待；我当前程序在两组 key 之间留了 10 ms 间隔，按这个节奏是 1.4 年往上。何况芯片一般会限制连续失败次数，搜到一半就会停。</p>
+<p>所以提 I²C 频率没有意义，要么拿到这块电池对应的 Unseal Key，要么换一块已经配置好的保护板。</p>
+<h2>换芯还是买整包</h2>
+<p>继续修要同时处理三件事：四颗电芯重新采购、保护板已经记了 PF、BQ40Z50 还锁在 Sealed。</p>
+<p>四颗 3400 mAh 电芯单价 16.5 元，合计 66 元；同型号完整电池包 77 元。材料价差只有 11 元，芯片、焊接、时间和解锁工具的钱都还没算进去。解锁已经失败，再买保护板芯片也没有明确收益，总成本很容易接近或超过整包。</p>
+<h2>结论</h2>
+<p>这块电池包的问题定位到两层：一颗电芯 0 V 失效，2.7 V/200 mA 外部激活没有充电电流；保护板侧 BQ40Z50 能通信，但处于 Sealed 且记了 PF，常见 Unseal Key 无效。芯片是好的还是坏的没法下结论，只能说标准解锁流程走不通。</p>
+<p>材料上四颗电芯 66 元对整包 77 元，加上解锁失败和 PF 未清除，继续修不划算，最后买了完整电池包。</p>
+<h2>调试代码与实测工程</h2>
+<p>本次 STM32L496 诊断代码位于公开仓库：<a href="https://github.com/createskyblue/STM32L496_BQ40Z50_DIAG">STM32L496_BQ40Z50_DIAG</a>。</p>
+<p>相关文件包括：</p>
+<ul>
+<li><code>Core/Src/bq40z50_diag.c</code>：地址扫描、标准电池数据、单节电压和 BQ40Z50 状态读取。</li>
+<li><code>Core/Src/bq40z50_protocol.c</code>：Unseal 数据帧编码和 SEC 字段解析。</li>
+<li><code>Core/Src/i2c.c</code>：STM32L496 的 I²C1 初始化。</li>
+<li><code>tests/test_bq40z50_protocol.c</code>：验证 key 字节顺序和数据帧格式。</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-03 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=nh50bat-bq40z50-unseal-debug');
+  }
+  </script>
+</body>
+</html>

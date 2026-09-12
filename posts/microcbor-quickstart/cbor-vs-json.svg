@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 260" font-family="Consolas, 'Courier New', monospace" font-size="13">
+  <rect width="720" height="260" fill="#fafafa" rx="6"/>
+  <text x="20" y="28" font-size="14" font-weight="bold" fill="#222">同一消息 {dev:"s-01",ok:true} 在两种格式下的字节占用</text>
+
+  <!-- JSON row -->
+  <text x="20" y="60" fill="#444">JSON（19 字节）</text>
+  <g>
+    <!-- {"dev":"s-01","ok":true} -->
+    <rect x="140" y="44" width="19" height="22" fill="#e8e8e8" stroke="#bbb"/><text x="145" y="60" fill="#333">{</text>
+    <rect x="159" y="44" width="38" height="22" fill="#ffe4b5" stroke="#d4a373"/><text x="162" y="60" fill="#333">"dev"</text>
+    <rect x="197" y="44" width="19" height="22" fill="#e8e8e8" stroke="#bbb"/><text x="202" y="60" fill="#333">:</text>
+    <rect x="216" y="44" width="48" height="22" fill="#b5e0ff" stroke="#5a9fd4"/><text x="219" y="60" fill="#333">"s-01"</text>
+    <rect x="264" y="44" width="19" height="22" fill="#e8e8e8" stroke="#bbb"/><text x="269" y="60" fill="#333">,</text>
+    <rect x="283" y="44" width="38" height="22" fill="#ffe4b5" stroke="#d4a373"/><text x="287" y="60" fill="#333">"ok"</text>
+    <rect x="321" y="44" width="19" height="22" fill="#e8e8e8" stroke="#bbb"/><text x="326" y="60" fill="#333">:</text>
+    <rect x="340" y="44" width="38" height="22" fill="#c8f7c5" stroke="#5bbf5b"/><text x="345" y="60" fill="#333">true</text>
+    <rect x="378" y="44" width="19" height="22" fill="#e8e8e8" stroke="#bbb"/><text x="383" y="60" fill="#333">}</text>
+  </g>
+
+  <!-- CBOR row -->
+  <text x="20" y="110" fill="#444">CBOR（11 字节）</text>
+  <g>
+    <!-- a2 63646576 64732d3031 626f6b f5 -->
+    <rect x="140" y="94" width="38" height="22" fill="#f0c8ff" stroke="#a66cc9"/><text x="143" y="110" fill="#333">a2 map</text>
+    <rect x="178" y="94" width="57" height="22" fill="#ffe4b5" stroke="#d4a373"/><text x="181" y="110" fill="#333">63 dev</text>
+    <rect x="235" y="94" width="67" height="22" fill="#b5e0ff" stroke="#5a9fd4"/><text x="238" y="110" fill="#333">64 s-01</text>
+    <rect x="302" y="94" width="48" height="22" fill="#ffe4b5" stroke="#d4a373"/><text x="305" y="110" fill="#333">62 ok</text>
+    <rect x="350" y="94" width="28" height="22" fill="#c8f7c5" stroke="#5bbf5b"/><text x="353" y="110" fill="#333">f5</text>
+  </g>
+
+  <!-- 图例 -->
+  <g font-size="12" fill="#444">
+    <rect x="20" y="150" width="14" height="14" fill="#e8e8e8" stroke="#bbb"/><text x="40" y="162">结构标点（引号、逗号、括号、冒号）</text>
+    <rect x="20" y="172" width="14" height="14" fill="#ffe4b5" stroke="#d4a373"/><text x="40" y="184">键名文本（CBOR 长度前缀替代引号）</text>
+    <rect x="20" y="194" width="14" height="14" fill="#b5e0ff" stroke="#5a9fd4"/><text x="40" y="206">字符串值（CBOR 单字节头替代两端引号）</text>
+    <rect x="20" y="216" width="14" height="14" fill="#c8f7c5" stroke="#5bbf5b"/><text x="40" y="228">布尔（JSON 4 字符 → CBOR 1 字节）</text>
+    <rect x="20" y="238" width="14" height="14" fill="#f0c8ff" stroke="#a66cc9"/><text x="40" y="250">容器头（CBOR 一个字节包含 major type + 计数）</text>
+  </g>
+
+  <text x="460" y="110" fill="#888" font-size="12">头字节自带类型和长度</text>
+  <text x="420" y="60" fill="#888" font-size="12">引号、逗号、冒号共 8 个字节</text>
+</svg>

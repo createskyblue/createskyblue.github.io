@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用ESP-NN在ESP32-S3上部署一个学过sin的神经网络 - CacheRivulet小记</title>
+  <meta name="description" content="ESP32-S3运行ESP-NN量化正弦模型">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="ESP-NN">
+  <meta property="article:tag" content="TFLite Micro">
+  <meta property="article:tag" content="模型量化">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:published_time" content="2026-06-02">
+  <meta property="og:title" content="用ESP-NN在ESP32-S3上部署一个学过sin的神经网络">
+  <meta property="og:description" content="ESP32-S3运行ESP-NN量化正弦模型">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32s3-esp-nn-sin-demo/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32s3-esp-nn-sin-demo/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用ESP-NN在ESP32-S3上部署一个学过sin的神经网络",
+  "description": "ESP32-S3运行ESP-NN量化正弦模型",
+  "datePublished": "2026-06-02",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32s3-esp-nn-sin-demo/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32s3-esp-nn-sin-demo/"
+  },
+  "keywords": "ESP32-S3, ESP-NN, TFLite Micro, 模型量化, 边缘AI"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用ESP-NN在ESP32-S3上部署一个学过sin的神经网络</h1>
+  <article class="article-body">
+<h1>用ESP-NN在ESP32-S3上部署一个学过sin的神经网络</h1>
+<h2>全景流程</h2>
+<div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; font-size: 14px;">
+
+<div style="padding: 16px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+
+<p><strong>PC (Python)</strong></p>
+<p>① <code>train.py</code> — 训练 float 模型</p>
+<p>② <code>quantize.py</code> — float32 → int8 量化</p>
+<p>③ <code>convert_to_c.py</code> — .tflite → C 数组 <code>model.h</code></p>
+</div>
+
+<div style="text-align: center; font-size: 24px; color: #0ea5e9;">→<br/>拷贝<br/>model.h<br/>→</div>
+
+<div style="padding: 16px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+
+<p><strong>ESP32-S3</strong></p>
+<p>④ <code>app_main.cpp</code> — 加载模型 → 推理 → 打印结果</p>
+</div>
+
+</div>
+
+<h2>环境</h2>
+<ul>
+<li>Python 3.8+，用uv管理虚拟环境</li>
+<li>ESP-IDF v5.0+</li>
+<li>ESP32-S3开发板（ESP32/ESP32-C3也兼容，S3加速比最高）</li>
+</ul>
+<h2>训练</h2>
+<h3>数据</h3>
+<p>1000个<code>[0, 2π]</code>均匀分布的随机点，对应<code>sin(x)</code>值。选sin的原因：非线性（Dense必须弯曲才能拟合）、有界（输出[-1,1]，量化时范围可控）、周期性（训练数据天然覆盖完整定义域）。</p>
+<h3>网络</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">model = tf.keras.Sequential([</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'relu'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">input_shape</span><span style="color:#D4D4D4">=(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">,)),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'relu'</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">])</span></span>
+<span class="line"><span style="color:#D4D4D4">model.compile(</span><span style="color:#9CDCFE">optimizer</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'adam'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">loss</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'mse'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">metrics</span><span style="color:#D4D4D4">=[</span><span style="color:#CE9178">'mae'</span><span style="color:#D4D4D4">])</span></span></code></pre><p>三层全连接，305个参数。300轮训练，batch_size=64，20%验证集。</p>
+<h3>训练代码（train.py）</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> math</span></span>
+<span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> numpy </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> np</span></span>
+<span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> tensorflow </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> tf</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 1. 生成训练数据：1000个 [0, 2π] 的随机点</span></span>
+<span class="line"><span style="color:#D4D4D4">x_values = np.random.uniform(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * math.pi, </span><span style="color:#B5CEA8">1000</span><span style="color:#D4D4D4">).astype(np.float32)</span></span>
+<span class="line"><span style="color:#D4D4D4">np.random.shuffle(x_values)</span></span>
+<span class="line"><span style="color:#D4D4D4">y_values = np.sin(x_values).astype(np.float32)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 2. 构建模型</span></span>
+<span class="line"><span style="color:#D4D4D4">model = tf.keras.Sequential([</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'relu'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">input_shape</span><span style="color:#D4D4D4">=(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">,)),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'relu'</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">])</span></span>
+<span class="line"><span style="color:#D4D4D4">model.compile(</span><span style="color:#9CDCFE">optimizer</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'adam'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">loss</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'mse'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">metrics</span><span style="color:#D4D4D4">=[</span><span style="color:#CE9178">'mae'</span><span style="color:#D4D4D4">])</span></span>
+<span class="line"><span style="color:#D4D4D4">model.summary()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 3. 训练 300 轮</span></span>
+<span class="line"><span style="color:#D4D4D4">model.fit(x_values, y_values, </span><span style="color:#9CDCFE">epochs</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">300</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">batch_size</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">validation_split</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">0.2</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 4. 验证</span></span>
+<span class="line"><span style="color:#D4D4D4">test_x = np.array([</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, math.pi / </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">, math.pi / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">, math.pi, </span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4"> * math.pi / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * math.pi], </span><span style="color:#9CDCFE">dtype</span><span style="color:#D4D4D4">=np.float32)</span></span>
+<span class="line"><span style="color:#D4D4D4">test_y = model.predict(test_x, </span><span style="color:#9CDCFE">verbose</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">).flatten()</span></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> x, y_pred </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> zip</span><span style="color:#D4D4D4">(test_x, test_y):</span></span>
+<span class="line"><span style="color:#D4D4D4">    y_true = math.sin(x)</span></span>
+<span class="line"><span style="color:#DCDCAA">    print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"  sin(</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">x</span><span style="color:#569CD6">:.4f}</span><span style="color:#CE9178">) = </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">y_true</span><span style="color:#569CD6">:+.4f}</span><span style="color:#CE9178">  |  预测 = </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">y_pred</span><span style="color:#569CD6">:+.4f}</span><span style="color:#CE9178">  |  误差 = </span><span style="color:#569CD6">{</span><span style="color:#DCDCAA">abs</span><span style="color:#D4D4D4">(y_pred - y_true)</span><span style="color:#569CD6">:.4f}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 5. 保存</span></span>
+<span class="line"><span style="color:#D4D4D4">model.save(</span><span style="color:#CE9178">"sin_model_float.keras"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">converter = tf.lite.TFLiteConverter.from_keras_model(model)</span></span>
+<span class="line"><span style="color:#C586C0">with</span><span style="color:#DCDCAA"> open</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"sin_model_float.tflite"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"wb"</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> f:</span></span>
+<span class="line"><span style="color:#D4D4D4">    f.write(converter.convert())</span></span></code></pre><pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">pip</span><span style="color:#CE9178"> install</span><span style="color:#CE9178"> uv</span></span>
+<span class="line"><span style="color:#DCDCAA">uv</span><span style="color:#CE9178"> venv</span><span style="color:#CE9178"> .venv</span><span style="color:#D4D4D4"> &#x26;&#x26; </span><span style="color:#DCDCAA">uv</span><span style="color:#CE9178"> pip</span><span style="color:#CE9178"> install</span><span style="color:#CE9178"> tensorflow</span><span style="color:#CE9178"> numpy</span></span>
+<span class="line"><span style="color:#DCDCAA">python</span><span style="color:#CE9178"> train.py</span></span></code></pre><h3>训练结果</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>sin(0.00) = +0.000  |  预测 = +0.001  |  误差 0.001</span></span>
+<span class="line"><span>sin(π/2)  = +1.000  |  预测 = +0.991  |  误差 0.009</span></span>
+<span class="line"><span>sin(π)    = -0.000  |  预测 = -0.013  |  误差 0.013</span></span></code></pre><p>产物：<code>sin_model_float.keras</code>（可继续训练）、<code>sin_model_float.tflite</code>（float TFLite，约3KB）。</p>
+<h2>量化</h2>
+<h3>为什么需要量化</h3>
+<p>ESP32-S3的FPU只有单精度，且没有向量浮点加速。int8整数运算配合ESP-NN的汇编优化（利用ESP32-S3的PIE向量指令，一条指令处理4个int8），推理速度比float快一个数量级。模型体积也缩小4倍。</p>
+<h3>量化原理</h3>
+<p>量化建立float和int8之间的线性映射：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>float_value = (int8_value - zero_point) × scale</span></span></code></pre><p><code>scale</code>和<code>zero_point</code>通过校准数据集统计每层数值范围后自动计算。量化脚本中的<code>representative_dataset</code>用于<strong>观察</strong>每层激活值的分布，与训练无关。</p>
+<h3>量化代码（quantize.py）</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> math</span></span>
+<span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> numpy </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> np</span></span>
+<span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> tensorflow </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> tf</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 1. 加载 float 模型</span></span>
+<span class="line"><span style="color:#D4D4D4">converter = tf.lite.TFLiteConverter.from_keras_model(</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.models.load_model(</span><span style="color:#CE9178">"sin_model_float.keras"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 2. 配置 int8 全量化</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.optimizations = [tf.lite.Optimize.DEFAULT]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 校准数据集：100个随机样本，用来统计每层数值范围</span></span>
+<span class="line"><span style="color:#569CD6">def</span><span style="color:#DCDCAA"> representative_dataset</span><span style="color:#D4D4D4">():</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> x </span><span style="color:#C586C0">in</span><span style="color:#D4D4D4"> np.random.uniform(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * math.pi, </span><span style="color:#B5CEA8">100</span><span style="color:#D4D4D4">).astype(np.float32):</span></span>
+<span class="line"><span style="color:#C586C0">        yield</span><span style="color:#D4D4D4"> [x]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">converter.representative_dataset = representative_dataset</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.inference_input_type = tf.int8</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.inference_output_type = tf.int8</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 3. 转换并保存</span></span>
+<span class="line"><span style="color:#D4D4D4">tflite_quant_model = converter.convert()</span></span>
+<span class="line"><span style="color:#C586C0">with</span><span style="color:#DCDCAA"> open</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"sin_model_int8.tflite"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"wb"</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> f:</span></span>
+<span class="line"><span style="color:#D4D4D4">    f.write(tflite_quant_model)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 4. 验证</span></span>
+<span class="line"><span style="color:#D4D4D4">interpreter = tf.lite.Interpreter(</span><span style="color:#9CDCFE">model_content</span><span style="color:#D4D4D4">=tflite_quant_model)</span></span>
+<span class="line"><span style="color:#D4D4D4">interpreter.allocate_tensors()</span></span>
+<span class="line"><span style="color:#D4D4D4">input_details = interpreter.get_input_details()</span></span>
+<span class="line"><span style="color:#D4D4D4">output_details = interpreter.get_output_details()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"输入量化参数: scale=</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">input_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]</span><span style="color:#569CD6">:.6f}</span><span style="color:#CE9178">, "</span></span>
+<span class="line"><span style="color:#569CD6">      f</span><span style="color:#CE9178">"zero_point=</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">input_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#DCDCAA">print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"输出量化参数: scale=</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">output_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]</span><span style="color:#569CD6">:.6f}</span><span style="color:#CE9178">, "</span></span>
+<span class="line"><span style="color:#569CD6">      f</span><span style="color:#CE9178">"zero_point=</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">output_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">test_points = [</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, math.pi / </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">, math.pi / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">, math.pi, </span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4"> * math.pi / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> x </span><span style="color:#C586C0">in</span><span style="color:#D4D4D4"> test_points:</span></span>
+<span class="line"><span style="color:#D4D4D4">    input_scale = input_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">    input_zp = input_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">    x_quant = </span><span style="color:#4EC9B0">int</span><span style="color:#D4D4D4">(x / input_scale + input_zp)</span></span>
+<span class="line"><span style="color:#D4D4D4">    x_quant = np.clip(x_quant, -</span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">127</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    interpreter.set_tensor(input_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'index'</span><span style="color:#D4D4D4">], np.array([[x_quant]], </span><span style="color:#9CDCFE">dtype</span><span style="color:#D4D4D4">=np.int8))</span></span>
+<span class="line"><span style="color:#D4D4D4">    interpreter.invoke()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    y_quant = interpreter.get_tensor(output_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'index'</span><span style="color:#D4D4D4">]).flatten()[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">    output_scale = output_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">    output_zp = output_details[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][</span><span style="color:#CE9178">'quantization'</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">    y_pred = </span><span style="color:#4EC9B0">float</span><span style="color:#D4D4D4">((</span><span style="color:#4EC9B0">int</span><span style="color:#D4D4D4">(y_quant) - output_zp) * output_scale)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    y_true = math.sin(x)</span></span>
+<span class="line"><span style="color:#DCDCAA">    print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"  sin(</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">x</span><span style="color:#569CD6">:.4f}</span><span style="color:#CE9178">) = </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">y_true</span><span style="color:#569CD6">:+.4f}</span><span style="color:#CE9178">  |  int8 预测 = </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">y_pred</span><span style="color:#569CD6">:+.4f}</span><span style="color:#CE9178">  |  误差 = </span><span style="color:#569CD6">{</span><span style="color:#DCDCAA">abs</span><span style="color:#D4D4D4">(y_pred - y_true)</span><span style="color:#569CD6">:.4f}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span></code></pre><h3>量化结果</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>输入: scale=0.024349, zero_point=-128</span></span>
+<span class="line"><span>输出: scale=0.008386, zero_point=7</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>sin(0.00) = +0.000  |  int8 预测 = +0.025  |  误差 0.025</span></span>
+<span class="line"><span>sin(π/4)  = +0.707  |  int8 预测 = +0.713  |  误差 0.006</span></span>
+<span class="line"><span>sin(π/2)  = +1.000  |  int8 预测 = +1.006  |  误差 0.006</span></span>
+<span class="line"><span>sin(3π/2) = -1.000  |  int8 预测 = -1.115  |  误差 0.115</span></span></code></pre><p>边界处误差较大，可通过量化感知训练（QAT）改善。产物：<code>sin_model_int8.tflite</code>（约3.4KB）。</p>
+<h2>转C数组</h2>
+<p>.tflite文件无法直接被C代码读取，转为<code>const unsigned char</code>数组嵌入固件：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> sys</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">def</span><span style="color:#DCDCAA"> convert_to_c_array</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">tflite_path</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">output_path</span><span style="color:#D4D4D4">):</span></span>
+<span class="line"><span style="color:#C586C0">    with</span><span style="color:#DCDCAA"> open</span><span style="color:#D4D4D4">(tflite_path, </span><span style="color:#CE9178">"rb"</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> f:</span></span>
+<span class="line"><span style="color:#D4D4D4">        model_data = f.read()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    with</span><span style="color:#DCDCAA"> open</span><span style="color:#D4D4D4">(output_path, </span><span style="color:#CE9178">"w"</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> f:</span></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#CE9178">'// Auto-generated by convert_to_c.py</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#CE9178">'// Do not edit manually</span><span style="color:#D7BA7D">\n\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#CE9178">'#ifndef MODEL_H_</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#CE9178">'#define MODEL_H_</span><span style="color:#D7BA7D">\n\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">'constexpr unsigned int g_model_len = </span><span style="color:#569CD6">{</span><span style="color:#DCDCAA">len</span><span style="color:#D4D4D4">(model_data)</span><span style="color:#569CD6">}</span><span style="color:#CE9178">;</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#CE9178">'alignas(16) const unsigned char g_model[] = {</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">        for</span><span style="color:#D4D4D4"> i, byte </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> enumerate</span><span style="color:#D4D4D4">(model_data):</span></span>
+<span class="line"><span style="color:#C586C0">            if</span><span style="color:#D4D4D4"> i % </span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4"> == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#D4D4D4">                f.write(</span><span style="color:#CE9178">'  '</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">            f.write(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">'0x</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">byte</span><span style="color:#569CD6">:02x}</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#C586C0">            if</span><span style="color:#D4D4D4"> i &#x3C; </span><span style="color:#DCDCAA">len</span><span style="color:#D4D4D4">(model_data) - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#D4D4D4">                f.write(</span><span style="color:#CE9178">', '</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#C586C0">            if</span><span style="color:#D4D4D4"> i % </span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4"> == </span><span style="color:#B5CEA8">11</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#D4D4D4">                f.write(</span><span style="color:#CE9178">'</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#CE9178">'</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">};</span><span style="color:#D7BA7D">\n\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">        f.write(</span><span style="color:#CE9178">'#endif  // MODEL_H_</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#9CDCFE"> __name__</span><span style="color:#D4D4D4"> == </span><span style="color:#CE9178">"__main__"</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#D4D4D4">    input_file = sys.argv[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">] </span><span style="color:#C586C0">if</span><span style="color:#DCDCAA"> len</span><span style="color:#D4D4D4">(sys.argv) > </span><span style="color:#B5CEA8">1</span><span style="color:#C586C0"> else</span><span style="color:#CE9178"> "sin_model_int8.tflite"</span></span>
+<span class="line"><span style="color:#D4D4D4">    output_file = sys.argv[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">] </span><span style="color:#C586C0">if</span><span style="color:#DCDCAA"> len</span><span style="color:#D4D4D4">(sys.argv) > </span><span style="color:#B5CEA8">2</span><span style="color:#C586C0"> else</span><span style="color:#CE9178"> "../esp32s3/main/model.h"</span></span>
+<span class="line"><span style="color:#D4D4D4">    convert_to_c_array(input_file, output_file)</span></span></code></pre><p><code>alignas(16)</code>是ESP32-S3的DMA和向量指令的对齐要求。</p>
+<h2>ESP32-S3部署</h2>
+<h3>项目结构</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>esp32s3/</span></span>
+<span class="line"><span>├── CMakeLists.txt</span></span>
+<span class="line"><span>├── components/</span></span>
+<span class="line"><span>│   └── esp-tflite-micro/   # TFLite Micro 组件（通过 -DESP_NN 调用 ESP-NN）</span></span>
+<span class="line"><span>├── managed_components/</span></span>
+<span class="line"><span>│   └── espressif__esp-nn/  # ESP-NN（idf.py build 自动下载）</span></span>
+<span class="line"><span>└── main/</span></span>
+<span class="line"><span>    ├── CMakeLists.txt</span></span>
+<span class="line"><span>    ├── idf_component.yml</span></span>
+<span class="line"><span>    ├── app_main.cpp</span></span>
+<span class="line"><span>    └── model.h             # convert_to_c.py 生成</span></span></code></pre><p><code>main/idf_component.yml</code>只声明<code>esp-nn</code>依赖，<code>esp-tflite-micro</code>通过本地<code>components</code>目录引入：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">dependencies</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#569CD6">  espressif/esp-nn</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#569CD6">    version</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">">=1.1.1"</span></span></code></pre><p><code>main/CMakeLists.txt</code>必须在<code>PRIV_REQUIRES</code>中声明<code>esp-tflite-micro</code>，否则编译器找不到头文件：</p>
+<pre><code>idf_component_register(
+    SRCS "app_main.cpp"
+    INCLUDE_DIRS "."
+    PRIV_REQUIRES spi_flash esp-tflite-micro
+)</code></pre><p>ESP-NN通过<code>esp-tflite-micro</code>的CMakeLists.txt中的<code>-DESP_NN</code>宏自动启用。</p>
+<h3>推理代码</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/*</span></span>
+<span class="line"><span style="color:#6A9955"> * sin_demo - 在 ESP32-S3 上运行 sin(x) 推理</span></span>
+<span class="line"><span style="color:#6A9955"> *</span></span>
+<span class="line"><span style="color:#6A9955"> * 流程:</span></span>
+<span class="line"><span style="color:#6A9955"> *   1. 加载 int8 量化模型</span></span>
+<span class="line"><span style="color:#6A9955"> *   2. 循环输入 x 值</span></span>
+<span class="line"><span style="color:#6A9955"> *   3. 执行推理（ESP-NN 自动加速）</span></span>
+<span class="line"><span style="color:#6A9955"> *   4. 反量化输出，打印结果</span></span>
+<span class="line"><span style="color:#6A9955"> */</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;cstdio></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;cinttypes></span><span style="color:#6A9955">  // PRId32 / PRIu32 宏</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;cmath></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;freertos/FreeRTOS.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;freertos/task.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/micro_interpreter.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/micro_mutable_op_resolver.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/schema/schema_generated.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "model.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// TFLite Micro 需要的内存池</span></span>
+<span class="line"><span style="color:#569CD6">constexpr</span><span style="color:#569CD6"> int</span><span style="color:#D4D4D4"> kTensorArenaSize = </span><span style="color:#B5CEA8">2048</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">alignas</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> tensor_arena</span><span style="color:#D4D4D4">[kTensorArenaSize];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// 模型需要的算子数量（只有 1 个全连接层类型）</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4">::MicroMutableOpResolver&#x3C;</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">> resolver;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">extern</span><span style="color:#CE9178"> "C"</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> app_main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">========================================</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"  sin_demo: ESP-NN + TFLite Micro</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"========================================</span><span style="color:#D7BA7D">\n\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 1. 加载模型</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4">::Model *model = </span><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#DCDCAA">GetModel</span><span style="color:#D4D4D4">(g_model);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">model</span><span style="color:#D4D4D4">-></span><span style="color:#DCDCAA">version</span><span style="color:#D4D4D4">() != TFLITE_SCHEMA_VERSION) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"ERROR: 模型版本不匹配! 期望 </span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178">, 实际 %"</span><span style="color:#D4D4D4"> PRIu32 </span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">               TFLITE_SCHEMA_VERSION, </span><span style="color:#9CDCFE">model</span><span style="color:#D4D4D4">-></span><span style="color:#DCDCAA">version</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"[OK] 模型已加载 (</span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178"> bytes)</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, g_model_len);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">resolver</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AddFullyConnected</span><span style="color:#D4D4D4">() != kTfLiteOk) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"ERROR: 注册 FullyConnected 算子失败</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 2. 创建解释器</span></span>
+<span class="line"><span style="color:#569CD6">    static</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4">::</span><span style="color:#4EC9B0">MicroInterpreter</span><span style="color:#DCDCAA"> interpreter</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#4EC9B0">        model</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">resolver</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">tensor_arena</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">kTensorArenaSize</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AllocateTensors</span><span style="color:#D4D4D4">() != kTfLiteOk) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"ERROR: 分配张量内存失败</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"[OK] 解释器已初始化 (arena: </span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178"> bytes)</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, kTensorArenaSize);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    TfLiteTensor *input = </span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">input</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">    TfLiteTensor *output = </span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">output</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // ESP32-S3 上 int32_t 是 long int，必须用 PRId32 而非 %d</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"[OK] 输入量化参数:  scale=</span><span style="color:#9CDCFE">%.6f</span><span style="color:#CE9178">  zero_point=%"</span><span style="color:#D4D4D4"> PRId32 </span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">           (</span><span style="color:#569CD6">double</span><span style="color:#D4D4D4">)</span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">scale</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">zero_point</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"[OK] 输出量化参数:  scale=</span><span style="color:#9CDCFE">%.6f</span><span style="color:#CE9178">  zero_point=%"</span><span style="color:#D4D4D4"> PRId32 </span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">           (</span><span style="color:#569CD6">double</span><span style="color:#D4D4D4">)</span><span style="color:#9CDCFE">output</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">scale</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">output</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">zero_point</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 3. 循环推理</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"  </span><span style="color:#9CDCFE">%-12s</span><span style="color:#9CDCFE">  %-12s</span><span style="color:#9CDCFE">  %-12s</span><span style="color:#9CDCFE">  %-12s</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"x"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"sin(x)真实值"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"推理结果"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"误差"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"  </span><span style="color:#9CDCFE">%-12s</span><span style="color:#9CDCFE">  %-12s</span><span style="color:#9CDCFE">  %-12s</span><span style="color:#9CDCFE">  %-12s</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"--------"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"----------"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"--------"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"--------"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C;= </span><span style="color:#B5CEA8">20</span><span style="color:#D4D4D4">; i++) {</span></span>
+<span class="line"><span style="color:#569CD6">        float</span><span style="color:#D4D4D4"> x = (</span><span style="color:#569CD6">float</span><span style="color:#D4D4D4">)i / </span><span style="color:#B5CEA8">20.0f</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">2.0f</span><span style="color:#D4D4D4"> * M_PI;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        // float → int8</span></span>
+<span class="line"><span style="color:#569CD6">        int8_t</span><span style="color:#D4D4D4"> x_quant = (</span><span style="color:#569CD6">int8_t</span><span style="color:#D4D4D4">)(x / </span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">scale</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">zero_point</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">        input</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">int8</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">] = x_quant;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        // 推理（ESP-NN 自动加速）</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">Invoke</span><span style="color:#D4D4D4">() != kTfLiteOk) {</span></span>
+<span class="line"><span style="color:#DCDCAA">            printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"ERROR: 推理失败</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">            return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        // int8 → float</span></span>
+<span class="line"><span style="color:#569CD6">        int8_t</span><span style="color:#D4D4D4"> y_quant = </span><span style="color:#9CDCFE">output</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">int8</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">        float</span><span style="color:#D4D4D4"> y_pred = (y_quant - </span><span style="color:#9CDCFE">output</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">zero_point</span><span style="color:#D4D4D4">) * </span><span style="color:#9CDCFE">output</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">params</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">scale</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">        float</span><span style="color:#D4D4D4"> y_true = </span><span style="color:#DCDCAA">sinf</span><span style="color:#D4D4D4">(x);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"  </span><span style="color:#9CDCFE">%-12.4f</span><span style="color:#9CDCFE">  %-12.4f</span><span style="color:#9CDCFE">  %-12.4f</span><span style="color:#9CDCFE">  %-12.4f</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">               x, y_true, y_pred, </span><span style="color:#DCDCAA">fabsf</span><span style="color:#D4D4D4">(y_pred - y_true));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">        vTaskDelay</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">pdMS_TO_TICKS</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">500</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">推理完成!</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>编译烧录</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">idf.py</span><span style="color:#CE9178"> set-target</span><span style="color:#CE9178"> esp32s3</span></span>
+<span class="line"><span style="color:#DCDCAA">idf.py</span><span style="color:#CE9178"> build</span></span>
+<span class="line"><span style="color:#DCDCAA">idf.py</span><span style="color:#569CD6"> --port</span><span style="color:#CE9178"> COM3</span><span style="color:#CE9178"> flash</span><span style="color:#CE9178"> monitor</span></span></code></pre><h3>输出</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>========================================</span></span>
+<span class="line"><span>  sin_demo: ESP-NN + TFLite Micro</span></span>
+<span class="line"><span>========================================</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>[OK] 模型已加载 (3456 bytes)</span></span>
+<span class="line"><span>[OK] 解释器已初始化 (arena: 2048 bytes)</span></span>
+<span class="line"><span>[OK] 输入量化参数:  scale=0.024349  zero_point=-128</span></span>
+<span class="line"><span>[OK] 输出量化参数:  scale=0.008386  zero_point=7</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>  x             sin(x)真实值  推理结果    误差</span></span>
+<span class="line"><span>  --------      ----------    --------    --------</span></span>
+<span class="line"><span>  0.0000        0.0000        0.0252      0.0252</span></span>
+<span class="line"><span>  0.3142        0.3090        0.3438      0.0348</span></span>
+<span class="line"><span>  0.6283        0.5878        0.5786      0.0092</span></span>
+<span class="line"><span>  0.9425        0.8090        0.8134      0.0044</span></span>
+<span class="line"><span>  1.2566        0.9511        0.9560      0.0049</span></span>
+<span class="line"><span>  1.5708        1.0000        1.0063      0.0063</span></span>
+<span class="line"><span>  1.8850        0.9511        0.9308      0.0202</span></span>
+<span class="line"><span>  2.1991        0.8090        0.7967      0.0124</span></span>
+<span class="line"><span>  2.5133        0.5878        0.5115      0.0762</span></span>
+<span class="line"><span>  2.8274        0.3090        0.2432      0.0658</span></span>
+<span class="line"><span>  3.1416       -0.0000       -0.0168      0.0168</span></span>
+<span class="line"><span>  3.4558       -0.3090       -0.2600      0.0491</span></span>
+<span class="line"><span>  3.7699       -0.5878       -0.5619      0.0259</span></span>
+<span class="line"><span>  4.0841       -0.8090       -0.7967      0.0124</span></span>
+<span class="line"><span>  4.3982       -0.9511       -0.9728      0.0217</span></span>
+<span class="line"><span>  4.7124       -1.0000       -1.1153      0.1153</span></span>
+<span class="line"><span>  5.0265       -0.9511       -0.9224      0.0286</span></span>
+<span class="line"><span>  5.3407       -0.8090       -0.7212      0.0878</span></span>
+<span class="line"><span>  5.6549       -0.5878       -0.5115      0.0762</span></span>
+<span class="line"><span>  5.9690       -0.3090       -0.3187      0.0096</span></span>
+<span class="line"><span>  6.2832        0.0000        0.0419      0.0419</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>推理完成!</span></span></code></pre><h2>ESP-NN加速机制</h2>
+<p>ESP-NN通过<code>-DESP_NN</code>宏替换TFLite Micro的默认算子实现。本例涉及的是<code>FullyConnected</code>算子。</p>
+<p>ESP32-S3的加速比最高，因其有PIE向量指令，一条指令同时处理4个int8数据。ESP-NN的汇编内核直接利用了这个特性。</p>
+<p>性能数据来源：<a href="https://github.com/espressif/esp-nn">ESP-NN GitHub</a> 和 <a href="https://components.espressif.com/components/espressif/esp-nn">ESP Component Registry</a> 中的Person Detection示例基准测试。</p>
+<h2>后续</h2>
+<ul>
+<li>换更大的模型（如CNN做MNIST），体会卷积层的量化</li>
+<li>用<a href="https://github.com/espressif/esp-dl">ESP-DL</a>替代TFLite Micro，支持双核调度和静态内存规划</li>
+<li>接传感器，把<code>input-&gt;data.int8</code>换成真实的传感器数据</li>
+</ul>
+<p>链路不变：训练 → 量化 → 转C → 推理。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-02 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32s3-esp-nn-sin-demo');
+  }
+  </script>
+</body>
+</html>

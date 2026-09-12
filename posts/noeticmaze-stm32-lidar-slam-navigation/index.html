@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NoeticMaze 在 STM32 上实现激光雷达 SLAM 与自主导航的工程拆解 - CacheRivulet小记</title>
+  <meta name="description" content="STM32激光雷达SLAM">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="SLAM">
+  <meta property="article:tag" content="激光雷达">
+  <meta property="article:tag" content="FreeRTOS">
+  <meta property="article:tag" content="A*">
+  <meta property="article:published_time" content="2026-05-31">
+  <meta property="og:title" content="NoeticMaze 在 STM32 上实现激光雷达 SLAM 与自主导航的工程拆解">
+  <meta property="og:description" content="STM32激光雷达SLAM">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/noeticmaze-stm32-lidar-slam-navigation/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/noeticmaze-stm32-lidar-slam-navigation/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "NoeticMaze 在 STM32 上实现激光雷达 SLAM 与自主导航的工程拆解",
+  "description": "STM32激光雷达SLAM",
+  "datePublished": "2026-05-31",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/noeticmaze-stm32-lidar-slam-navigation/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/noeticmaze-stm32-lidar-slam-navigation/"
+  },
+  "keywords": "STM32, SLAM, 激光雷达, FreeRTOS, A*"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">NoeticMaze 在 STM32 上实现激光雷达 SLAM 与自主导航的工程拆解</h1>
+  <article class="article-body">
+<h1>NoeticMaze 在 STM32 上实现激光雷达 SLAM 与自主导航的工程拆解</h1>
+<blockquote>
+<p><strong>声明：</strong> NoeticMaze 是一个开源项目，作者为 <a href="https://github.com/dokdo2013/noeticmaze">dokdo2013</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解嵌入式 SLAM 的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>NoeticMaze 是一个基于 STM32F446RE 的室内自主导航项目。它把激光雷达建图、ICP 定位、A* 路径规划、路径跟踪、动态重规划和蓝牙遥测放进了一个资源受限的 MCU 工程。</p>
+<p>这篇文章按照技术报告的完整度展开，不把项目压缩成一句“STM32 跑 SLAM”。真正有价值的部分在工程边界：地图怎么存，点云怎么传，ICP 怎么收敛，A* 怎么在小内存里搜索，FreeRTOS 任务怎么隔离实时控制和重计算。</p>
+<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:18px 0; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+  <div style="padding:12px; background:#ffffff; border:1px solid #dbeafe; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">1. 感知</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">雷达 DMA 组帧，IMU 和编码器给运动预测。</div>
+  </div>
+  <div style="padding:12px; background:#ffffff; border:1px solid #dcfce7; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">2. 定位与建图</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">ICP 输出位姿，Bresenham 写入占据栅格。</div>
+  </div>
+  <div style="padding:12px; background:#ffffff; border:1px solid #fef9c3; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">3. 规划</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">2cm 地图降采样到 10cm，A* 搜索低代价路径。</div>
+  </div>
+  <div style="padding:12px; background:#ffffff; border:1px solid #fee2e2; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">4. 控制</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">MotionTask 100Hz 跟踪路径并输出左右轮 PWM。</div>
+  </div>
+</div>
+
+<h2>核心结论</h2>
+<p>NoeticMaze 在 STM32F446RE 上实现了基于激光雷达的局部室内建图与自主导航闭环。系统不依赖 ROS，不依赖上位机做核心算法，也不使用预先导入的地图。</p>
+<p>完整导航能力包括：</p>
+<ul>
+<li>激光雷达 360 度扫描：UART DMA 接收，逐帧解析为极坐标点云。</li>
+<li>ICP 实时定位：点到线 ICP 匹配前后激光扫描，估计机器人位移。</li>
+<li>占据栅格建图：2cm 分辨率栅格，Bresenham 光线追踪更新地图。</li>
+<li>A* 路径规划：在 10cm 降采样规划图上搜索低代价可行路径。</li>
+<li>预瞄点航向跟踪：100Hz 运动控制差速底盘沿路径行驶。</li>
+<li>动态重规划：目标变化、路径阻断或位姿偏移时重新规划。</li>
+<li>蓝牙遥测：向上位机发送位姿、地图增量、路径和调试事件。</li>
+</ul>
+<p>它的适用范围也很明确：固定 4m x 4m 局部地图、小型室内或迷宫场景、相对静态环境。它没有回环检测，不适合长距离、大范围、动态人群环境。</p>
+<h2>几个需要先厘清的技术边界</h2>
+<p>理解 NoeticMaze 前，需要先厘清几个技术边界。它们直接影响后面对定位、建图、路径规划和避障机制的判断。</p>
+<p>第一，地图是在线构建的。机器人开机后从零开始扫描环境，通过 ICP 估计位姿，再用 Bresenham 光线追踪把扫描结果写入占据栅格。用户是在实时构建的地图上点选目标。</p>
+<p>第二，ICP 采用帧到帧匹配。系统维护参考扫描帧，用当前扫描和参考帧做点到线匹配，估计相对运动，再把定位结果用于建图。</p>
+<p>第三，A* 结果应描述为低代价可行路径。项目在 10cm 规划图上做 8 连通搜索，并叠加障碍膨胀、未知区策略、旧路径亲和度和路径平滑。</p>
+<p>第四，当前雷达任务没有真正按车体运动状态做跳帧。代码中有运动学跳帧相关宏和设计意图，但实际数据流是每完成一圈 360 度扫描后投递给 SLAM；队列满时复用当前缓冲。</p>
+<p>第五，路径规划结果通过全局路径快照和事件标志通知运动线程。系统里存在 <code>RespQueueHandle</code>，但最终路径发布机制是全局路径公告板。</p>
+<h2>硬件平台与资源约束</h2>
+<p>NoeticMaze 使用 NUCLEO-F446RE，核心 MCU 是 STM32F446RE。</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>规格</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>内核</td>
+<td>ARM Cortex-M4F，带单精度 FPU</td>
+</tr>
+<tr>
+<td>主频</td>
+<td>180MHz</td>
+</tr>
+<tr>
+<td>Flash</td>
+<td>512KB</td>
+</tr>
+<tr>
+<td>SRAM</td>
+<td>128KB</td>
+</tr>
+<tr>
+<td>FPU</td>
+<td>fpv4-sp-d16，支持单精度浮点</td>
+</tr>
+<tr>
+<td>RTOS</td>
+<td>FreeRTOS v10.3.1，CMSIS-RTOS v2 API</td>
+</tr>
+<tr>
+<td>FreeRTOS 堆</td>
+<td>30720 Bytes，约 30KB</td>
+</tr>
+<tr>
+<td>开发板</td>
+<td>NUCLEO-F446RE</td>
+</tr>
+</tbody></table>
+<p>外围传感器和通信接口如下。</p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>型号或规格</th>
+<th>接口</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>激光雷达</td>
+<td>460800 波特率，84 字节/帧，40 点/帧</td>
+<td>USART1 + DMA</td>
+<td>360 度环境距离扫描</td>
+</tr>
+<tr>
+<td>IMU</td>
+<td>MPU6500，3 轴陀螺仪 + 3 轴加速度计</td>
+<td>SPI2</td>
+<td>Yaw 和角速度</td>
+</tr>
+<tr>
+<td>编码器</td>
+<td>MC520P30_12V，30:1 减速比，4 倍频 1560 ticks/圈</td>
+<td>TIM3/TIM4 正交解码</td>
+<td>轮速与里程计</td>
+</tr>
+<tr>
+<td>蓝牙</td>
+<td>透传模块</td>
+<td>USART3 + DMA，912600 波特率</td>
+<td>上位机遥测和目标点指令</td>
+</tr>
+</tbody></table>
+<p>底盘参数如下。</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>驱动方式</td>
+<td>双轮差速驱动</td>
+</tr>
+<tr>
+<td>轮径</td>
+<td>70mm</td>
+</tr>
+<tr>
+<td>轮距</td>
+<td>180mm</td>
+</tr>
+<tr>
+<td>最大线速度</td>
+<td>0.8m/s</td>
+</tr>
+<tr>
+<td>巡航线速度</td>
+<td>0.35m/s</td>
+</tr>
+<tr>
+<td>最大角速度</td>
+<td>60deg/s</td>
+</tr>
+<tr>
+<td>电机 PWM 频率</td>
+<td>45kHz</td>
+</tr>
+</tbody></table>
+<p>128KB SRAM 是最紧的资源。系统同时需要维护地图、雷达帧、点云、A* 队列、任务栈、蓝牙缓冲和各种状态快照。</p>
+<p>关键内存压力包括：</p>
+<ul>
+<li>2cm 分辨率的 200 x 200 占据栅格地图：2bit/cell，约 10KB。</li>
+<li>10cm 分辨率的 40 x 40 规划地图：4bit/cell，800B/缓冲，乒乓双缓冲共 1600B。</li>
+<li>3 个激光雷达帧缓冲：<code>LidarMap_t</code> 每个约 736B，共约 2.2KB。</li>
+<li>FreeRTOS 任务栈：多个任务合计约 20KB。</li>
+<li>ICP 使用的 360 点当前帧和参考帧点云。</li>
+<li>A* 优先队列：2500 个节点，每个 4B，共约 10KB。</li>
+</ul>
+<p>这些数字解释了项目为什么大量使用静态内存、打包存储、零拷贝队列和降采样规划图。桌面端常见的宽松数据结构，在这个平台上很快会把 RAM 用完。</p>
+<h2>总体数据流</h2>
+<p>系统可以按以下链路理解：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>激光雷达 USART1 + DMA</span></span>
+<span class="line"><span>  -> LidarRouteTask 解析并组装 360 度扫描</span></span>
+<span class="line"><span>  -> LidarQueueHandle 投递 LidarMap_t 指针</span></span>
+<span class="line"><span>  -> AlgorithmBrain 执行 ICP、建图、降采样、重规划判断</span></span>
+<span class="line"><span>  -> ReqQueueHandle 向 PlannerTask 请求路径</span></span>
+<span class="line"><span>  -> PlannerTask 在 10cm 地图上运行 A* 和路径平滑</span></span>
+<span class="line"><span>  -> 全局路径公告板 + PathEventHandle 发布路径</span></span>
+<span class="line"><span>  -> MotionTask 100Hz 跟踪路径并控制电机</span></span>
+<span class="line"><span>  -> TaskPrint 通过蓝牙发送地图、路径、位姿和调试事件</span></span></code></pre><p>高频运动控制和低频规划分开。A* 可以按需运行，MotionTask 必须稳定周期运行。雷达、SLAM、Planner 和蓝牙也通过队列和事件解耦，避免单个模块卡住整个控制链。</p>
+<h2>激光雷达数据采集与预处理</h2>
+<p>激光雷达数据通过 USART1 + DMA 循环接收。UART 空闲中断触发解析逻辑，<code>LidarRouteTask</code> 将原始帧组装为完整的 360 度扫描。</p>
+<p>协议结构要点：</p>
+<ul>
+<li>单帧 84 字节。</li>
+<li>每帧包含 40 个测距点。</li>
+<li>帧头高半字节匹配 <code>0xA?</code>、<code>0x5?</code>，低半字节组合为校验值。</li>
+<li>相邻点角度间隔约 0.705 度。</li>
+<li>单帧覆盖约 27.5 到 28.2 度。</li>
+<li>完成 360 度扫描需要约 13 到 14 帧原始数据。</li>
+</ul>
+<p>代码采用动态插值解算器。解析时根据相邻两帧起始角度差计算精确步长，补偿雷达电机转速波动。</p>
+<p>距离过滤也分层处理。雷达模块有效距离宏为 <code>30mm ~ 10000mm</code>，SLAM 转换点云时使用 <code>30mm ~ 8000mm</code> 过滤，无效点标记为 0。</p>
+<p>雷达坐标系还有方向适配问题。该雷达角度方向是顺时针为正，而常见 SLAM 坐标系按逆时针为正。极坐标转笛卡尔坐标时需要做角度方向转换，并叠加雷达安装角补偿。</p>
+<h3>零拷贝雷达缓冲池</h3>
+<p>系统维护 3 个静态 <code>LidarMap_t</code> 缓冲区，通过 FreeRTOS 队列实现借还机制。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>空闲池 -> 雷达任务填充 -> 就绪队列 -> SLAM 任务处理 -> 归还空闲池</span></span></code></pre><p>队列里传的是指针，不复制整帧数据。当前结构体每个约 736B，三块缓冲区可以接受；如果每帧复制，会浪费 CPU 和 SRAM。</p>
+<h3>运动学跳帧的当前状态</h3>
+<p>代码中定义了直行跳帧、转弯全投递、角速度阈值等宏，设计意图是转弯时全量处理，直行或静止时降低投递频率。</p>
+<p>当前 <code>StartLidarRouteTask()</code> 没有读取角速度，也没有使用这些宏丢弃直行帧。实际行为是每完成一圈 360 度扫描后，队列可用就投递给 SLAM；队列满时复用当前缓冲。</p>
+<p>因此，文章里不能把“直行时每 10 帧只处理 1 帧”写成已生效优化，只能写成预留设计。</p>
+<h2>IMU 与轮式里程计</h2>
+<p>MPU6500 使用 DMP 做姿态解算。DMP 在传感器内部输出四元数，STM32 通过 SPI2 读取结果，减少 MCU 上的姿态计算负担。</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>IMU</td>
+<td>MPU6500</td>
+</tr>
+<tr>
+<td>通信</td>
+<td>SPI2</td>
+</tr>
+<tr>
+<td>DMP 输出</td>
+<td>6 轴低功耗四元数</td>
+</tr>
+<tr>
+<td>采样率</td>
+<td>200Hz</td>
+</tr>
+<tr>
+<td>主要输出</td>
+<td>Yaw、角速度</td>
+</tr>
+</tbody></table>
+<p>差速底盘的里程计来自左右轮编码器。系统根据左右轮位移计算线位移和角位移，给 ICP 提供初始猜测。轮式里程计会因为打滑、地面不平和积分误差逐步漂移，但短时间运动预测很有价值。</p>
+<p>ICP 如果从零初值开始匹配，容易收敛慢或落到错误局部最优。里程计和 IMU 预测让 ICP 从一个接近真实运动的位置开始迭代，减少计算量，也提高匹配稳定性。</p>
+<h2>ICP 定位：帧到帧点到线匹配</h2>
+<p>室内机器人需要持续回答“我在哪里”。编码器可以推算位移，但误差会积累；室内没有 GPS；磁力计在电机和结构件附近也不可靠。因此 NoeticMaze 用激光雷达扫描之间的几何关系修正位姿。</p>
+<p>ICP 的直观含义是：当前扫描得到一圈环境轮廓，参考帧保存上一关键帧的环境轮廓。将当前轮廓平移、旋转，直到它和参考轮廓尽量重合。最终平移和旋转量就是机器人相对参考帧的运动。</p>
+<p>NoeticMaze 使用帧到帧模式。</p>
+<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:16px 0;">
+  <div style="padding:14px; background:#f8fafc; border:1px solid #dbeafe; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">ICP 输入</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">当前 360 度扫描、参考帧点云、编码器和 IMU 给出的初始位姿预测。</div>
+  </div>
+  <div style="padding:14px; background:#f8fafc; border:1px solid #dcfce7; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">ICP 输出</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">机器人本帧位姿增量，以及用于修正里程计漂移的 map-odom 变换。</div>
+  </div>
+  <div style="padding:14px; background:#f8fafc; border:1px solid #fef9c3; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">建图输入</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">ICP 位姿和当前雷达命中点，用 Bresenham 标记空闲格和占据格。</div>
+  </div>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>匹配对象</th>
+<th>NoeticMaze 是否使用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>帧到帧</td>
+<td>当前扫描 vs 最近参考扫描</td>
+<td>是</td>
+</tr>
+<tr>
+<td>帧到地图</td>
+<td>当前扫描 vs 已建地图</td>
+<td>否</td>
+</tr>
+<tr>
+<td>预存地图定位</td>
+<td>当前扫描 vs 预先导入地图</td>
+<td>否</td>
+</tr>
+</tbody></table>
+<p>地图由定位结果驱动建出来。ICP 负责估计机器人移动了多少，建图模块用这个位姿把激光扫描写入栅格。</p>
+<h3>参考帧维护</h3>
+<p>ICP 需要参考帧。系统将第一次有效激光扫描作为初始参考帧，之后根据运动阈值更新。</p>
+<ul>
+<li>初始时：第一次扫描直接成为参考帧。</li>
+<li>正常运行：机器人平移超过 10cm 或旋转超过 5.7 度时，当前帧替换参考帧。</li>
+<li>静止时：如果编码器检测位移小于 2mm 且旋转小于 0.14 度，触发 ZUPT 死区，跳过 ICP。</li>
+</ul>
+<p>参考帧存在全局数组 <code>ref_scan[360]</code> 中，同时预计算每个点附近的表面法向量 <code>ref_normals[360]</code>，供点到线误差计算使用。</p>
+<h3>ICP 完整流程</h3>
+<p>一帧扫描到来后，定位流程可以拆成以下步骤。</p>
+<ol>
+<li><p>极坐标转笛卡尔坐标<br>雷达每个角度槽有一个距离值。系统将距离和角度转换为 XY 点，同时处理顺时针角度方向和安装角补偿。</p>
+</li>
+<li><p>运动畸变补偿<br>一圈扫描跨越一段时间。机器人扫描过程中仍在运动，因此不同角度点处于不同采样时刻。系统用线速度和角速度把每个点补偿到扫描结束时刻。</p>
+</li>
+<li><p>里程计初始猜测<br>编码器和 IMU 给出本帧位姿预测，作为 ICP 初始估计。</p>
+</li>
+<li><p>迭代匹配<br>对当前帧每个有效点，按当前估计位姿变换到参考坐标系，在参考帧角度窗口内搜索最近线段，并计算点到线误差。</p>
+</li>
+<li><p>构造最小二乘问题<br>每个匹配点贡献一行方程，未知量是 <code>dx</code>、<code>dy</code>、<code>dtheta</code>。</p>
+</li>
+<li><p>求解 3 x 3 线性方程组<br>使用高斯消元、部分主元和岭回归，得到本轮位姿增量。</p>
+</li>
+<li><p>更新位姿并判断收敛<br>若增量足够小则退出，否则继续迭代，最多迭代 10 次。</p>
+</li>
+</ol>
+<h3>点到线误差的数学形式</h3>
+<p>点到线 ICP 每次迭代求解的是最小二乘问题。对第 <code>i</code> 个匹配点：</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msubsup><mi>p</mi><mi>i</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup><mo>=</mo><mi>R</mi><mo stretchy="false">(</mo><mi>θ</mi><mo stretchy="false">)</mo><mo>⋅</mo><msub><mi>p</mi><mi>i</mi></msub><mo>+</mo><mi>t</mi></mrow><annotation encoding="application/x-tex">p&#x27;_i = R(\theta) \cdot p_i + t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0489em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span></div>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>e</mi><mi>i</mi></msub><mo>=</mo><mo stretchy="false">(</mo><msub><mtext>ref</mtext><mi>i</mi></msub><mo>−</mo><msubsup><mi>p</mi><mi>i</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup><mo stretchy="false">)</mo><mo>⋅</mo><msub><mi>n</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">e_i = (\text{ref}_i - p&#x27;_i) \cdot n_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord text"><span class="mord">ref</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0519em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></div>
+<p>其中：</p>
+<ul>
+<li><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">p_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> 是当前帧点。</li>
+<li><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>p</mi><mi>i</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup></mrow><annotation encoding="application/x-tex">p&#x27;_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0106em;vertical-align:-0.2587em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4413em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2587em;"><span></span></span></span></span></span></span></span></span></span></span> 是当前估计位姿变换后的点。</li>
+<li><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mtext>ref</mtext><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\text{ref}_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">ref</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> 是参考帧中匹配的点。</li>
+<li><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">n_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> 是参考点附近表面的法向量。</li>
+<li><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>e</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">e_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> 是当前点到参考线的垂直距离。</li>
+</ul>
+<p>线性化后得到关于 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>x</mi></mrow><annotation encoding="application/x-tex">dx</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">x</span></span></span></span></span>、<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>y</mi></mrow><annotation encoding="application/x-tex">dy</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span></span></span></span>、<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>θ</mi></mrow><annotation encoding="application/x-tex">d\theta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span></span></span></span></span> 的超定方程组。有效匹配对通常有数百个，但未知量只有 3 个。</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">(</mo><msup><mi>A</mi><mi>T</mi></msup><mi>A</mi><mo>+</mo><mi>λ</mi><mi>I</mi><mo stretchy="false">)</mo><mtext> </mtext><mi>x</mi><mo>=</mo><msup><mi>A</mi><mi>T</mi></msup><mi>b</mi></mrow><annotation encoding="application/x-tex">(A^T A + \lambda I)\, x = A^T b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1413em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">λ</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8913em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mord mathnormal">b</span></span></span></span></span></div>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>x</mi><mo>=</mo><mrow><mo fence="true">[</mo><mtable rowspacing="0.16em" columnalign="center" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>d</mi><mi>x</mi></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>d</mi><mi>y</mi></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>d</mi><mi>θ</mi></mrow></mstyle></mtd></mtr></mtable><mo fence="true">]</mo></mrow><mo separator="true">,</mo><mspace width="1em"/><mi>λ</mi><mo>=</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">x = \begin{bmatrix} dx \\ dy \\ d\theta \end{bmatrix}, \quad \lambda = 10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:3.6em;vertical-align:-1.55em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.667em;height:3.6em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="3.6em" viewBox="0 0 667 3600"><path d="M403 1759 V84 H666 V0 H319 V1759 v0 v1759 v84 h347 v-84
+H403z M403 1759 V0 H319 V1759 v0 v1759 v84 h84z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span><span class="mord"><span class="mtable"><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.21em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="mord mathnormal">x</span></span></span><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span></span><span style="top:-1.81em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.667em;height:3.6em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="3.6em" viewBox="0 0 667 3600"><path d="M347 1759 V0 H0 V84 H263 V1759 v0 v1759 H0 v84 H347z
+M347 1759 V0 H263 V1759 v0 v1759 h84z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8641em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span></span></div>
+<p>岭回归项用于防止矩阵病态或接近奇异。</p>
+<h3>为什么使用点到线 ICP</h3>
+<p>激光雷达扫到的是离散点，但室内墙面、走廊和家具边缘常常形成连续线段。点到点 ICP 只关心离散最近点，当前扫描和参考扫描角度稍有错位时，最近点未必是真正对应点。</p>
+<p>点到线 ICP 把相邻参考点形成的局部表面当作线段，计算当前点到表面的垂直距离。对墙面和走廊这类结构，误差方向更稳定。</p>
+<p>法向量通过相邻点计算：</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>t</mi><mo>=</mo><mtext>point</mtext><mo stretchy="false">[</mo><mtext>next</mtext><mo stretchy="false">]</mo><mo>−</mo><mtext>point</mtext><mo stretchy="false">[</mo><mtext>prev</mtext><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">t = \text{point}[\text{next}] - \text{point}[\text{prev}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">point</span></span><span class="mopen">[</span><span class="mord text"><span class="mord">next</span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">point</span></span><span class="mopen">[</span><span class="mord text"><span class="mord">prev</span></span><span class="mclose">]</span></span></span></span></span></div>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>n</mi><mi>x</mi></msub><mo>=</mo><mo>−</mo><mfrac><msub><mi>t</mi><mi>y</mi></msub><mrow><mi mathvariant="normal">∥</mi><mi>t</mi><mi mathvariant="normal">∥</mi></mrow></mfrac><mo separator="true">,</mo><mspace width="1em"/><msub><mi>n</mi><mi>y</mi></msub><mo>=</mo><mfrac><msub><mi>t</mi><mi>x</mi></msub><mrow><mi mathvariant="normal">∥</mi><mi>t</mi><mi mathvariant="normal">∥</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">n_x = -\frac{t_y}{\|t\|}, \quad n_y = \frac{t_x}{\|t\|}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.2281em;vertical-align:-0.936em;"></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.2921em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">∥</span><span class="mord mathnormal">t</span><span class="mord">∥</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.2281em;vertical-align:-0.936em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.2921em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">∥</span><span class="mord mathnormal">t</span><span class="mord">∥</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>环形边界用模运算处理：0 度点的左邻居是 359 度，359 度点的右邻居是 0 度。</p>
+<p>法向量计算还包含保护条件：</p>
+<ul>
+<li>当前点无效则跳过。</li>
+<li>邻居点无效则跳过。</li>
+<li>邻居点距离太远则跳过，避免墙角或不同物体误连。</li>
+<li>切线向量太短则跳过，避免法向方向不稳定。</li>
+</ul>
+<h3>ICP 参数表</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>扫描点数</td>
+<td>360</td>
+<td>每度 1 个槽位</td>
+</tr>
+<tr>
+<td>最大迭代次数</td>
+<td>10</td>
+<td>平衡精度和 CPU 开销</td>
+</tr>
+<tr>
+<td>匹配距离阈值</td>
+<td>0.20m</td>
+<td>超过距离的匹配对丢弃</td>
+</tr>
+<tr>
+<td>搜索窗口</td>
+<td>±30 度</td>
+<td>在参考帧中搜索候选点</td>
+</tr>
+<tr>
+<td>求解器</td>
+<td>高斯消元 + 部分主元 + 岭回归</td>
+<td>模拟稳定的最小二乘求解</td>
+</tr>
+<tr>
+<td>关键帧更新</td>
+<td>位移 &gt; 10cm 或旋转 &gt; 5.7 度</td>
+<td>更新参考帧</td>
+</tr>
+<tr>
+<td>ZUPT 死区</td>
+<td>位移 &lt; 2mm 且旋转 &lt; 0.14 度</td>
+<td>静止时跳过 ICP</td>
+</tr>
+<tr>
+<td>增量限制</td>
+<td>平移 ±0.4m，旋转 ±0.3rad</td>
+<td>防止单次迭代发散</td>
+</tr>
+<tr>
+<td>最小匹配数</td>
+<td>10</td>
+<td>匹配不足时判定失败</td>
+</tr>
+</tbody></table>
+<h3>运动畸变补偿</h3>
+<p>激光雷达完成一圈扫描需要时间。机器人在这一段时间内可能前进或转弯，导致早期采集的点和后期采集的点不在同一车体坐标系。</p>
+<p>补偿思路是把每个点变换到扫描结束时刻。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> each point i in scan:</span></span>
+<span class="line"><span style="color:#D4D4D4">    dt = i * (scan_time / </span><span style="color:#B5CEA8">360</span><span style="color:#D4D4D4">) - scan_time</span></span>
+<span class="line"><span style="color:#D4D4D4">    dtheta = omega * dt</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">fabs</span><span style="color:#D4D4D4">(omega) > </span><span style="color:#B5CEA8">1e-4</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        dx = (v / omega) * </span><span style="color:#DCDCAA">sin</span><span style="color:#D4D4D4">(dtheta);</span></span>
+<span class="line"><span style="color:#D4D4D4">        dy = (v / omega) * (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4"> - </span><span style="color:#DCDCAA">cos</span><span style="color:#D4D4D4">(dtheta));</span></span>
+<span class="line"><span style="color:#D4D4D4">    } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#D4D4D4">        dx = v * dt;</span></span>
+<span class="line"><span style="color:#D4D4D4">        dy = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">    point</span><span style="color:#D4D4D4">[i] = </span><span style="color:#DCDCAA">rotate</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">point</span><span style="color:#D4D4D4">[i], dtheta) + [dx, dy];</span></span></code></pre><p><code>dt</code> 为负值是合理的：早期点距离扫描结束时刻更远，需要补偿更多运动。代码将 <code>scan_time / 360</code> 提到循环外，用乘法替代重复除法，减少 360 次循环中的开销。</p>
+<h3>map-odom 变换</h3>
+<p>ICP 输出的是相对更可信的地图坐标位姿，里程计输出的是高频但会漂移的 odom 位姿。系统维护 <code>map &lt;- odom</code> 变换，将二者连接起来。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">tf_theta = icp_theta - odom_theta;</span></span>
+<span class="line"><span style="color:#D4D4D4">tf_x = icp_x - (</span><span style="color:#DCDCAA">cos</span><span style="color:#D4D4D4">(tf_theta) * odom_x - </span><span style="color:#DCDCAA">sin</span><span style="color:#D4D4D4">(tf_theta) * odom_y);</span></span>
+<span class="line"><span style="color:#D4D4D4">tf_y = icp_y - (</span><span style="color:#DCDCAA">sin</span><span style="color:#D4D4D4">(tf_theta) * odom_x + </span><span style="color:#DCDCAA">cos</span><span style="color:#D4D4D4">(tf_theta) * odom_y);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">global_x = tf_x + </span><span style="color:#DCDCAA">cos</span><span style="color:#D4D4D4">(tf_theta) * odom_x - </span><span style="color:#DCDCAA">sin</span><span style="color:#D4D4D4">(tf_theta) * odom_y;</span></span>
+<span class="line"><span style="color:#D4D4D4">global_y = tf_y + </span><span style="color:#DCDCAA">sin</span><span style="color:#D4D4D4">(tf_theta) * odom_x + </span><span style="color:#DCDCAA">cos</span><span style="color:#D4D4D4">(tf_theta) * odom_y;</span></span>
+<span class="line"><span style="color:#D4D4D4">global_theta = tf_theta + odom_theta;</span></span></code></pre><p>这样 100Hz 运动线程可以使用高频里程计，同时通过 ICP 结果修正长期漂移。</p>
+<h2>占据栅格建图</h2>
+<p>定位回答“机器人在哪”，建图回答“环境里有什么”。NoeticMaze 使用占据栅格表示局部地图。</p>
+<p>SLAM 高精图参数：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>分辨率</td>
+<td>2cm</td>
+</tr>
+<tr>
+<td>尺寸</td>
+<td>200 x 200</td>
+</tr>
+<tr>
+<td>覆盖范围</td>
+<td>4m x 4m</td>
+</tr>
+<tr>
+<td>存储</td>
+<td>2bit/cell，共 10000 字节</td>
+</tr>
+<tr>
+<td>状态</td>
+<td>未知、空闲、占据</td>
+</tr>
+</tbody></table>
+<p>每次有激光点命中障碍，系统从机器人所在栅格到命中点栅格做 Bresenham 光线追踪：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> each lidar hit point:</span></span>
+<span class="line"><span style="color:#D4D4D4">    ray = </span><span style="color:#DCDCAA">bresenham_line</span><span style="color:#D4D4D4">(robot_pos, hit_point);</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> each cell in ray excluding endpoint:</span></span>
+<span class="line"><span style="color:#D4D4D4">        mark cell as FREE;</span></span>
+<span class="line"><span style="color:#D4D4D4">    mark endpoint as OCCUPIED;</span></span></code></pre><p>Bresenham 只需要整数加减和比较，很适合 MCU。沿途格子标为空闲，终点格子标为占据，这正是占据栅格建图的核心。</p>
+<h3>2bit 打包存储</h3>
+<p>每个格子只需要 2 bit 表示 3 种状态：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>00 = 未知</span></span>
+<span class="line"><span>01 = 空闲</span></span>
+<span class="line"><span>10 = 占据</span></span></code></pre><p>一个字节存 4 个格子：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>bit[7:6] = cell3</span></span>
+<span class="line"><span>bit[5:4] = cell2</span></span>
+<span class="line"><span>bit[3:2] = cell1</span></span>
+<span class="line"><span>bit[1:0] = cell0</span></span></code></pre><p>40000 个格子如果用 1 字节表示需要 40KB；2bit 打包后约 10KB。对 128KB SRAM 来说，这个优化非常关键。</p>
+<h3>地图写保护和增量传输</h3>
+<p>项目通过 <code>map_core_write.h</code> 的宏定义控制写权限，确保只有 SLAM 线程写地图，降低并发写导致数据损坏的风险。</p>
+<p>蓝牙发送地图时只发送变化的格子增量。报告中提到最多记录 512 个 diff，这能显著降低蓝牙带宽压力。</p>
+<h2>双地图结构：2cm 建图，10cm 规划</h2>
+<p>SLAM 高精图适合建图和显示，但不适合直接跑 A*。200 x 200 网格有 40000 个节点，搜索空间过大。</p>
+<div style="display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:10px; align-items:center; margin:16px 0; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+  <div style="padding:14px; background:#ffffff; border:1px solid #dbeafe; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">SLAM 高精图</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">2cm，200 x 200，2bit/cell。用于精细建图、显示和地图增量。</div>
+  </div>
+  <div style="font-size:22px; color:#64748b; text-align:center;">→</div>
+  <div style="padding:14px; background:#ffffff; border:1px solid #dcfce7; border-radius:8px;">
+    <div style="font-weight:700; color:#1e293b;">Planner 规划图</div>
+    <div style="font-size:14px; color:#475569; margin-top:6px;">10cm，40 x 40，4bit/cell。用于 A*、碰撞检测和重规划。</div>
+  </div>
+</div>
+
+<p>系统将 2cm 图降采样为 10cm 规划图。</p>
+<table>
+<thead>
+<tr>
+<th>地图</th>
+<th>分辨率</th>
+<th>尺寸</th>
+<th>覆盖范围</th>
+<th>存储</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SLAM 高精图</td>
+<td>2cm</td>
+<td>200 x 200</td>
+<td>4m x 4m</td>
+<td>2bit/cell，约 10KB</td>
+<td>建图、显示、增量传输</td>
+</tr>
+<tr>
+<td>Planner 规划图</td>
+<td>10cm</td>
+<td>40 x 40</td>
+<td>4m x 4m</td>
+<td>4bit/cell，800B x 2</td>
+<td>A*、碰撞检测、重规划</td>
+</tr>
+</tbody></table>
+<p>一个 10cm 规划格对应 5 x 5 个 2cm 细格。降采样采用保守规则：</p>
+<ul>
+<li>25 个细格中只要有一个占据，规划格标为占据。</li>
+<li>否则只要有一个空闲，规划格标为空闲。</li>
+<li>全部未知则保持未知。</li>
+</ul>
+<p>这个规则可能牺牲一点通行空间，但能降低漏检障碍的风险。</p>
+<h2>A* 路径规划</h2>
+<p>PlannerTask 在 10cm、40 x 40 的规划图上运行 A*。使用 8 连通网格，允许上下左右和 4 个对角方向移动。</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>网格连通</td>
+<td>8 连通</td>
+<td>正交 + 对角</td>
+</tr>
+<tr>
+<td>正交代价</td>
+<td>10</td>
+<td>整数缩放，避免浮点</td>
+</tr>
+<tr>
+<td>对角代价</td>
+<td>14</td>
+<td>约等于 10 x sqrt(2)</td>
+</tr>
+<tr>
+<td>启发函数</td>
+<td>Octile 距离</td>
+<td>适合 8 连通网格</td>
+</tr>
+<tr>
+<td>目标容差</td>
+<td>1.5 格</td>
+<td>不要求精确到目标格</td>
+</tr>
+<tr>
+<td>优先队列</td>
+<td>最小堆，容量 2500</td>
+<td>打包 f 值和索引</td>
+</tr>
+<tr>
+<td>最大路径长度</td>
+<td>400 点</td>
+<td>限制路径缓存大小</td>
+</tr>
+</tbody></table>
+<p>A* 的目标是在当前代价模型下找可行且代价较低的路径。代价模型中包含障碍膨胀、未知区策略和路径亲和度。</p>
+<h3>障碍膨胀</h3>
+<p>机器人有物理尺寸，路径不能贴着障碍物走。规划图对障碍周围区域设置多级惩罚。</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>膨胀半径</th>
+<th>惩罚值</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L1</td>
+<td>0.15m</td>
+<td>1000</td>
+<td>接近物理碰撞边界，A* 极力避免</td>
+</tr>
+<tr>
+<td>L2</td>
+<td>0.22m</td>
+<td>150</td>
+<td>安全缓冲区</td>
+</tr>
+<tr>
+<td>L3</td>
+<td>0.28m</td>
+<td>30</td>
+<td>轻微惩罚，鼓励远离障碍</td>
+</tr>
+</tbody></table>
+<p>物理碰撞半径约 0.10m。膨胀半径让路径在可通行区域中留出安全余量。</p>
+<h3>路径亲和度</h3>
+<p>重规划时，如果新路径和旧路径完全无关，机器人可能在局部代价变化中来回跳。NoeticMaze 对旧路径附近区域降低代价，让新路径倾向于延续旧路径。</p>
+<p>报告中整理的策略是：旧路径附近约 0.3m 半径内代价获得折扣。这样能降低重规划振荡，尤其在未知区域和 U 型结构附近更有用。</p>
+<h3>路径平滑</h3>
+<p>A* 输出的是栅格折线，直接跟踪会造成频繁转向。系统做两步平滑：</p>
+<ol>
+<li><p>双向拉线<br>从路径首尾尝试用直线连接更远路径点，用 Bresenham 射线检测是否穿墙。若直线安全，就替代中间折线。</p>
+</li>
+<li><p>安全 Bezier 圆角<br>在转折处用 Bezier 曲线做圆角。生成圆角时持续做碰撞检测，若碰撞则缩小圆角半径。</p>
+</li>
+</ol>
+<p>平滑后的路径更适合预瞄点跟踪，也能减少差速底盘频繁急转。</p>
+<h2>路径跟踪与运动控制</h2>
+<p>MotionTask 以 100Hz 运行。它读取全局路径公告板中的路径，选择前方预瞄点，生成线速度和角速度，再换算为左右轮速度。</p>
+<p>核心思想如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">lookahead_point = </span><span style="color:#DCDCAA">find_lookahead</span><span style="color:#D4D4D4">(path, robot_pos, L = </span><span style="color:#F44747">0.18m</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">heading_error = </span><span style="color:#DCDCAA">angle_to</span><span style="color:#D4D4D4">(lookahead_point) - robot_yaw;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">yaw_rate_cmd = Kp * heading_error;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">fabs</span><span style="color:#D4D4D4">(heading_error) > </span><span style="color:#F44747">10deg</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">    linear_speed *= speed_scale;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">fabs</span><span style="color:#D4D4D4">(heading_error) > </span><span style="color:#F44747">60deg</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">    linear_speed = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">v_left  = linear_speed - yaw_rate_cmd * wheel_track / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">v_right = linear_speed + yaw_rate_cmd * wheel_track / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">;</span></span></code></pre><p>这套方法使用前方预瞄点，但没有使用经典 Pure Pursuit 的曲率公式。因此更准确的描述是“预瞄点航向控制”。</p>
+<p>底层电机控制采用轮速 PID。</p>
+<table>
+<thead>
+<tr>
+<th>控制环</th>
+<th>参数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>轮速 PID</td>
+<td>Kp=950, Ki=250, Kd=0</td>
+<td>使用 CMSIS-DSP <code>arm_pid_f32()</code>，100Hz 更新</td>
+</tr>
+<tr>
+<td>角速度控制</td>
+<td>Kp=0.0035, Kd=0.0005</td>
+<td>生成角速度修正</td>
+</tr>
+<tr>
+<td>加速度限制</td>
+<td>1.60m/s^2</td>
+<td>防止电机突然加减速</td>
+</tr>
+</tbody></table>
+<p>到达目标附近后系统减速停车。若启用自动返航，到达目标后会将初始位置 <code>(1.05, 3.15)</code> 设为新目标并规划返航路径。</p>
+<h2>动态避障与重规划</h2>
+<p>NoeticMaze 的避障机制是持续建图和重规划。系统检测到新障碍后先写入地图，再根据当前地图重新规划路径。</p>
+<p>重规划触发条件如下。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>触发条件</th>
+<th>阈值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>目标变化</td>
+<td>移动超过 1 个规划格</td>
+<td>用户通过蓝牙下发新目标</td>
+</tr>
+<tr>
+<td>2</td>
+<td>无有效路径</td>
+<td>路径长度为 0</td>
+<td>当前没有可跟踪路径</td>
+</tr>
+<tr>
+<td>3</td>
+<td>起点漂移</td>
+<td>偏离超过 5 个规划格</td>
+<td>机器人位置和旧路径起点偏差过大</td>
+</tr>
+<tr>
+<td>4</td>
+<td>路径阻断</td>
+<td>连续 4 帧以上检测到路径穿障</td>
+<td>新障碍挡住当前路径</td>
+</tr>
+<tr>
+<td>5</td>
+<td>防抖间隔</td>
+<td>两次规划间隔至少 300ms</td>
+<td>避免高频重规划振荡</td>
+</tr>
+</tbody></table>
+<p>避障链路如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>激光雷达持续扫描</span></span>
+<span class="line"><span>  -> SLAM 更新占据栅格</span></span>
+<span class="line"><span>  -> 检查当前路径是否穿过新障碍</span></span>
+<span class="line"><span>  -> 触发重规划请求</span></span>
+<span class="line"><span>  -> PlannerTask 基于新地图运行 A*</span></span>
+<span class="line"><span>  -> MotionTask 切换到新路径</span></span></code></pre><p>这套机制适合静态或缓慢变化的室内环境。快速移动的人或物体可能被写入地图，导致临时虚假障碍或重规划抖动。</p>
+<h2>FreeRTOS 任务拓扑</h2>
+<p>NoeticMaze 由多个 FreeRTOS 任务协同运行。任务频率和优先级体现了实时系统设计：运动控制优先，规划按需，蓝牙遥测低优先级。</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>优先级</th>
+<th>频率</th>
+<th>栈大小</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MotionTask</code></td>
+<td>最高</td>
+<td>100Hz</td>
+<td>1KB</td>
+<td>电机 PID + 路径跟踪</td>
+</tr>
+<tr>
+<td><code>ImuTask</code></td>
+<td>高</td>
+<td>200Hz</td>
+<td>2KB</td>
+<td>MPU6500 DMP 读取和 Yaw 解算</td>
+</tr>
+<tr>
+<td><code>LidarRouteTask</code></td>
+<td>较高</td>
+<td>事件驱动</td>
+<td>1KB</td>
+<td>DMA 数据解码和 360 度帧组装</td>
+</tr>
+<tr>
+<td><code>AlgorithmBrain</code></td>
+<td>中</td>
+<td>跟随激光帧</td>
+<td>4KB</td>
+<td>ICP、建图、降采样、重规划判断</td>
+</tr>
+<tr>
+<td><code>PlannerTask</code></td>
+<td>中低</td>
+<td>按需</td>
+<td>4KB</td>
+<td>A* 和路径平滑</td>
+</tr>
+<tr>
+<td><code>TaskPrint</code></td>
+<td>低</td>
+<td>事件/周期</td>
+<td>4KB</td>
+<td>蓝牙遥测发送和指令接收</td>
+</tr>
+<tr>
+<td><code>defaultTask</code></td>
+<td>低</td>
+<td>空闲</td>
+<td>0.5KB</td>
+<td>默认空闲任务</td>
+</tr>
+</tbody></table>
+<p>任务间通信机制如下。</p>
+<table>
+<thead>
+<tr>
+<th>机制</th>
+<th>名称</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>消息队列</td>
+<td><code>LidarQueueHandle</code>，深度 3</td>
+<td>激光帧指针传递，零拷贝</td>
+</tr>
+<tr>
+<td>消息队列</td>
+<td><code>ReqQueueHandle</code>，深度 3</td>
+<td>SLAM 向 Planner 发重规划请求</td>
+</tr>
+<tr>
+<td>消息队列</td>
+<td><code>RespQueueHandle</code>，深度 2</td>
+<td>当前版本保留创建，规划结果不靠它返回</td>
+</tr>
+<tr>
+<td>事件标志</td>
+<td><code>PathEventHandle</code></td>
+<td>广播路径更新</td>
+</tr>
+<tr>
+<td>互斥锁</td>
+<td><code>MapDataMutexHandle</code></td>
+<td>保护地图数据访问</td>
+</tr>
+<tr>
+<td>互斥锁</td>
+<td><code>PrintfMutexHandle</code></td>
+<td>保护调试输出</td>
+</tr>
+</tbody></table>
+<p>系统数据流可以简化为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>LidarRouteTask</span></span>
+<span class="line"><span>  -> LidarQueueHandle</span></span>
+<span class="line"><span>  -> AlgorithmBrain</span></span>
+<span class="line"><span>     -> ICP 位姿</span></span>
+<span class="line"><span>     -> 2cm 栅格更新</span></span>
+<span class="line"><span>     -> 10cm 规划图更新</span></span>
+<span class="line"><span>     -> ReqQueueHandle</span></span>
+<span class="line"><span>  -> PlannerTask</span></span>
+<span class="line"><span>     -> A* 路径</span></span>
+<span class="line"><span>     -> 平滑路径</span></span>
+<span class="line"><span>     -> 全局路径公告板</span></span>
+<span class="line"><span>     -> PathEventHandle</span></span>
+<span class="line"><span>  -> MotionTask</span></span>
+<span class="line"><span>     -> 预瞄点跟踪</span></span>
+<span class="line"><span>     -> 左右轮速度</span></span>
+<span class="line"><span>     -> PWM</span></span></code></pre><p>这个结构避免了把所有逻辑塞进一个大循环。高频控制不等待 A*，SLAM 不等待蓝牙，上位机遥测也不能阻塞运动控制。</p>
+<h2>用户交互流程</h2>
+<p>从用户角度看，流程分为 4 个阶段。</p>
+<h3>阶段 1：开机初始化</h3>
+<ul>
+<li>IMU 初始化并等待 DMP 输出稳定。</li>
+<li>雷达启动，USART1 DMA 开始接收。</li>
+<li>编码器和里程计归零。</li>
+<li>初始位置设置在固定地图坐标范围内，例如 <code>(1.05, 3.15)</code>。</li>
+<li>FreeRTOS 任务开始调度。</li>
+</ul>
+<h3>阶段 2：自主探索建图</h3>
+<ul>
+<li>雷达持续输出 360 度扫描。</li>
+<li>ICP 做帧到帧匹配并估计位姿。</li>
+<li>Bresenham 光线追踪更新 2cm 占据栅格。</li>
+<li>蓝牙上位机接收机器人位姿、地图增量和调试事件。</li>
+<li>用户看到实时构建的局部地图。</li>
+</ul>
+<h3>阶段 3：用户下发目标点</h3>
+<p>用户在上位机地图上点击目标位置，上位机通过蓝牙发送目标点。报告中整理的目标点包是 <code>GoalPacket (0x07)</code>，包含 <code>goal_x</code> 和 <code>goal_y</code>。</p>
+<p>STM32 通过 USART3 DMA 接收并解析包，调用目标点设置逻辑。SLAM 线程检测到目标变化后，向 PlannerTask 发起规划请求。</p>
+<h3>阶段 4：规划和自动行驶</h3>
+<ul>
+<li>SLAM 将 2cm 地图降采样为 10cm 规划图。</li>
+<li>PlannerTask 使用 A* 搜索路径。</li>
+<li>路径通过全局公告板发布。</li>
+<li>MotionTask 使用预瞄点航向控制跟踪路径。</li>
+<li>若路径被新障碍阻断，系统触发重规划。</li>
+<li>到达目标后停车，必要时自动返航。</li>
+</ul>
+<p>这里的用户输入是目标点，系统自行完成定位、建图、路径搜索和轨迹跟踪。</p>
+<h2>项目亮点</h2>
+<p>NoeticMaze 的亮点集中在工程实现。</p>
+<p>第一，完整链路在 MCU 端闭环。激光雷达、IMU、编码器、SLAM、A*、路径跟踪和蓝牙遥测都在 STM32 上运行。</p>
+<p>第二，内存设计有明确约束。2bit 地图压缩、静态缓冲池、零拷贝队列、规划图降采样，都是为 128KB SRAM 服务的。</p>
+<p>第三，算法选型贴合场景。室内墙面环境适合点到线 ICP，局部地图适合占据栅格，固定小范围导航适合 40 x 40 规划图。</p>
+<p>第四，实时调度边界清晰。高频控制和低频规划分开，重计算不会直接压在运动控制周期上。</p>
+<p>第五，通用库依赖少。项目没有使用 Cartographer、GMapping 这类 ROS SLAM 库，ICP、地图、规划和调度逻辑都针对 MCU 资源约束自研。</p>
+<h2>已知边界</h2>
+<p>这套系统的边界同样需要写清楚。</p>
+<p>没有回环检测。机器人回到之前到过的位置时，系统不会识别并全局校正地图。长时间运行后，位姿和地图会累积漂移。</p>
+<p>地图范围固定为 4m x 4m。它适合迷宫、小房间、教学和竞赛场景，不适合整层楼或大范围导航。</p>
+<p>环境假设偏静态。移动的人或物体可能被写入地图，造成临时障碍和重规划抖动。</p>
+<p>定位精度依赖硬件标定。轮径、轮距、编码器、IMU 零偏、雷达安装角和底盘机械误差都会影响结果。</p>
+<p>A* 在未知区域和 U 型结构附近可能振荡。路径亲和度、最小重规划间隔和路径穿障连续帧判断可以缓解，但不能从根本上消除所有局部规划问题。</p>
+<h2>结论</h2>
+<p>NoeticMaze 展示了一种典型的嵌入式导航解法：放弃通用框架，把问题限制在明确范围内，并在这个范围内完成闭环。</p>
+<p>在 128KB RAM 的 STM32F446RE 上，完整导航系统能跑起来，依赖一组连续的工程取舍：雷达零拷贝、点到线 ICP、2bit 占据栅格、2cm 到 10cm 的双地图、带代价约束的 A*、预瞄点航向控制，以及 FreeRTOS 下的任务隔离。</p>
+<p>这也是 NoeticMaze 最值得学习的地方。它是一个约束明确、链路完整、适合学习嵌入式 SLAM 和室内导航的工程样本。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-31 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=noeticmaze-stm32-lidar-slam-navigation');
+  }
+  </script>
+</body>
+</html>

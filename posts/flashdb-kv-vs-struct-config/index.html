@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>嵌入式 Flash 配置应拆成独立键值对，而不是固耦合结构体 - CacheRivulet小记</title>
+  <meta name="description" content="FlashDB KV替代结构体配置">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="FlashDB">
+  <meta property="article:tag" content="KVDB">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:tag" content="键值对">
+  <meta property="article:published_time" content="2026-06-20">
+  <meta property="og:title" content="嵌入式 Flash 配置应拆成独立键值对，而不是固耦合结构体">
+  <meta property="og:description" content="FlashDB KV替代结构体配置">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/flashdb-kv-vs-struct-config/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/flashdb-kv-vs-struct-config/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "嵌入式 Flash 配置应拆成独立键值对，而不是固耦合结构体",
+  "description": "FlashDB KV替代结构体配置",
+  "datePublished": "2026-06-20",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/flashdb-kv-vs-struct-config/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/flashdb-kv-vs-struct-config/"
+  },
+  "keywords": "FlashDB, KVDB, 嵌入式, Flash存储, 键值对"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">嵌入式 Flash 配置应拆成独立键值对，而不是固耦合结构体</h1>
+  <article class="article-body">
+<h1>嵌入式 Flash 配置应拆成独立键值对，而不是固耦合结构体</h1>
+<p>嵌入式固件里，把配置固化成 Flash 常量是基本需求。Wi-Fi 账号、设备名、采样间隔、功能开关——这些东西掉电后必须还在。</p>
+<p>MCU 项目最本能的写法是定义一个 C 结构体，把整个结构体当一块连续内存写进 Flash：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> device_config {</span></span>
+<span class="line"><span style="color:#569CD6">    char</span><span style="color:#9CDCFE"> wifi_ssid</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">32</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">    char</span><span style="color:#9CDCFE"> ble_name</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">32</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">    uint16_t</span><span style="color:#D4D4D4"> sample_interval;</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4"> flags;</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p>这个写法看着干净，但它把配置项之间锁死了。结构体方案有持久化能力，没有持久化弹性。</p>
+<h2>结构体方案的三个问题</h2>
+<p><strong>定位方式决定耦合程度</strong>。结构体的字段靠偏移量寻址——<code>sample_interval</code> 在 <code>ble_name</code> 后面 0 字节处，这是编译时写死的。所有字段挤在同一块连续内存里，定义结构体的那一刻，字段之间就已经锁死了。KV 的每个键值对靠名字寻址，键与键之间没有位置关系，天然独立。</p>
+<p><strong>版本锁死</strong>。固件升级加一个字段，必须放在结构体末尾。插在中间，所有后续字段的偏移量全变了，老数据读出来是乱的。每个版本还要维护一套 if-else 判断旧格式、逐字段搬运到新布局。KV 加一个 <code>cfg/new_feature</code>，老键值对不受任何影响，新旧并存，互不干扰。</p>
+<p><strong>不自描述</strong>。把 Flash dump 出来是一段二进制。没有结构体定义文件、没有对应的固件版本号，根本不知道里面有什么。KV 的 key 名本身就是元数据——<code>list</code> 一下就知道当前有哪些配置，浏览器端可以直接展示成表格。</p>
+<h2>KV 是怎么解耦的</h2>
+<p>KV 把配置从「一块连续的、布局锁死的二进制」变成「一组独立的、自描述的键值对」。</p>
+<p>每个键值对独立存取。key 是名字，value 是数据。FlashDB 在底层负责扇区管理和磨损均衡，业务层只需要 <code>get</code> 和 <code>set</code>。</p>
+<p>对比：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>结构体方案</th>
+<th>KV 方案</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>字段寻址</td>
+<td>编译时偏移量，位置锁死</td>
+<td>运行时按名字查找，独立定位</td>
+</tr>
+<tr>
+<td>加一个字段</td>
+<td>必须放末尾，否则偏移量全乱</td>
+<td>新增 key，不影响已有键值对</td>
+</tr>
+<tr>
+<td>版本升级</td>
+<td>按版本号 if-else 逐字段搬运</td>
+<td>新旧 key 并存，无需迁移</td>
+</tr>
+<tr>
+<td>外部查看</td>
+<td>二进制 blob，无结构体定义不可读</td>
+<td>key 名即元数据，可直接 list</td>
+</tr>
+</tbody></table>
+<h2>什么时候用结构体就够了</h2>
+<p>不是所有 Flash 数据都值得换 KV。</p>
+<p>如果配置项极少（两三个字段）、格式永远不变、也不需要从外部查看或管理，结构体方案完全够用。一个 boot 标志位、一个校准值——KV 的代价（FlashDB 本身占用几 KB Flash 和少量 RAM）反而不划算。</p>
+<p>一旦满足下面任意一条，就值得拆成 KV：</p>
+<ul>
+<li>配置项超过四五个，且还在增加。</li>
+<li>固件会持续升级，配置格式不能锁死。</li>
+<li>需要从芯片外部（BLE、串口、调试器）查看或修改配置。</li>
+</ul>
+<h2>不止是嵌入式 Flash 的问题</h2>
+<p>这个对比不限于 MCU。Linux 上用 <code>fwrite(&amp;cfg, sizeof(cfg), 1, fp)</code> 存二进制结构体，跟 MCU 上往 Flash 写结构体的困境完全一样——偏移量锁死、版本迁移靠 if-else、dump 出来不可读。</p>
+<p>JSON 文件本质上就是文本 KV。<code>{&quot;sample_interval&quot;: 500}</code> 跟 FlashDB 里 <code>cfg/sample_interval → 500</code> 是同一种思维方式：靠名字定位，不靠偏移量。好处也一致——加字段不用管顺序，老数据不受影响，任何文本编辑器都能打开看。</p>
+<p>当然 JSON 有 JSON 的代价：每次启动要解析整个文件，文件大了解析慢。但结构上的优势是一样的。嵌入式 Flash 上选 KV，Linux 上选 JSON 或 TOML，背后是同一个原则：<strong>数据之间如果没有天然的先后依赖，就不要用位置关系把它们锁在一起。</strong></p>
+<h2>结论</h2>
+<p>结构体存配置先快后慢：第一版很快，每次改版都慢一步。KV 存配置先慢后快：接入 FlashDB 多花一点初始工作量，之后每次加配置、改字段、外部管理都更独立。</p>
+<p>核心原则很简单：把耦合的东西拆成独立的键值对。Flash 上的配置如此，很多嵌入式设计问题也如此。</p>
+<h2>FlashDB 写入机制简述</h2>
+<p>理解 FlashDB 的写入方式，要先理解 Flash 硬件的两个基本约束：</p>
+<ul>
+<li><strong>擦除</strong>：以扇区为单位（通常几 KB），擦除后整个扇区所有位变为 1。</li>
+<li><strong>写入</strong>：只能把 1 改成 0。想把 0 改回 1，必须擦除整个扇区。</li>
+</ul>
+<p>这意味着原位覆盖一个值是不可能的——旧值是 0 的位，你没法单独翻回 1。FlashDB 的处理方式是追加写：修改一个键，不碰旧记录，在扇区尾部的新位置写一条新记录，然后把旧记录的状态字节里的一个标记位从 1 写成 0，表示废弃。</p>
+<p>每个扇区内部顺序追加，写满后触发 GC：把扇区中未被标记废弃的键值对拷贝到另一个干净扇区，再擦除整个旧扇区（全部位回到 1）。追加写和 GC 配合，磨损均衡自然达成——写入轮流落在不同扇区，不会盯着一个地址反复擦写。</p>
+<p>每条 KV 记录带一个状态头，标记当前处于「准备写入」「已写入」「已删除」哪个阶段，外加 CRC 校验。如果在「准备写入」阶段复位，下次启动 CRC 对不上，这条记录直接丢弃，不影响已有数据。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-20 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=flashdb-kv-vs-struct-config');
+  }
+  </script>
+</body>
+</html>

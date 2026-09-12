@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一半是 WiFi 蓝牙仲裁打架，一半是 NimBLE 底层库 bug - CacheRivulet小记</title>
+  <meta name="description" content="ESP32-S3 WiFi 重连时发不出蓝牙包">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="ESP-IDF">
+  <meta property="article:tag" content="BluFi">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-08-23">
+  <meta property="og:title" content="一半是 WiFi 蓝牙仲裁打架，一半是 NimBLE 底层库 bug">
+  <meta property="og:description" content="ESP32-S3 WiFi 重连时发不出蓝牙包">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ble-provisioning-wifi-conflict/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ble-provisioning-wifi-conflict/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "一半是 WiFi 蓝牙仲裁打架，一半是 NimBLE 底层库 bug",
+  "description": "ESP32-S3 WiFi 重连时发不出蓝牙包",
+  "datePublished": "2026-08-23",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ble-provisioning-wifi-conflict/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ble-provisioning-wifi-conflict/"
+  },
+  "keywords": "嵌入式, BLE, ESP32-S3, ESP-IDF, BluFi, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">一半是 WiFi 蓝牙仲裁打架，一半是 NimBLE 底层库 bug</h1>
+  <article class="article-body">
+<h1>一半是 WiFi 蓝牙仲裁打架，一半是 NimBLE 底层库 bug</h1>
+<h2>概述</h2>
+<p>设备通过 BLE 配网（BluFi）：手机连上配网蓝牙、下发 WiFi 凭据，设备以 STA 方式连接路由器。配网期间 WiFi 与蓝牙必须同时工作，但 ESP32 的 WiFi 与蓝牙共用同一射频前端，单射频按时分复用（TDM）调度，射频资源由共存仲裁器按优先级分配；官方共存矩阵将部分组合的蓝牙性能仅定性为 C1（支持但性能不稳定）。</p>
+<p>某次配网中，WiFi 密码错误、路由器暂时不可达，STA 进入反复重连。此时手机能连上配网 BLE、能订阅通知，但设备主动下发的数据全部消失，点“扫描 WiFi 列表”无任何回包。以下记录现象、排查过程与根因判定。</p>
+<h2>现象：连得上，发不出</h2>
+<p>环境是 ESP-IDF v6.1-beta1，NimBLE，BluFi 配网。WiFi 一次就能连上时，整条配网流程正常。一旦 STA 进入反复重连，故障变成状态相关的：</p>
+<ul>
+<li>手机能扫到设备，能连上配网 BLE，也能订阅通知。</li>
+<li>手机写下发命令，设备收得到、也处理得了。</li>
+<li>设备该回给手机的数据全部消失：WiFi 列表没有，状态报告也没有。</li>
+</ul>
+<p>链路层是通的，GATT 写是通的，唯独板子主动发给手机的蓝牙包发不出去。</p>
+<h2>第一层：WiFi 重连把蓝牙射频挤掉</h2>
+<p>ESP32 的 WiFi 与蓝牙共用同一射频前端，同一时刻只有一个模块能用空口，由共存仲裁按优先级分配（TDM 时分复用）。WiFi 扫描、重连这类活动期间，蓝牙被持续压制，空口丢包、序号错乱时有发生。</p>
+<p>官方共存矩阵将 WiFi 处于 SoftAP 连接中/已连接、Sniffer RX 时的蓝牙性能标为 C1（支持但性能不稳定）；STA 与 BLE 的组合官方标 Y（支持且稳定），但官方 issue 与 FAQ 里仍有大量共存故障记录：<a href="https://github.com/espressif/esp-idf/issues/17871" target="_blank" rel="noopener noreferrer">ESP-IDF #17871</a>（ESP32-S3 仅在 BLE 激活时 STA 掉线，关闭 BLE 即恢复）、<a href="https://github.com/espressif/esp-idf/issues/11280" target="_blank" rel="noopener noreferrer">#11280</a>（ESP32-C3 共存下 BLE 连接建立后立即失败，已修复）、<a href="https://docs.espressif.com/projects/esp-faq/en/latest/software-framework/coexistence.html" target="_blank" rel="noopener noreferrer">FAQ ELx200</a>（Wi-Fi 与 BLE 共存时频繁报错，官方给出修复）。本案例的 STA 反复重连属于重连风暴（反复扫描与重连），实测对蓝牙的压制同样明显。</p>
+<p>STA 反复重连时，外设刚连上，NimBLE 还要补发一条 <code>LE Read Remote Version Information</code> 读对端版本。这条 HCI 交换正好撞上仲裁窗口，控制器回 HCI 错误 <code>0x1A</code>（26，Unsupported Feature or Parameter Value）。</p>
+<p>如果只是空口被挤占，收和发应该一起变差。现在接收还在，只有板子往外发的包没了，说明射频干扰只是第一层。真正把发送通道关掉的，是后面那条库逻辑。</p>
+<h2>第二层：NimBLE 把读版本失败当成连接失败</h2>
+<p><code>BLE_GAP_EVENT_CONNECT</code> 的 status 在 NimBLE 里有多处赋值。逐一排除后，只有 <code>ble_gap_rx_rd_rem_ver_info_complete()</code> 会把任意 HCI 状态原样带进连接事件。</p>
+<p>读版本 HCI 事务完成后，完成事件里的 <code>ev-&gt;status</code> 被直接当成连接事件 status，丢给广播回调，也就是 esp_blufi 的 GAP 回调。仲裁干扰让这条命令失败后，esp_blufi 打出 <code>connection failed; status=26</code>。连接其实已经建立了，失败的只是事后读版本。</p>
+<p><img src="/posts/ble-provisioning-wifi-conflict/flow.svg" alt="连接事件 status 的来源与污染路径"></p>
+<h2>后果：is_connected 恒为 false</h2>
+<p>esp_blufi 用一个布尔量 <code>is_connected</code> 判断能不能往手机发数据。它只在连接事件 <code>status == 0</code> 时置位。连接事件被污染后，这个标志永远是 false。</p>
+<p><code>btc_blufi_send_encap()</code> 看到 false 直接返回。状态报告、WiFi 列表，所有板子到手机的数据都被静默丢掉。接收方向不查这个标志，所以手机写进来的请求照常处理。表现就是“连得上、发不出”。</p>
+<h2>上游已经修了库 bug，但还没进当前 IDF</h2>
+<p>相关 issue 是 <a href="https://github.com/espressif/esp-idf/issues/18342" target="_blank" rel="noopener noreferrer">espressif/esp-idf #18342 &quot;Blufi connect error in Nimble&quot;</a>，同属 BluFi + NimBLE 连接错误这一块。</p>
+<p>这次定位到的具体路径，已经在上游 mynewt-nimble 修掉：连接事件 status 固定为 0，读版本、读特性改成连接事件投递之后的独立 HCI 事务，失败不再污染连接状态。ESP-IDF 对应迁移是 <a href="https://github.com/espressif/esp-idf/commit/e08609e451" target="_blank" rel="noopener noreferrer">e08609e451 &quot;Migrate to NimBLE 1.9.0&quot;</a>（2026-07-25）。v6.1-beta1、v6.0.2、v6.1-rc1 都还没带上。</p>
+<h2>现在能用的两步处理</h2>
+<p>两层原因对应两步处理：</p>
+<ul>
+<li>修库 bug：IDF 本地补丁，slave 分支里把 <code>ble_gap_event_connect_call(ev-&gt;conn_handle, ev-&gt;status)</code> 改成 <code>ble_gap_event_connect_call(ev-&gt;conn_handle, 0)</code>，和上游语义对齐。</li>
+<li>躲开仲裁打架：手机明确请求扫描 WiFi 列表（<code>GET_WIFI_LIST</code>）时，<code>wifi_manager_suspend_sta()</code> 先挂起 STA 自动重连，<code>SCAN_DONE</code> 立刻恢复。普通退避重连不要动。</li>
+</ul>
+<p>升级到带 NimBLE 1.9.0 的 IDF 后，本地补丁可以拿掉。补丁改的是 IDF 安装目录，升级会丢，更新后要重新打。</p>
+<h2>补丁前后对照</h2>
+<p>用 PC 蓝牙模拟手机（bleak 直连，按 BluFi 帧格式发 <code>GET_WIFI_LIST</code>）：</p>
+<ul>
+<li>补丁前：PC 收到 0 条通知。</li>
+<li>补丁后：收到 WiFi 列表通知，158 字节，里面是真实 SSID。</li>
+</ul>
+<p>根因和修复都在硬件上对过。</p>
+<h2>结论</h2>
+<p>本设备通过 BLE 配网（BluFi），配网期间 WiFi 与蓝牙同时工作，但两者共用同一射频前端，由共存仲裁时分复用。</p>
+<p>经核查，故障属实：WiFi 正常时配网流程可用，WiFi 反复重连后，设备下发的数据全部丢失。</p>
+<p>原因分两层。WiFi 与蓝牙共用射频前端，重连期间仲裁持续压制蓝牙，读版本 HCI 命令失败（0x1A），空口丢包、序号错乱时有发生；NimBLE 又将该失败状态写入连接事件，esp_blufi 的 <code>is_connected</code> 恒为 false，发送通道被静默关闭。</p>
+<p>验证与处置：PC 蓝牙直连下，补丁前 0 条通知，补丁后收到 158 字节真实 SSID。软件层已由上游 NimBLE 1.9.0 修复；硬件层属共存特性，扫描 WiFi 列表时挂起 STA 重连即可规避。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-23 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ble-provisioning-wifi-conflict');
+  }
+  </script>
+</body>
+</html>

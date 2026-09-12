@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>嵌入式选型指南 - CacheRivulet小记</title>
+  <meta name="description" content="嵌入式选型指南">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="软件">
+  <meta property="article:tag" content="选型">
+  <meta property="article:published_time" content="2026-08-13">
+  <meta property="og:title" content="嵌入式选型指南">
+  <meta property="og:description" content="嵌入式选型指南">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/embedded_selection_guide/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/embedded_selection_guide/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "嵌入式选型指南",
+  "description": "嵌入式选型指南",
+  "datePublished": "2026-08-13",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/embedded_selection_guide/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/embedded_selection_guide/"
+  },
+  "keywords": "嵌入式, 软件, 选型"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">嵌入式选型指南</h1>
+  <article class="article-body">
+<h1>嵌入式选型指南</h1>
+<ul>
+<li>通讯</li>
+<li><ul>
+<li>nanomodbus</li>
+</ul>
+</li>
+<li><ul>
+<li>帧解析器 TinyFrame</li>
+</ul>
+</li>
+<li>基础设施</li>
+<li><ul>
+<li>环形缓冲区 LwRB</li>
+</ul>
+</li>
+<li><ul>
+<li>键值对 时序数据库 loxdb(稍微重一点 11K Flash; 8K RAM) &gt; flashDB(多数情况足够，节省37% Flash 资源，8.5K Flash; 1K RAM)</li>
+</ul>
+</li>
+<li><ul>
+<li>轻量AB分区配置数据库 flashStore</li>
+</ul>
+</li>
+<li><ul>
+<li>事件库 microbus(更先进，Flash 2K, RAM 872B) &gt; LwEVT (精简，大多数情况下够用，Flash 410B, RAM 52B)</li>
+</ul>
+</li>
+<li>JSON解析</li>
+<li><ul>
+<li>cjson</li>
+</ul>
+</li>
+<li><ul>
+<li>LwJSON</li>
+</ul>
+</li>
+<li>内存分配器 LwMEM</li>
+<li>LwSHELL</li>
+<li>LwPRINTF</li>
+<li>图形显示</li>
+<li><ul>
+<li>单色屏 U8g2</li>
+</ul>
+</li>
+<li><ul>
+<li>彩屏 LVGL</li>
+</ul>
+</li>
+<li>边缘AI</li>
+<li><ul>
+<li>TFLits</li>
+</ul>
+</li>
+<li><ul>
+<li>NanoEdgeAI</li>
+</ul>
+</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-13 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=embedded_selection_guide');
+  }
+  </script>
+</body>
+</html>

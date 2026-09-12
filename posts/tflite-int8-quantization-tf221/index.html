@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>已有 .tflite 模型转 int8 量化 - CacheRivulet小记</title>
+  <meta name="description" content="提取 .tflite 权重 → Keras 重建 → 导出 int8">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="TFLite">
+  <meta property="article:tag" content="TFLM">
+  <meta property="article:tag" content="模型量化">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:tag" content="Python">
+  <meta property="article:published_time" content="2026-07-05">
+  <meta property="og:title" content="已有 .tflite 模型转 int8 量化">
+  <meta property="og:description" content="提取 .tflite 权重 → Keras 重建 → 导出 int8">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/tflite-int8-quantization-tf221/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/tflite-int8-quantization-tf221/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "已有 .tflite 模型转 int8 量化",
+  "description": "提取 .tflite 权重 → Keras 重建 → 导出 int8",
+  "datePublished": "2026-07-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/tflite-int8-quantization-tf221/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/tflite-int8-quantization-tf221/"
+  },
+  "keywords": "TFLite, TFLM, 模型量化, 嵌入式, 边缘AI, Python"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">已有 .tflite 模型转 int8 量化</h1>
+  <article class="article-body">
+<h1>已有 .tflite 模型转 int8 量化</h1>
+<p>有一个现成的 <code>sine_calcu.tflite</code> 浮点模型（2380 字节，<a href="/posts/tflite-int8-quantization-tf221/sine_calcu_float.tflite" target="_blank" rel="noopener noreferrer">下载</a>），需要量化为 int8 给 STM32 用。打开终端，装好 TF 2.21，写下一行熟悉的代码：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">converter = tf.lite.TFLiteConverter.from_frozen_buffer(model_data, ...)</span></span></code></pre><p>报错：<code>AttributeError: type object &#39;TFLiteConverterV2&#39; has no attribute &#39;from_frozen_buffer&#39;</code>。</p>
+<p>查了一圈发现 TF 2.16+ 重构了 TFLiteConverter 的 API。新的构造函数签名是 <code>TFLiteConverter(funcs, trackable_obj=None)</code>，需要 concrete functions。但手里只有一个 <code>.tflite</code> 文件——没有 SavedModel，没有 Keras 模型，也没有原始训练代码。concrete function 从哪来？</p>
+<p>这篇文章记录了这个问题的解法：用 flatbuffers 解析 <code>.tflite</code> 模型的内部结构，提取所有权重张量，在 Keras 中重建一个完全相同的模型，再走标准的 Keras → int8 量化流程。</p>
+<h2>第一步：用 flatbuffers 解析模型结构</h2>
+<p>TensorFlow 自带 TFLite 的 flatbuffers schema（<code>tensorflow.lite.python.schema_py_generated</code>），可以直接解析 <code>.tflite</code> 文件的内部结构：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">from</span><span style="color:#D4D4D4"> tensorflow.lite.python </span><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> schema_py_generated </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> _schema</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">with</span><span style="color:#DCDCAA"> open</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"sine_calcu.tflite"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"rb"</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">as</span><span style="color:#D4D4D4"> f:</span></span>
+<span class="line"><span style="color:#D4D4D4">    model_data = f.read()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">model = _schema.Model.GetRootAs(model_data, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">sg = model.Subgraphs(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> i </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(sg.OperatorsLength()):</span></span>
+<span class="line"><span style="color:#D4D4D4">    op = sg.Operators(i)</span></span>
+<span class="line"><span style="color:#D4D4D4">    oc = model.OperatorCodes(op.OpcodeIndex())</span></span>
+<span class="line"><span style="color:#D4D4D4">    inputs = [op.Inputs(j) </span><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> j </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(op.InputsLength())]</span></span>
+<span class="line"><span style="color:#D4D4D4">    outputs = [op.Outputs(j) </span><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> j </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(op.OutputsLength())]</span></span>
+<span class="line"><span style="color:#DCDCAA">    print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"Op [</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">i</span><span style="color:#569CD6">}</span><span style="color:#CE9178">]: builtin_code=</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">oc.BuiltinCode()</span><span style="color:#569CD6">}</span><span style="color:#CE9178">, "</span></span>
+<span class="line"><span style="color:#569CD6">          f</span><span style="color:#CE9178">"inputs=</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">inputs</span><span style="color:#569CD6">}</span><span style="color:#CE9178">, outputs=</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">outputs</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span></code></pre><p>输出：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Op [0]: builtin_code=9, inputs=[0, 5, 6], outputs=[7]    ← FULLY_CONNECTED</span></span>
+<span class="line"><span>Op [1]: builtin_code=28, inputs=[7], outputs=[8]         ← TANH</span></span>
+<span class="line"><span>Op [2]: builtin_code=9, inputs=[8, 4, 2], outputs=[9]    ← FULLY_CONNECTED</span></span>
+<span class="line"><span>Op [3]: builtin_code=28, inputs=[9], outputs=[10]        ← TANH</span></span>
+<span class="line"><span>Op [4]: builtin_code=9, inputs=[10, 3, 1], outputs=[11]  ← FULLY_CONNECTED</span></span></code></pre><p>模型结构一目了然：<code>Dense(1→10) → Tanh → Dense(10→5) → Tanh → Dense(5→1)</code>，一个三层 MLP。每个 tensor 的名称和 shape 也都能从 flatbuffer 中读到。</p>
+<h2>第二步：提取权重张量</h2>
+<p>所有权重都存储在 flatbuffer 的 buffer 区。根据 tensor 的名称和索引关系，定位到 6 个权重张量：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">tensor_data = {}</span></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> i </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(sg.TensorsLength()):</span></span>
+<span class="line"><span style="color:#D4D4D4">    t = sg.Tensors(i)</span></span>
+<span class="line"><span style="color:#D4D4D4">    name = t.Name().decode() </span><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> t.Name() </span><span style="color:#C586C0">else</span><span style="color:#569CD6"> f</span><span style="color:#CE9178">"tensor_</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">i</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span></span>
+<span class="line"><span style="color:#D4D4D4">    buf = model.Buffers(t.Buffer())</span></span>
+<span class="line"><span style="color:#D4D4D4">    data_len = buf.DataLength()</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> data_len > </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#D4D4D4">        shape = [t.Shape(j) </span><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> j </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(t.ShapeLength())]</span></span>
+<span class="line"><span style="color:#D4D4D4">        raw_bytes = buf.DataAsNumpy()</span></span>
+<span class="line"><span style="color:#D4D4D4">        arr = np.frombuffer(raw_bytes, </span><span style="color:#9CDCFE">dtype</span><span style="color:#D4D4D4">=np.float32).reshape(shape).copy()</span></span>
+<span class="line"><span style="color:#D4D4D4">        tensor_data[name] = arr</span></span></code></pre><p>提取结果：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>sequential_1/dense_1/MatMul   : [10, 1]   ← Layer 1 kernel</span></span>
+<span class="line"><span>sequential_1/dense_1/BiasAdd  : [10]      ← Layer 1 bias</span></span>
+<span class="line"><span>arith.constant3               : [5, 10]   ← Layer 2 kernel</span></span>
+<span class="line"><span>arith.constant1               : [5]       ← Layer 2 bias</span></span>
+<span class="line"><span>arith.constant2               : [1, 5]    ← Layer 3 kernel</span></span>
+<span class="line"><span>arith.constant                : [1]       ← Layer 3 bias</span></span></code></pre><p>注意 TFLite 中 FC 层的权重 shape 是 <code>[out_features, in_features]</code>，Keras 的 Dense 是 <code>[in_features, out_features]</code>，赋值时需要 transpose。</p>
+<h2>第三步：在 Keras 中重建模型</h2>
+<p>用提取的权重构建一个完全相同的 Keras 模型：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">model_keras = tf.keras.Sequential([</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'tanh'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">input_shape</span><span style="color:#D4D4D4">=(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">,)),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">activation</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">'tanh'</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">    tf.keras.layers.Dense(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#D4D4D4">])</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># Build</span></span>
+<span class="line"><span style="color:#D4D4D4">_ = model_keras(np.array([[</span><span style="color:#B5CEA8">0.0</span><span style="color:#D4D4D4">]], </span><span style="color:#9CDCFE">dtype</span><span style="color:#D4D4D4">=np.float32))</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># Set weights — 注意 transpose</span></span>
+<span class="line"><span style="color:#D4D4D4">model_keras.layers[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">].set_weights([w1.T, b1])</span></span>
+<span class="line"><span style="color:#D4D4D4">model_keras.layers[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">].set_weights([w2.T, b2])</span></span>
+<span class="line"><span style="color:#D4D4D4">model_keras.layers[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">].set_weights([w3.T, b3])</span></span></code></pre><p>验证 float 精度——与原 <code>.tflite</code> 模型对比：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>x=-2.00  keras=+0.643296  tflite=+0.643297  OK</span></span>
+<span class="line"><span>x=-1.00  keras=+0.243617  tflite=+0.243617  OK</span></span>
+<span class="line"><span>x=+0.00  keras=+0.000132  tflite=+0.000133  OK</span></span>
+<span class="line"><span>x=+0.50  keras=-0.001474  tflite=-0.001474  OK</span></span>
+<span class="line"><span>x=+1.00  keras=+0.014659  tflite=+0.014659  OK</span></span>
+<span class="line"><span>x=+2.00  keras=+0.038101  tflite=+0.038101  OK</span></span></code></pre><p>六个测试点误差在 1e-6 级别，权重提取和重建完全正确。</p>
+<h2>第四步：Full Int8 量化</h2>
+<p>现在有了 Keras 模型，就可以走标准的 TF 量化流程：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">def</span><span style="color:#DCDCAA"> representative_dataset</span><span style="color:#D4D4D4">():</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> _ </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> range</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">500</span><span style="color:#D4D4D4">):</span></span>
+<span class="line"><span style="color:#D4D4D4">        x = np.random.uniform(-np.pi, np.pi, </span><span style="color:#9CDCFE">size</span><span style="color:#D4D4D4">=(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">)).astype(np.float32)</span></span>
+<span class="line"><span style="color:#C586C0">        yield</span><span style="color:#D4D4D4"> [x]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">converter = tf.lite.TFLiteConverter.from_keras_model(model_keras)</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.optimizations = [tf.lite.Optimize.DEFAULT]</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.representative_dataset = representative_dataset</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.inference_input_type = tf.int8</span></span>
+<span class="line"><span style="color:#D4D4D4">converter.inference_output_type = tf.int8</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">tflite_quant_model = converter.convert()</span></span></code></pre><p>这里的关键参数：</p>
+<ul>
+<li><code>supported_ops = TFLITE_BUILTINS_INT8</code> — 要求全部算子都用 int8 内核</li>
+<li><code>inference_input_type = tf.int8</code> — 输入直接使用 int8，跳过 float 输入端的隐式 Quantize</li>
+<li><code>inference_output_type = tf.int8</code> — 输出也是 int8</li>
+<li><code>representative_dataset</code> — 校准数据集，用于计算激活值的量化参数</li>
+</ul>
+<h2>量化结果</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Float model: 2380 bytes</span></span>
+<span class="line"><span>Int8  model: 2992 bytes</span></span></code></pre><p>int8 模型尺寸不降反升——这个模型太小了（总共才 6 个权重张量，加起来不到 300 个 float），新增的 Quantize/Dequantize 算子和量化元数据开销超过了权重本身的压缩收益。对于真实规模的模型（几 MB 以上），int8 通常会缩小 3-4 倍。</p>
+<p>量化参数：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Scale</th>
+<th>Zero Point</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Input</td>
+<td>0.02451</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Output</td>
+<td>0.00341</td>
+<td>-126</td>
+</tr>
+</tbody></table>
+<p>精度验证——用 int8 推理并与原 float 模型对比：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>x=+0.00  int8=+0.00683  float_ref=+0.00013  error=0.0067</span></span>
+<span class="line"><span>x=+0.50  int8=+0.00683  float_ref=-0.00147  error=0.0083</span></span>
+<span class="line"><span>x=+1.00  int8=+0.01024  float_ref=+0.01466  error=0.0044</span></span>
+<span class="line"><span>x=+1.50  int8=+0.04096  float_ref=+0.02848  error=0.0125</span></span>
+<span class="line"><span>x=-1.00  int8=+0.24919  float_ref=+0.24362  error=0.0056</span></span>
+<span class="line"><span>x=+3.14  int8=+0.06145  float_ref=+0.05494  error=0.0065</span></span></code></pre><p>误差在 int8 量化的正常范围（~0.01 级别）。量化后模型的函数语义保持不变。</p>
+<p>量化前后的模型文件：</p>
+<ul>
+<li><a href="/posts/tflite-int8-quantization-tf221/sine_calcu_float.tflite" target="_blank" rel="noopener noreferrer">sine_calcu_float.tflite</a>（2380 bytes，float32）</li>
+<li><a href="/posts/tflite-int8-quantization-tf221/sine_calcu_int8.tflite" target="_blank" rel="noopener noreferrer">sine_calcu_int8.tflite</a>（2992 bytes，全 int8 量化）</li>
+</ul>
+<h2>这个方法能泛化吗</h2>
+<p>这个流程的核心思路是 <strong>&quot;从 .tflite flatbuffer 反向工程出模型结构和权重&quot;</strong>，它适用于以下条件：</p>
+<ul>
+<li><strong>已知算子类型</strong>：模型只用了 TFLite 的标准内置算子（FullyConnected、Tanh、Conv2D 等），没有自定义算子</li>
+<li><strong>已知激活函数</strong>：flatbuffer 中 Tanh/ReLU/Logistic 等激活函数的代码是公开的</li>
+<li><strong>模型规模适中</strong>：权重张量数量在几十个以内，手动匹配 tensor 名称到 Keras 层的映射是可行的</li>
+</ul>
+<p>对于更复杂的模型（含有分支、跳跃连接、自定义算子），手动重建会变得困难。那种场景下，更好的做法是找到原始训练代码，或者用 TF 1.x 的 <code>tf.compat.v1.lite.TFLiteConverter.from_frozen_graph</code> 降级处理。</p>
+<p>这次量化工作的本质是把一个不透明的二进制模型文件变成了可操作的 Keras 对象。flatbuffers 在这里扮演了&quot;解包器&quot;的角色——即便 TFLite 的序列化格式是 Protobuf 或其他格式，思路一样：解析序列化格式，提取数据，重建计算图。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=tflite-int8-quantization-tf221');
+  }
+  </script>
+</body>
+</html>

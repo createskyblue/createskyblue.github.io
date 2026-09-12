@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用 SPI 的占空比编码驱动 WS2812 灯珠 - CacheRivulet小记</title>
+  <meta name="description" content="SPI占空比编码驱动WS2812">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="DMA">
+  <meta property="article:tag" content="SPI">
+  <meta property="article:published_time" content="2026-07-27">
+  <meta property="og:title" content="用 SPI 的占空比编码驱动 WS2812 灯珠">
+  <meta property="og:description" content="SPI占空比编码驱动WS2812">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32-hal-spi-ws2812/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32-hal-spi-ws2812/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用 SPI 的占空比编码驱动 WS2812 灯珠",
+  "description": "SPI占空比编码驱动WS2812",
+  "datePublished": "2026-07-27",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32-hal-spi-ws2812/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32-hal-spi-ws2812/"
+  },
+  "keywords": "嵌入式, MCU, STM32, DMA, SPI"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用 SPI 的占空比编码驱动 WS2812 灯珠</h1>
+  <article class="article-body">
+<h1>用 SPI 的占空比编码驱动 WS2812 灯珠</h1>
+<p>WS2812 只有一根数据线，对逻辑 0 和逻辑 1 的识别依赖高电平持续时间。直接用 GPIO 翻转需要严格控制每个脉冲，代码执行时间和中断都可能扰动波形。</p>
+<p>这个驱动借用了 SPI 的稳定时钟：先把每个 WS2812 数据位展开成一个 SPI 字节，再让 SPI 和 DMA 连续输出。完整代码见 <a href="https://github.com/createskyblue/STM32_HAL_SPI_WS2812">STM32 HAL SPI WS2812 驱动仓库</a>。</p>
+<h2>WS2812 单线脉宽约束</h2>
+<p>WS2812 接收的是固定周期内不同高电平宽度的脉冲。逻辑 0 的高电平较短，逻辑 1 的高电平较长。SPI 本身不会生成 WS2812 协议，但 MOSI 引脚可以按固定速率连续输出 0 和 1，这给了我们一个转换入口。</p>
+<p>驱动规定一个 WS2812 数据位占用 8 个 SPI 位。只要 SPI 使用 MSB 优先发送，就能用一个字节中连续高电平位的数量控制脉宽。</p>
+<h2>SPI 字节展开脉宽编码</h2>
+<p>驱动只定义了两个编码值：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> BIT0_PULSE </span><span style="color:#B5CEA8">0x80</span><span style="color:#6A9955">  // 1000 0000</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> BIT1_PULSE </span><span style="color:#B5CEA8">0xC0</span><span style="color:#6A9955">  // 1100 0000</span></span></code></pre><p><code>0x80</code> 发送时先输出 1 个高电平位，再输出 7 个低电平位。<code>0xC0</code> 先输出 2 个高电平位，再输出 6 个低电平位。两种编码的总周期相同，高电平宽度不同，正好对应 WS2812 对逻辑 0 和逻辑 1 的判定方式。</p>
+<p>这样处理后，CPU 不再逐个翻转 GPIO。SPI 外设负责稳定输出每一个小时间片，软件只需要准备字节序列。</p>
+<h2>GRB 数据缓冲区</h2>
+<p>每颗 WS2812 需要 24 位颜色数据，发送顺序是 G、R、B。驱动逐位读取三个颜色分量，并把原始 1 位转换成一个 SPI 字节：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *p = ws2812->led_buffer + num * </span><span style="color:#B5CEA8">24</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">; i++) {</span></span>
+<span class="line"><span style="color:#D4D4D4">    *p++ = (g &#x26; </span><span style="color:#B5CEA8">0x80</span><span style="color:#D4D4D4">) ? BIT1_PULSE : BIT0_PULSE;</span></span>
+<span class="line"><span style="color:#D4D4D4">    g &#x3C;&#x3C;= </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>R 和 B 分量使用相同的展开过程。一颗灯最终占用 24 字节缓冲区，多颗灯的数据直接首尾相连。缓冲区消耗增加了 8 倍，换来了简单、连续且可交给外设发送的波形数据。</p>
+<h2>DMA 连续发送</h2>
+<p>颜色全部编码完成后，更新函数只做一次 DMA 发送：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> WS2812_Update</span><span style="color:#D4D4D4">(WS2812_HandleTypeDef *</span><span style="color:#9CDCFE">ws2812</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_SPI_Transmit_DMA</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#9CDCFE">        ws2812</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">spi_handle</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        ws2812</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">led_buffer</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">        WS2812_LED_NUM * </span><span style="color:#B5CEA8">24</span></span>
+<span class="line"><span style="color:#D4D4D4">    );</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>DMA 按顺序搬运整个缓冲区，SPI 持续输出 MOSI 波形。发送期间不需要 CPU 逐位等待，长灯带也沿用同一套编码方式，只需扩大灯珠数量和缓冲区。</p>
+<h2>SPI 配置与波形校准</h2>
+<p><code>0x80</code> 和 <code>0xC0</code> 只决定高电平占整个编码字节的比例，实际脉宽仍由 SPI 时钟决定。移植时需要检查以下条件：</p>
+<ul>
+<li>MOSI 连接 WS2812 数据输入，SPI 使用 MSB 优先。</li>
+<li>SPI 时钟配合 8 位展开后，逻辑 0、逻辑 1 的高低电平落在当前灯珠数据手册范围内。</li>
+<li>DMA 发送完成后保留足够的低电平复位时间，再开始下一帧。</li>
+<li>调整 SPI 分频或编码值后，用示波器确认 MOSI 波形。</li>
+</ul>
+<p>这段驱动的核心很小：用 SPI 字节中的高电平位数表达 WS2812 脉宽，再用 DMA 发送整帧。它把严格时序转换成普通的缓冲区编码问题，适合已经具备 SPI 和 DMA 外设的 MCU 工程。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-27 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32-hal-spi-ws2812');
+  }
+  </script>
+</body>
+</html>

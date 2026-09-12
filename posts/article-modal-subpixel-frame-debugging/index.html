@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>弹窗动画停在半像素位置会让文章图片顶线消失 - CacheRivulet小记</title>
+  <meta name="description" content="弹窗边框出现细线，从布局和渲染精度排查">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="CSS">
+  <meta property="article:tag" content="Vue">
+  <meta property="article:tag" content="渲染调试">
+  <meta property="article:published_time" content="2026-06-13">
+  <meta property="og:title" content="弹窗动画停在半像素位置会让文章图片顶线消失">
+  <meta property="og:description" content="弹窗边框出现细线，从布局和渲染精度排查">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/article-modal-subpixel-frame-debugging/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/article-modal-subpixel-frame-debugging/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "弹窗动画停在半像素位置会让文章图片顶线消失",
+  "description": "弹窗边框出现细线，从布局和渲染精度排查",
+  "datePublished": "2026-06-13",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/article-modal-subpixel-frame-debugging/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/article-modal-subpixel-frame-debugging/"
+  },
+  "keywords": "CSS, Vue, 渲染调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">弹窗动画停在半像素位置会让文章图片顶线消失</h1>
+  <article class="article-body">
+<h1>弹窗动画停在半像素位置会让文章图片顶线消失</h1>
+<p>文章弹窗里的图片出现过一个渲染异常：图片顶部的 1px 线框会消失，看起来像图片内容向上压住了外部线框。鼠标框选图片后，线框又恢复正常。</p>
+<p>直接改图片样式很难稳定复现和修复。异常状态和恢复后的 computed style 对比后，图片自身规则没有实质差异。真正触发风险的是弹窗动画把内容层长期留在半像素 transform 合成层里，1px 顶线在取整时被吃掉。</p>
+<h2>有效线索</h2>
+<p>异常状态下，文章图片继承的 CSS 变量里有这样的入场位移：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">--modal-enter-x: -192.5px;</span></span>
+<span class="line"><span style="color:#D4D4D4">--modal-enter-y: -786.5px;</span></span></code></pre><p>这两个 <code>.5px</code> 值来自弹窗入场动画。原结构把弹窗外层固定在视口中心：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D7BA7D">.modal-outer</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">  position</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">fixed</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  top</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">50%</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  left</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">50%</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  transform</span><span style="color:#D4D4D4">: </span><span style="color:#DCDCAA">translate</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">-50%</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">-50%</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>入场动画也直接作用在同一个外层元素上。视口尺寸、卡片点击位置和弹窗尺寸组合后，最终坐标容易落在半像素。浏览器在 transform 合成层中绘制图片、圆角和 1px 线框时，会出现取整差异。鼠标框选触发重绘，线框临时恢复，所以看起来像“选一下就好了”。</p>
+<h2>修复方式</h2>
+<p>修复点放在弹窗层级，避免继续堆叠图片规则。</p>
+<ol>
+<li><code>modal-outer</code> 改成全屏 fixed 容器，用 flex 居中，不再使用 <code>top: 50%</code> 和 <code>translate(-50%, -50%)</code>。</li>
+<li>新增 <code>modal-shell</code> 包住目录栏和文章主体，入场/离场动画只作用在这个内部壳层。</li>
+<li>给 Vue <code>&lt;Transition&gt;</code> 显式声明 enter/leave 时长，避免外层没有 transition 后过渡类无法按预期清理。</li>
+<li>动画结束态让 <code>modal-shell</code> 回到 <code>transform: none</code>，文章内容不再长期处在 transform 合成层里。</li>
+<li>图片仍保留 <code>display: block</code>，线框改用 <code>box-shadow: 0 0 0 1px black</code>，降低 inline 布局和边框绘制带来的额外变量。</li>
+</ol>
+<p>核心结构变成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#808080">&#x3C;</span><span style="color:#569CD6">div</span><span style="color:#9CDCFE"> class</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"modal-outer"</span><span style="color:#808080">></span></span>
+<span class="line"><span style="color:#808080">  &#x3C;</span><span style="color:#569CD6">div</span><span style="color:#9CDCFE"> class</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"modal-shell"</span><span style="color:#808080">></span></span>
+<span class="line"><span style="color:#808080">    &#x3C;</span><span style="color:#569CD6">aside</span><span style="color:#9CDCFE"> class</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"chapter-panel"</span><span style="color:#808080">>&#x3C;/</span><span style="color:#569CD6">aside</span><span style="color:#808080">></span></span>
+<span class="line"><span style="color:#808080">    &#x3C;</span><span style="color:#569CD6">div</span><span style="color:#9CDCFE"> class</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"modal-wrapper"</span><span style="color:#808080">>&#x3C;/</span><span style="color:#569CD6">div</span><span style="color:#808080">></span></span>
+<span class="line"><span style="color:#808080">  &#x3C;/</span><span style="color:#569CD6">div</span><span style="color:#808080">></span></span>
+<span class="line"><span style="color:#808080">&#x3C;/</span><span style="color:#569CD6">div</span><span style="color:#808080">></span></span></code></pre><p>关键样式变成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D7BA7D">.modal-outer</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">  position</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">fixed</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  inset</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  display</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">flex</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  align-items</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">center</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  justify-content</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">center</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  pointer-events</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">none</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D7BA7D">.modal-shell</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">  display</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">flex</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  transform</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">none</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  pointer-events</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">auto</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D7BA7D">.modal-enter-from</span><span style="color:#D7BA7D"> .modal-shell</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">  transform</span><span style="color:#D4D4D4">: </span><span style="color:#DCDCAA">translate</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#DCDCAA">    var</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">--modal-enter-x</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0px</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#DCDCAA">    var</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">--modal-enter-y</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0px</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">  ) </span><span style="color:#DCDCAA">scale</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0.004</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D7BA7D">.modal-enter-to</span><span style="color:#D7BA7D"> .modal-shell</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D7BA7D">.modal-leave-from</span><span style="color:#D7BA7D"> .modal-shell</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">  transform</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">none</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h2>验证方式</h2>
+<p>这类问题不能只看 computed style。异常和正常状态的 computed style 可能完全一样，差异存在于合成层、动画类和实际像素坐标。</p>
+<p>验证时检查三个点：</p>
+<ol>
+<li>动画结束后 <code>.modal-outer</code> 的 <code>transform</code> 为 <code>none</code>。</li>
+<li>动画结束后 <code>.modal-shell</code> 的 <code>transform</code> 为 <code>none</code>。</li>
+<li><code>.article-body img</code> 保持 <code>display: block</code>，线框规则为 <code>box-shadow: 0 0 0 1px black</code>。</li>
+</ol>
+<p>对应的回归测试可以直接检查源码约束，防止后续又把 transform 居中加回外层弹窗。</p>
+<h2>结论</h2>
+<p>图片线框丢失不一定是图片样式问题。弹窗、浮层、缩放动画、半像素居中会改变子元素的绘制上下文。遇到“鼠标框选后恢复”的 UI 异常，应优先检查是否存在长期保留的 transform、filter、backdrop-filter 或动画类。</p>
+<p>这次修复的原则是：外层负责固定定位和居中，内层负责短暂动画，动画结束后内容层回到普通布局。这样能保留打开动画，同时减少图片、文字和 1px 线框的合成层取整风险。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-13 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=article-modal-subpixel-frame-debugging');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>专为 NanoEdgeAI 设计的 CSV 时间序列标注工具 | A CSV time-series annotation tool tailored for NanoEdge AI Studio - CacheRivulet小记</title>
+  <meta name="description" content="CSV时间序列标注工具">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="csv">
+  <meta property="article:tag" content="time-series">
+  <meta property="article:tag" content="annotation">
+  <meta property="article:tag" content="nanoedgeai">
+  <meta property="article:published_time" content="2026-03-02">
+  <meta property="og:title" content="专为 NanoEdgeAI 设计的 CSV 时间序列标注工具 | A CSV time-series annotation tool tailored for NanoEdge AI Studio">
+  <meta property="og:description" content="CSV时间序列标注工具">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/csv-time-series-annotator/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/csv-time-series-annotator/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "专为 NanoEdgeAI 设计的 CSV 时间序列标注工具 | A CSV time-series annotation tool tailored for NanoEdge AI Studio",
+  "description": "CSV时间序列标注工具",
+  "datePublished": "2026-03-02",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/csv-time-series-annotator/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/csv-time-series-annotator/"
+  },
+  "keywords": "csv, time-series, annotation, nanoedgeai"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">专为 NanoEdgeAI 设计的 CSV 时间序列标注工具 | A CSV time-series annotation tool tailored for NanoEdge AI Studio</h1>
+  <article class="article-body">
+<h1>NanoEdgeAI CSV时间序列标注工具</h1>
+<h2>项目简介</h2>
+<p>NanoEdgeAI CSV时间序列标注工具是一个基于Web的数据标注平台，专为时间序列数据的可视化与标注而设计。项目提供本地运行和快速部署能力，提升数据标注效率。</p>
+<p>本工具主要面向数据科学家、机器学习工程师以及需要对时间序列数据进行结构化标注的研究团队。</p>
+<p>你可以在 <a href="https://createskyblue.github.io/csv-time-series-annotator/">https://createskyblue.github.io/csv-time-series-annotator/</a> 直接使用此工具，无需安装任何依赖。
+<img src="/posts/csv-time-series-annotator/img/PixPin_2026-01-07_06-26-10.webp" alt="应用演示"></p>
+<h2>主要功能</h2>
+<ul>
+<li><strong>多文件标注</strong>：支持同时上传多个CSV文件进行标注，可在一个项目中管理多个数据文件</li>
+<li><strong>文件导航</strong>：支持通过W/S键在不同文件间切换，不管样本是否完成标注</li>
+<li><strong>文件管理系统</strong>：新增文件树系统，可添加和删除标注项目中的文件</li>
+<li><strong>灵活数据导入与解析</strong>：支持CSV格式的数据导入，使用Papa Parse进行高效解析，每个CSV行被视为一个独立的时间序列样本</li>
+<li><strong>时间轴系数设置</strong>：允许用户设置时间轴单位系数，调整X轴显示比例</li>
+<li><strong>数据维度设置</strong>：支持设置数据维度数量，将数据按维度交错方式解析（D1_S1, D2_S1...序列），便于处理多维时间序列数据</li>
+<li><strong>时间序列可视化</strong>：基于uPlot轻量级图表库实现数据可视化</li>
+<li><strong>快速标签选择</strong>：支持数字键1-9快速选择前9个标签按钮</li>
+<li><strong>标签管理</strong>：灵活的标签配置系统，支持自定义标签</li>
+<li><strong>跳转功能</strong>：在样本导航区域提供文本框，允许用户手动输入数字快速跳转到指定样本</li>
+<li><strong>项目命名</strong>：允许用户为项目命名，便于管理</li>
+<li><strong>按钮按下反馈</strong>：标注按钮在鼠标按下或键盘快捷键按下时提供视觉反馈</li>
+<li><strong>数据导出</strong>：一键导出标注结果到分类的CSV文件，按原始文件名分别导出</li>
+<li><strong>修复CSV导出问题</strong>：修复导出CSV时自动创建新标题行的问题</li>
+<li><strong>项目备份与恢复</strong>：支持项目状态的导入导出功能</li>
+</ul>
+<h2>技术架构</h2>
+<ul>
+<li><strong>前端框架</strong>：React v19.2.3</li>
+<li><strong>语言</strong>：TypeScript ~5.8.2</li>
+<li><strong>构建工具</strong>：Vite ^6.2.0</li>
+<li><strong>图表库</strong>：uPlot ^1.6.32</li>
+<li><strong>CSV解析</strong>：Papa Parse ^5.5.3</li>
+</ul>
+<h2>快速开始</h2>
+<h3>环境准备</h3>
+<p>确保您的系统已安装Node.js（版本需兼容npm）</p>
+<h3>安装与运行</h3>
+<ol>
+<li><p><strong>克隆或下载项目到本地目录</strong></p>
+</li>
+<li><p><strong>安装依赖</strong>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">npm</span><span style="color:#CE9178"> install</span></span></code></pre></li>
+<li><p><strong>启动本地服务</strong>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">npm</span><span style="color:#CE9178"> run</span><span style="color:#CE9178"> dev</span></span></code></pre></li>
+</ol>
+<h2>使用说明</h2>
+<h3>数据导入</h3>
+<ul>
+<li>点击侧边栏的&quot;上传 CSV 数据源&quot;按钮，选择CSV文件</li>
+<li>CSV的每一行将被视为一个独立的时间序列样本</li>
+</ul>
+<h3>数据维度设置</h3>
+<ul>
+<li>在&quot;全局配置&quot;区域，可以设置&quot;数据维度(D)&quot;的值</li>
+<li>该功能用于处理多维时间序列数据，将数据按维度交错方式解析（D1_S1, D2_S1...序列）</li>
+<li>设置后，图表将显示多条数据序列线，每条线代表一个维度的数据</li>
+<li>数据维度值会在右上角显示为&quot;{维度数} 维模式&quot;标签</li>
+</ul>
+<h3>标签配置</h3>
+<ul>
+<li>在&quot;标签配置&quot;区域编辑标签，每行一个标签</li>
+<li>修改后将即时更新下方的打标按钮</li>
+</ul>
+<h3>数据标注</h3>
+<ul>
+<li>使用键盘上的 A/D 键或点击箭头按钮切换样本</li>
+<li>点击标签按钮为当前样本打标签</li>
+<li>已标注的样本会显示在状态指示区域</li>
+</ul>
+<h3>数据导出</h3>
+<ul>
+<li>完成标注后，点击&quot;一键导出标注结果&quot;按钮</li>
+<li>系统会按标签分类导出CSV文件</li>
+</ul>
+<h3>项目管理</h3>
+<ul>
+<li>使用&quot;导出项目&quot;功能保存当前标注进度</li>
+<li>使用&quot;导入项目&quot;功能恢复之前的标注进度</li>
+</ul>
+<h2>构建与部署</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">npm</span><span style="color:#CE9178"> run</span><span style="color:#CE9178"> build</span></span></code></pre><h2>项目结构</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>.</span></span>
+<span class="line"><span>├── App.tsx           # 主应用组件</span></span>
+<span class="line"><span>├── uplot-wrapper.tsx # 图表组件封装</span></span>
+<span class="line"><span>├── types.ts          # 类型定义</span></span>
+<span class="line"><span>├── index.html        # 应用入口HTML</span></span>
+<span class="line"><span>├── index.tsx         # React渲染入口</span></span>
+<span class="line"><span>├── vite.config.ts    # Vite配置</span></span>
+<span class="line"><span>├── lib/              # 第三方库</span></span>
+<span class="line"><span>├── img/              # 图片资源</span></span>
+<span class="line"><span>└── README.md</span></span></code></pre>
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-03-02 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=csv-time-series-annotator');
+  }
+  </script>
+</body>
+</html>

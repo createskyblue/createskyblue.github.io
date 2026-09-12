@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>移动端实时图表应先安排绘图区再调整样式 - CacheRivulet小记</title>
+  <meta name="description" content="手机实时图表刻度和端点拥挤，先划分绘图区再调样式">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="移动端UI">
+  <meta property="article:tag" content="图表设计">
+  <meta property="article:tag" content="视觉设计">
+  <meta property="article:published_time" content="2026-06-10">
+  <meta property="og:title" content="移动端实时图表应先安排绘图区再调整样式">
+  <meta property="og:description" content="手机实时图表刻度和端点拥挤，先划分绘图区再调样式">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/mobile-chart-ui-design/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/mobile-chart-ui-design/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "移动端实时图表应先安排绘图区再调整样式",
+  "description": "手机实时图表刻度和端点拥挤，先划分绘图区再调样式",
+  "datePublished": "2026-06-10",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/mobile-chart-ui-design/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/mobile-chart-ui-design/"
+  },
+  "keywords": "移动端UI, 图表设计, 视觉设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">移动端实时图表应先安排绘图区再调整样式</h1>
+  <article class="article-body">
+<h1>移动端实时图表应先安排绘图区再调整样式</h1>
+<p>移动端实时图表最先暴露的问题通常是空间分配。屏幕宽度变小以后，曲线、刻度、端点、标题、辅助文字和卡片边距都会挤在一起。先决定每个元素占据哪块区域，再讨论颜色、圆角和线宽。</p>
+<p>实时图表还多一个要求：用户的视线会持续落在最新端。右侧区域承担了端点、刻度和状态读取三件事，必须预留空间。</p>
+<h2>卡片少用边框</h2>
+<p>移动端卡片一旦占满屏幕宽度，边框会特别显眼。多个卡片上下排列时，边框会把页面切成很多小盒子，图表本身反而被削弱。</p>
+<p>更稳的做法是用底色和间距分层：</p>
+<ul>
+<li>页面背景用浅灰。</li>
+<li>卡片保持白底。</li>
+<li>卡片之间留出明确间距。</li>
+<li>卡片边框去掉或降到几乎不可见。</li>
+</ul>
+<p>这样会让页面更安静。容器退到后面，图表线条、数字和端点成为主要信息。</p>
+<h2>右端空心圆是视觉锚点</h2>
+<p>实时曲线的最右侧适合放一个空心圆。它用于标出“这里是当前端点”。</p>
+<p>空心圆给用户的感受很直接：</p>
+<ul>
+<li>画面仍在更新。</li>
+<li>曲线的时间方向明确。</li>
+<li>最新点被强调，但不会像按钮一样跳出来。</li>
+</ul>
+<p>实心圆在手机上容易变成一个重色块。空心圆只保留轮廓，视觉重量更轻。描边宽度应当接近曲线线宽，过粗会压住曲线，过细会丢失存在感。</p>
+<h2>Y 轴刻度放到右侧</h2>
+<p>实时图表的最新点在右侧。用户看曲线时，视线通常会从左向右移动，最后停在右端。把 Y 轴刻度放到右侧，可以让刻度靠近视线终点。</p>
+<p>这个处理有三个好处：</p>
+<ul>
+<li>读最新点高度时，视线移动更短。</li>
+<li>左侧留给曲线进入画面，不被刻度占掉。</li>
+<li>右端空心圆和刻度形成同一个读取区域。</li>
+</ul>
+<p>右侧刻度不能直接压在曲线上。右侧应当留一条固定 gutter，曲线画到 gutter 左边，刻度文字放在 gutter 里面。线条和文字分开以后，图表会干净很多。</p>
+<h2>图表四边都要留空</h2>
+<p>图表填满画布会显得紧。移动端高度有限，更需要给四边留空。</p>
+<p>顶部留白用于最高刻度。最高刻度贴到顶部时，文字会被裁切，线条也会顶住边缘。</p>
+<p>底部留白用于最低刻度和端点轮廓。圆点贴到底部时，会像被切掉一截。</p>
+<p>右侧留白用于刻度文字和最新端点。曲线画到文字下面，会立刻显得脏。</p>
+<p>左侧也需要留一点空气。曲线从边缘冲出来，会让图表像贴在卡片边上。</p>
+<h2>辅助文字不要做成徽章</h2>
+<p>图表右上角常放时间范围、筛选、状态之类的辅助信息。它们应当是弱信息。最常见的问题是把每一项都做成圆角徽章，看起来像一排按钮。</p>
+<p>更好的处理：</p>
+<ul>
+<li>用普通文本。</li>
+<li>降低字号和颜色。</li>
+<li>信息项之间用细分隔线。</li>
+<li>不给每一项单独加背景。</li>
+</ul>
+<p>辅助信息的视觉等级要低于曲线和端点。它们只负责解释图表，不负责吸引注意力。</p>
+<h2>移动端边距不能省</h2>
+<p>手机屏幕窄，很多设计会下意识减少左右边距。结果卡片贴满屏幕，图表也跟着变窄，整个页面会显得廉价。</p>
+<p>卡片需要留出侧边距。这个边距不用大，但要让用户看到页面背景。背景露出来以后，卡片才像一个独立区域，图表也不会压迫屏幕边缘。</p>
+<p>图表高度也要稳定。移动端高度可以比桌面低，但比例不能被浏览器拉伸。文字如果出现纵向压扁，通常说明画布实际绘制尺寸和显示尺寸不一致。</p>
+<h2>结论</h2>
+<p>移动端实时图表的设计顺序应当是：</p>
+<ul>
+<li>先确定卡片边距。</li>
+<li>再确定绘图区和右侧刻度区。</li>
+<li>再确定上下留白。</li>
+<li>最后调整颜色、线宽和端点。</li>
+</ul>
+<p>无边框、右侧刻度、空心端点、右侧 gutter、弱化辅助文字，这几项比复杂配色更重要。图表先干净，样式才有意义。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-10 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=mobile-chart-ui-design');
+  }
+  </script>
+</body>
+</html>

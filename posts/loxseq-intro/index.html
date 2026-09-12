@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>断电、重启、断点续跑：嵌入式多步流程的检查点恢复设计 - CacheRivulet小记</title>
+  <meta name="description" content="断电、重启、断点续跑：恢复策略按步骤声明，安全场景除外">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="断电、重启、断点续跑：嵌入式多步流程的检查点恢复设计">
+  <meta property="og:description" content="断电、重启、断点续跑：恢复策略按步骤声明，安全场景除外">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/loxseq-intro/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/loxseq-intro/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "断电、重启、断点续跑：嵌入式多步流程的检查点恢复设计",
+  "description": "断电、重启、断点续跑：恢复策略按步骤声明，安全场景除外",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/loxseq-intro/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/loxseq-intro/"
+  },
+  "keywords": "嵌入式, C语言, Flash存储, 系统设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">断电、重启、断点续跑：嵌入式多步流程的检查点恢复设计</h1>
+  <article class="article-body">
+<h1>断电、重启、断点续跑：嵌入式多步流程的检查点恢复设计</h1>
+<blockquote>
+<p><strong>声明：</strong> loxseq 是一个开源项目，作者为 <a href="https://github.com/Vanderhell/loxseq">Vanderhell</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解嵌入式掉电恢复状态机的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/loxseq" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/loxseq</a>（断电恢复状态机的 C 语言参考实现）</p>
+<h2>概述</h2>
+<p>嵌入式设备经常跑多步流程：灌装、加热、排空，或者充电、标定。任何一步执行中掉电、看门狗复位或 OTA 重启，设备就忘了自己干到哪一步。重做的代价有三种形态：重复执行会破坏（投料、加药、校准），会危险（加热中重启再加热可能过温），会浪费（小时级流程从头再来）。</p>
+<p>解决办法是一套设计思想：把进度以检查点形式持久化，重启后读回检查点，按每步预设的恢复策略决定续跑、重跑、放弃还是问人。检查点不只是一个步骤号：写入可能只完成一半（撕裂写），固件升级后步骤表会变，旧记录可能比新的更新，这些都要靠校验、版本、指纹等附加信息兜住。本文以开源项目 loxseq 作为这套思想的参考实现展开，重点在思想本身。这个库的适用面很窄，后面会说明。</p>
+<p><img src="/posts/loxseq-intro/power-loss-recovery.svg" alt="断电恢复流程"></p>
+<h2>恢复策略按步骤声明</h2>
+<p>&quot;断电后怎么办&quot;没有统一答案，同一流程里每步都不一样。把策略声明在步骤表里，执行交给状态机：</p>
+<table>
+<thead>
+<tr>
+<th>恢复策略</th>
+<th>重启后行为</th>
+<th>典型场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LOXSEQ_RESUME_AT_STEP</code></td>
+<td>从断点继续本步</td>
+<td>断电不影响步骤前提</td>
+</tr>
+<tr>
+<td><code>LOXSEQ_RESUME_FROM_START</code></td>
+<td>回到本步，重头执行</td>
+<td>需要重新归零或复位</td>
+</tr>
+<tr>
+<td><code>LOXSEQ_NEVER_RESUME</code></td>
+<td>放弃流程，进入安全初始化</td>
+<td>步骤状态不可信</td>
+</tr>
+<tr>
+<td><code>LOXSEQ_OPERATOR_DECIDES</code></td>
+<td>挂起，等待操作员裁决</td>
+<td>需要人工判断</td>
+</tr>
+</tbody></table>
+<p>举例：灌装可以续（液位到设定值即可），加热可以续（温度到设定值即可），加药绝不恢复（药不能加两次），排空要问人（罐里有什么只有操作员知道）。策略按步声明，机器只执行裁决，人工闸门留在该留的地方。</p>
+<h2>最小集成示例</h2>
+<p>以 loxseq 为例看这套思想怎么落地：三步接入。</p>
+<h3>步骤表</h3>
+<p>每步声明标签、动作、超时和恢复策略。动作返回 <code>LOXSEQ_STEP_RUNNING</code> 表示进行中，返回 <code>LOXSEQ_STEP_DONE</code> 表示完成。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">enum</span><span style="color:#D4D4D4"> { S_FILL, S_HEAT, S_DRAIN, STEP_COUNT };</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> loxseq_step_status_t</span><span style="color:#DCDCAA"> step_fill</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">loxseq_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">s</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> now_ms</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">u</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">    (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)u;</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">loxseq_step_age_ms</span><span style="color:#D4D4D4">(s, now_ms) >= </span><span style="color:#B5CEA8">2000</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> LOXSEQ_STEP_DONE;</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> LOXSEQ_STEP_RUNNING;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#6A9955">/* step_heat、step_drain 结构相同，此处省略 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> const</span><span style="color:#4EC9B0"> loxseq_step_def_t</span><span style="color:#9CDCFE"> steps</span><span style="color:#D4D4D4">[STEP_COUNT] = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    [S_FILL]  = { .tag = </span><span style="color:#CE9178">"fill"</span><span style="color:#D4D4D4">,  .action = step_fill,</span></span>
+<span class="line"><span style="color:#D4D4D4">                  .timeout_ms = </span><span style="color:#B5CEA8">30000</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">                  .resume_policy = LOXSEQ_RESUME_AT_STEP },</span></span>
+<span class="line"><span style="color:#D4D4D4">    [S_HEAT]  = { .tag = </span><span style="color:#CE9178">"heat"</span><span style="color:#D4D4D4">,  .action = step_heat,</span></span>
+<span class="line"><span style="color:#D4D4D4">                  .timeout_ms = </span><span style="color:#B5CEA8">30000</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">                  .resume_policy = LOXSEQ_RESUME_AT_STEP },</span></span>
+<span class="line"><span style="color:#D4D4D4">    [S_DRAIN] = { .tag = </span><span style="color:#CE9178">"drain"</span><span style="color:#D4D4D4">, .action = step_drain,</span></span>
+<span class="line"><span style="color:#D4D4D4">                  .timeout_ms = </span><span style="color:#B5CEA8">30000</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">                  .resume_policy = LOXSEQ_NEVER_RESUME },</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><h3>存储钩子</h3>
+<p>实现写、读、擦三个回调。后端持久化序列化后的 32 字节检查点，不保存 C 结构体的内存映像。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> const</span><span style="color:#4EC9B0"> loxseq_storage_t</span><span style="color:#D4D4D4"> storage = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    .write_checkpoint = my_flash_write,</span><span style="color:#6A9955">  /* 持久化 32 字节检查点 */</span></span>
+<span class="line"><span style="color:#D4D4D4">    .read_checkpoint  = my_flash_read,</span></span>
+<span class="line"><span style="color:#D4D4D4">    .erase_checkpoint = my_flash_erase,</span><span style="color:#6A9955">  /* 擦除后表现为冷启动 */</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><h3>开机流程</h3>
+<p>开机先 <code>loxseq_recover()</code> 得出裁决，再按裁决启动；主循环周期性调用 <code>loxseq_tick()</code> 驱动步骤执行。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> loxseq_err_t</span><span style="color:#DCDCAA"> my_safe_init</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">loxseq_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">s</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> t</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">u</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">    (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)s; (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)t; (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)u; </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> LOXSEQ_OK;</span><span style="color:#6A9955"> /* 安全初始化，示例为空实现 */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> const</span><span style="color:#4EC9B0"> loxseq_safe_init_t</span><span style="color:#D4D4D4"> safe_init_cfg = { .run = my_safe_init, .user = </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4"> };</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">loxseq_t</span><span style="color:#D4D4D4"> seq;</span></span>
+<span class="line"><span style="color:#DCDCAA">loxseq_init</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">seq</span><span style="color:#D4D4D4">, steps, STEP_COUNT, &#x26;</span><span style="color:#9CDCFE">storage</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">safe_init_cfg</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">loxseq_recovery_verdict_t</span><span style="color:#D4D4D4"> v = </span><span style="color:#DCDCAA">loxseq_recover</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">seq</span><span style="color:#D4D4D4">, LOXSEQ_REBOOT_NORMAL);</span></span>
+<span class="line"><span style="color:#C586C0">switch</span><span style="color:#D4D4D4"> (v) {</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> LOXSEQ_RECOVERY_COLD_START: </span><span style="color:#DCDCAA">loxseq_start_fresh</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">seq</span><span style="color:#D4D4D4">, now_ms);     </span><span style="color:#C586C0">break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> LOXSEQ_RECOVERY_RESUME:     </span><span style="color:#DCDCAA">loxseq_start_resume</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">seq</span><span style="color:#D4D4D4">, now_ms);    </span><span style="color:#C586C0">break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> LOXSEQ_RECOVERY_RESTART:    </span><span style="color:#DCDCAA">loxseq_start_restart</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">seq</span><span style="color:#D4D4D4">, now_ms);   </span><span style="color:#C586C0">break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> LOXSEQ_RECOVERY_SAFE_INIT:  </span><span style="color:#DCDCAA">loxseq_start_safe_init</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">seq</span><span style="color:#D4D4D4">, now_ms); </span><span style="color:#C586C0">break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    case</span><span style="color:#D4D4D4"> LOXSEQ_RECOVERY_OPERATOR:   </span><span style="color:#DCDCAA">loxseq_start_operator_wait</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">seq</span><span style="color:#D4D4D4">);     </span><span style="color:#C586C0">break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    loxseq_tick</span><span style="color:#D4D4D4">(&#x26;seq, </span><span style="color:#DCDCAA">now_ms</span><span style="color:#D4D4D4">());</span><span style="color:#6A9955">   /* 每步的动作在这里被调用 */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>运行中分支</h3>
+<p>默认流程单向推进。需要按业务条件跳转时，动作里先调 <code>loxseq_set_next_step()</code> 设目标，再返回 <code>LOXSEQ_STEP_BRANCH</code>。以质检步骤为例：合格跳去打包，不合格先跳去重工。跳转目标不限相邻；返回 <code>BRANCH</code> 却没设目标会让序列器进入 FAILED。</p>
+<p>完整可编译示例（含打印步骤顺序的 main）：<a href="/posts/loxseq-intro/branch_demo.c" target="_blank" rel="noopener noreferrer">下载分支示例</a></p>
+<h2>场景约束</h2>
+<p>这套设计有三个明确的禁区，loxseq 的文档也写明了：</p>
+<ol>
+<li><strong>涉及生命安全的场景</strong>。loxseq 自己声明不提供安全等级：无 SIL 认证、无 IEC 61511、无 ISO 26262。检查点只记录软件知道的进度，不记录液位、温度、位置这些物理事实；断电期间物理过程还在演化，恢复时世界已经变了。安全场景的恢复必须止步于安全状态并等人工确认，自动续跑是错误设计。</li>
+<li><strong>重大财产损失场景</strong>。恢复策略不可证明安全时，机器替人做决定就是风险。</li>
+<li><strong>生产现场的主控</strong>。工厂工艺层的主控是 PLC/DCS 加安全 PLC，联锁、报警、配方都在那一层，断电恢复非常保守。检查点恢复适合的是设备内部的序列（点胶机归零分装、电池充电阶段、打印机断电续打），位置在 PLC 之下，两者叠加使用，互不替代。</li>
+</ol>
+<p>另外要说明的是：这个库的适用面很窄，没有公开的采用记录，项目作者也举不出确切的用户。把它当作高质量的参考实现来阅读更合适，价值在思想，不在这份代码。</p>
+<h2>需要检查点恢复的四个特征</h2>
+<p>用不用这套设计，判断标准是&quot;重做代价&quot;，与断电概率无关。四个特征命中其一就值得考虑：</p>
+<ol>
+<li>流程里有一次性或不可逆步骤，重复执行会破坏物料或设备。</li>
+<li>单步分钟到小时级，重跑代价大。</li>
+<li>断电后&quot;知道刚才在干什么&quot;本身就是安全条件（加热中、均衡中）。</li>
+<li>重启源多样：看门狗、OTA、电池耗尽、用户关机。</li>
+</ol>
+<p>四个特征全不命中，重启后从头跑一遍没损失，就不需要这套设计。大多数项目属于这一类，自己写几十行状态机比引入依赖更划算。</p>
+<p>即便不采用检查点恢复，这套思想里的几个设计点值得带走：恢复策略按步声明、终结写墓碑防止重做、步骤表指纹防固件升级误恢复、数据可疑时保守降级、时钟驱动状态机可测可移植。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=loxseq-intro');
+  }
+  </script>
+</body>
+</html>

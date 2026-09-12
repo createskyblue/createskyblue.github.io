@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Casio fx-82ES Plus 计算器方向键失灵，绿油下铜箔微裂纹飞线修复 - CacheRivulet小记</title>
+  <meta name="description" content="卡西欧计算器方向键失灵，绿油下铜箔断线，飞线修复">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="硬件拆解">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="按键">
+  <meta property="article:tag" content="PCB">
+  <meta property="article:published_time" content="2026-09-12">
+  <meta property="og:title" content="Casio fx-82ES Plus 计算器方向键失灵，绿油下铜箔微裂纹飞线修复">
+  <meta property="og:description" content="卡西欧计算器方向键失灵，绿油下铜箔断线，飞线修复">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/casio-fx82es-key-repair/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/casio-fx82es-key-repair/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Casio fx-82ES Plus 计算器方向键失灵，绿油下铜箔微裂纹飞线修复",
+  "description": "卡西欧计算器方向键失灵，绿油下铜箔断线，飞线修复",
+  "datePublished": "2026-09-12",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/casio-fx82es-key-repair/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/casio-fx82es-key-repair/"
+  },
+  "keywords": "硬件拆解, 故障诊断, 工程调试, 低功耗, 按键, PCB"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Casio fx-82ES Plus 计算器方向键失灵，绿油下铜箔微裂纹飞线修复</h1>
+  <article class="article-body">
+<h1>Casio fx-82ES Plus 计算器方向键失灵，绿油下铜箔微裂纹飞线修复</h1>
+<p>用了十来年的卡西欧计算器方向键↓用不了，拆开维修</p>
+<p><img src="/posts/casio-fx82es-key-repair/PixPin_2026-09-12_10-02-33.webp" alt="电路板反面"></p>
+<p>①是无法使用的按键，红色和蓝色是按键对应的扫描矩阵走线，其中红色线路通过过孔②去正面，蓝色线路通过过孔序号③来带有芯片的正面；</p>
+<ul>
+<li>使用低功耗分析仪发现，开机电流是30μA，任意按键按下后电流是50μA，按键电流大约20μA；</li>
+<li>排查红色支路上的其他按键，按下后有20μA电流增量；</li>
+<li>排查蓝色支路上的其他按键，发现按下后没有任何电流增量，并且对应的按键无反应，这说明有问题在蓝色支路上，进一步检查正面序号③的过孔。</li>
+</ul>
+<p><img src="/posts/casio-fx82es-key-repair/PixPin_2026-09-12_10-07-30.webp" alt="电路板正面"></p>
+<p>现在来到电路板带芯片的正面，过孔③在丝印P134处，它被连接到序号④K17测试点，接着通过序号⑤有绿油覆盖的走线来到序号⑥的过孔重新回到背面。</p>
+<p>经过测量发现序过孔④到序号⑥不通，刮开 ⑤ 处的绿油，覆铜在绿油下方已经断开。外观完全看不出来：绿油完好，铜箔的裂纹藏在下面，推测是按键按压、潮气腐蚀，细铜箔出现微裂纹。飞线处理。</p>
+<p><img src="/posts/casio-fx82es-key-repair/2116236428.webp" alt="序号⑤覆铜之下线路断开处"></p>
+<p><img src="/posts/casio-fx82es-key-repair/1006827852.webp" alt="飞线"></p>
+<p><img src="/posts/casio-fx82es-key-repair/cover.webp" alt="飞线后维修完成，通过测试程序"></p>
+<p>飞线后 ↓ 键恢复正常，通过内置隐藏的按键测试程序</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-12 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=casio-fx82es-key-repair');
+  }
+  </script>
+</body>
+</html>

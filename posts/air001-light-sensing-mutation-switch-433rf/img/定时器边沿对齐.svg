@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">相对延时与绝对边沿对齐对比</title>
+  <desc id="desc">相对延时会把 GPIO 调用开销加入每段脉宽并逐段累积，绝对边沿对齐让每个边沿等待固定目标时刻，误差不会传递到下一段。</desc>
+
+  <rect width="1200" height="620" fill="#f8fafc"/>
+  <text x="64" y="58" fill="#17202a" font-family="Microsoft YaHei, sans-serif" font-size="30" font-weight="700">软件发码的两种计时方式</text>
+  <text x="64" y="92" fill="#56616f" font-family="Microsoft YaHei, sans-serif" font-size="18">计划边沿相同，GPIO 执行开销的处理方式不同</text>
+
+  <line x1="64" y1="118" x2="1136" y2="118" stroke="#cbd5e1" stroke-width="2"/>
+
+  <text x="64" y="164" fill="#17202a" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="700">相对延时</text>
+  <text x="190" y="164" fill="#b42318" font-family="Microsoft YaHei, sans-serif" font-size="18">GPIO 调用开销进入当前脉宽，边沿逐段后移</text>
+
+  <text x="64" y="211" fill="#64748b" font-family="Microsoft YaHei, sans-serif" font-size="16">计划</text>
+  <line x1="150" y1="205" x2="1110" y2="205" stroke="#94a3b8" stroke-width="2"/>
+  <g stroke="#64748b" stroke-width="3">
+    <line x1="170" y1="191" x2="170" y2="219"/>
+    <line x1="370" y1="191" x2="370" y2="219"/>
+    <line x1="570" y1="191" x2="570" y2="219"/>
+    <line x1="770" y1="191" x2="770" y2="219"/>
+    <line x1="970" y1="191" x2="970" y2="219"/>
+  </g>
+
+  <text x="64" y="277" fill="#64748b" font-family="Microsoft YaHei, sans-serif" font-size="16">实际</text>
+  <path d="M150 286 H170 V246 H410 V286 H650 V246 H890 V286 H1110" fill="none" stroke="#b42318" stroke-width="5" stroke-linejoin="round"/>
+  <g stroke="#b42318" stroke-width="3" stroke-dasharray="5 5">
+    <line x1="170" y1="228" x2="170" y2="302"/>
+    <line x1="410" y1="228" x2="410" y2="302"/>
+    <line x1="650" y1="228" x2="650" y2="302"/>
+    <line x1="890" y1="228" x2="890" y2="302"/>
+  </g>
+  <g fill="#fff1f0" stroke="#f04438" stroke-width="2">
+    <rect x="370" y="307" width="40" height="24"/>
+    <rect x="570" y="307" width="80" height="24"/>
+    <rect x="770" y="307" width="120" height="24"/>
+  </g>
+  <text x="370" y="354" fill="#b42318" font-family="Microsoft YaHei, sans-serif" font-size="16">误差随边沿数量累积</text>
+
+  <line x1="64" y1="385" x2="1136" y2="385" stroke="#cbd5e1" stroke-width="2"/>
+
+  <text x="64" y="431" fill="#17202a" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="700">绝对边沿对齐</text>
+  <text x="236" y="431" fill="#087f5b" font-family="Microsoft YaHei, sans-serif" font-size="18">每个边沿等待固定目标时刻，误差不向后传递</text>
+
+  <text x="64" y="478" fill="#64748b" font-family="Microsoft YaHei, sans-serif" font-size="16">目标</text>
+  <line x1="150" y1="472" x2="1110" y2="472" stroke="#94a3b8" stroke-width="2"/>
+  <g stroke="#087f5b" stroke-width="3">
+    <line x1="170" y1="458" x2="170" y2="486"/>
+    <line x1="370" y1="458" x2="370" y2="486"/>
+    <line x1="570" y1="458" x2="570" y2="486"/>
+    <line x1="770" y1="458" x2="770" y2="486"/>
+    <line x1="970" y1="458" x2="970" y2="486"/>
+  </g>
+
+  <text x="64" y="544" fill="#64748b" font-family="Microsoft YaHei, sans-serif" font-size="16">实际</text>
+  <path d="M150 553 H176 V513 H376 V553 H576 V513 H776 V553 H976 V513 H1110" fill="none" stroke="#087f5b" stroke-width="5" stroke-linejoin="round"/>
+  <g fill="#fef3c7" stroke="#d97706" stroke-width="2">
+    <rect x="170" y="568" width="6" height="18"/>
+    <rect x="370" y="568" width="6" height="18"/>
+    <rect x="570" y="568" width="6" height="18"/>
+    <rect x="770" y="568" width="6" height="18"/>
+    <rect x="970" y="568" width="6" height="18"/>
+  </g>
+  <text x="1000" y="583" fill="#925f00" font-family="Microsoft YaHei, sans-serif" font-size="15">固定小偏差</text>
+</svg>
