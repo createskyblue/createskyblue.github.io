@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" viewBox="0 0 640 300">
+  <rect width="640" height="300" fill="#ffffff"/>
+  <text x="60" y="28" font-size="15" fill="#111827" font-family="sans-serif">堆内存使用量随时间变化</text>
+
+  <g stroke="#e5e7eb" stroke-width="1">
+    <line x1="60" y1="70" x2="620" y2="70"/>
+    <line x1="60" y1="120" x2="620" y2="120"/>
+    <line x1="60" y1="170" x2="620" y2="170"/>
+    <line x1="60" y1="220" x2="620" y2="220"/>
+  </g>
+
+  <g stroke="#9ca3af" stroke-width="1.5">
+    <line x1="60" y1="260" x2="620" y2="260"/>
+    <line x1="60" y1="40" x2="60" y2="260"/>
+  </g>
+  <text x="588" y="280" font-size="13" fill="#6b7280" font-family="sans-serif">运行时间</text>
+  <text x="14" y="48" font-size="13" fill="#6b7280" font-family="sans-serif">堆内存</text>
+
+  <polyline fill="none" stroke="#2563eb" stroke-width="2.5"
+    points="60,205 80,192 100,207 120,193 140,206 160,191 180,205 200,193 220,207 240,191 260,204 280,192 300,206 320,193 340,205 360,190 380,207 400,192 420,206 440,191 460,204 480,193 500,207 520,190 540,205 560,192 580,206 600,193"/>
+
+  <polyline fill="none" stroke="#dc2626" stroke-width="2.5"
+    points="60,225 80,214 100,220 120,209 140,215 160,204 180,210 200,199 220,205 240,194 260,200 280,189 300,195 320,184 340,190 360,179 380,185 400,174 420,180 440,169 460,175 480,164 500,170 520,159 540,165 560,154 580,160 600,149"/>
+
+  <line x1="60" y1="198" x2="600" y2="198" stroke="#2563eb" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="468" y="190" font-size="12" fill="#2563eb" font-family="sans-serif">正常程序：稳态水位</text>
+
+  <text x="452" y="138" font-size="12" fill="#dc2626" font-family="sans-serif">泄漏程序：持续上行</text>
+  <polygon points="600,149 588,146 588,152" fill="#dc2626"/>
+
+  <rect x="60" y="62" width="12" height="12" fill="#2563eb"/>
+  <text x="78" y="73" font-size="13" fill="#374151" font-family="sans-serif">正常程序（锯齿但平稳）</text>
+  <rect x="330" y="62" width="12" height="12" fill="#dc2626"/>
+  <text x="348" y="73" font-size="13" fill="#374151" font-family="sans-serif">泄漏程序（锯齿且上行）</text>
+</svg>

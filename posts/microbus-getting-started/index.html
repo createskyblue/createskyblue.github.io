@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MicroBus 入门：订阅话题，publish 发布事件 - CacheRivulet小记</title>
+  <meta name="description" content="MicroBus事件总线  最简入门与示例代码">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="Cortex-M">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="MicroBus 入门：订阅话题，publish 发布事件">
+  <meta property="og:description" content="MicroBus事件总线  最简入门与示例代码">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/microbus-getting-started/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/microbus-getting-started/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "MicroBus 入门：订阅话题，publish 发布事件",
+  "description": "MicroBus事件总线\n 最简入门与示例代码",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/microbus-getting-started/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/microbus-getting-started/"
+  },
+  "keywords": "嵌入式, MCU, C语言, Cortex-M"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">MicroBus 入门：订阅话题，publish 发布事件</h1>
+  <article class="article-body">
+<h1>MicroBus 入门：订阅话题，publish 发布事件</h1>
+<blockquote>
+<p><strong>声明：</strong> MicroBus 是一个开源项目，作者为 <a href="https://github.com/Vanderhell/MicroBus">Peter Vanderhell</a>。本文是阅读该项目源码和文档后整理的入门笔记。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 示例代码已在本机 GCC 与 ARM GCC 下编译运行验证。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/Vanderhell/MicroBus" target="_blank" rel="noopener noreferrer">github.com/Vanderhell/MicroBus</a></p>
+<p>这篇文章帮你完成一件事：<strong>把 MicroBus 跑起来，实现&quot;传感器模块发布电压读数，多个模块按话题订阅接收&quot;</strong>。核心概念只有两个：话题（topic，事件的类别）和订阅（subscribe，声明自己关心哪个话题）。事件携带的数据叫 payload（载荷）。</p>
+<h2>MicroBus 的调用流程</h2>
+<ol>
+<li><code>mbus_init()</code> 初始化总线</li>
+<li><code>mbus_subscribe()</code> 按话题注册回调</li>
+<li><code>mbus_publish()</code> 发布事件，同步调用话题匹配的回调</li>
+</ol>
+<p><img src="/posts/microbus-getting-started/microbus-flow.svg" alt="MicroBus 发布流程"></p>
+<h2>示例代码：传感器读数广播</h2>
+<p><code>mbus.h</code> 自带默认配置（16 个订阅槽、32 字节 payload、8 深度队列），直接包含就能用：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "mbus.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdint.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint16_t</span><span style="color:#D4D4D4"> g_last_mv;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> on_sensor</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#4EC9B0"> mbus_event_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#D4D4D4">    (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)ctx;</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">payload_len</span><span style="color:#D4D4D4"> != </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint16_t</span><span style="color:#D4D4D4">)) {</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    memcpy</span><span style="color:#D4D4D4">(&#x26;g_last_mv, </span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">payload</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(g_last_mv));</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> on_any</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#4EC9B0"> mbus_event_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#D4D4D4">    (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)event;</span></span>
+<span class="line"><span style="color:#D4D4D4">    (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)ctx;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#4EC9B0">    mbus_t</span><span style="color:#D4D4D4"> bus;</span></span>
+<span class="line"><span style="color:#569CD6">    uint16_t</span><span style="color:#D4D4D4"> mv = </span><span style="color:#B5CEA8">3300</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    mbus_init</span><span style="color:#D4D4D4">(&#x26;bus, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span><span style="color:#6A9955">            /* 1. 初始化，时钟可传 NULL */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 2. 订阅：on_sensor 只收 MBUS_TOPIC_SENSOR，on_any 收所有话题 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    mbus_subscribe</span><span style="color:#D4D4D4">(&#x26;bus, MBUS_TOPIC_SENSOR, on_sensor, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    mbus_subscribe</span><span style="color:#D4D4D4">(&#x26;bus, MBUS_TOPIC_ANY, on_any, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 3. 立即发布：同步调用回调 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    mbus_publish</span><span style="color:#D4D4D4">(&#x26;bus, MBUS_TOPIC_SENSOR, &#x26;mv, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(mv));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 4. 入队延后分发：先攒事件，主循环统一 dispatch */</span></span>
+<span class="line"><span style="color:#DCDCAA">    mbus_queue</span><span style="color:#D4D4D4">(&#x26;bus, MBUS_TOPIC_SENSOR, &#x26;mv, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(mv));</span></span>
+<span class="line"><span style="color:#DCDCAA">    mbus_queue_signal</span><span style="color:#D4D4D4">(&#x26;bus, MBUS_TOPIC_BOOT);</span></span>
+<span class="line"><span style="color:#DCDCAA">    mbus_dispatch</span><span style="color:#D4D4D4">(&#x26;bus);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>运行输出（验证版加 printf）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>sensor: 3300 mV</span></span>
+<span class="line"><span>any event received, count=1</span></span>
+<span class="line"><span>sensor: 3300 mV</span></span>
+<span class="line"><span>any event received, count=2</span></span>
+<span class="line"><span>any event received, count=3</span></span></code></pre><p>publish 立即触发 on_sensor 和 on_any 各一次；队列里的两个事件在 dispatch 时各触发一次，<code>MBUS_TOPIC_BOOT</code> 不带数据所以只有 on_any 收到。</p>
+<h2>mbus_config.h 配置项</h2>
+<ul>
+<li><code>MBUS_MAX_SUBSCRIBERS</code>：订阅槽数量，默认 16</li>
+<li><code>MBUS_MAX_PAYLOAD</code>：payload 上限，默认 32 字节</li>
+<li><code>MBUS_ENABLE_QUEUE</code>：队列开关，默认 1</li>
+<li><code>MBUS_QUEUE_DEPTH</code>：队列深度，默认 8，必须是 2 的幂</li>
+<li><code>MBUS_ISR_SAFE_QUEUE</code>：ISR 安全模式，默认 0；开启需提供临界区宏</li>
+</ul>
+<h2>MicroBus 的特色</h2>
+<ul>
+<li>话题过滤：订阅时指定话题，回调只收到匹配事件；<code>MBUS_TOPIC_ANY</code> 通配</li>
+<li>payload 拷贝进事件对象，调用方的临时缓冲可以立刻复用</li>
+<li>有界队列：ISR 里 <code>mbus_queue</code> 入队，主循环 <code>mbus_dispatch</code> 统一处理</li>
+<li>确定性：分发期间修改订阅表返回 <code>MBUS_ERR_BUSY</code></li>
+<li>调用者持有状态：<code>mbus_t</code> 放栈或静态，可多实例</li>
+</ul>
+<h2>适用边界</h2>
+<ul>
+<li>默认单上下文，多线程访问需要外部加锁</li>
+<li>话题空间 256 个，payload_len 单字节上限 255</li>
+<li><code>mbus_t</code> 约 544 B RAM（16 订阅槽 + 8 队列，Cortex-M4），放栈上要确认栈空间足够</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=microbus-getting-started');
+  }
+  </script>
+</body>
+</html>

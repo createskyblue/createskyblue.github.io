@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>墨水屏 24P 驱动板改 0402 小封装，重布单面板与双面板，支持一分钟制板法 - CacheRivulet小记</title>
+  <meta name="description" content="墨水屏24P驱动板 0402小封装 一分钟制板法">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="墨水屏">
+  <meta property="article:tag" content="电荷泵">
+  <meta property="article:tag" content="SPI">
+  <meta property="article:published_time" content="2026-09-21">
+  <meta property="og:title" content="墨水屏 24P 驱动板改 0402 小封装，重布单面板与双面板，支持一分钟制板法">
+  <meta property="og:description" content="墨水屏24P驱动板 0402小封装 一分钟制板法">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/epd-driver-24p-0402/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/epd-driver-24p-0402/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "墨水屏 24P 驱动板改 0402 小封装，重布单面板与双面板，支持一分钟制板法",
+  "description": "墨水屏24P驱动板\n0402小封装\n一分钟制板法",
+  "datePublished": "2026-09-21",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/epd-driver-24p-0402/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/epd-driver-24p-0402/"
+  },
+  "keywords": "嵌入式, 墨水屏, 电荷泵, SPI"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">墨水屏 24P 驱动板改 0402 小封装，重布单面板与双面板，支持一分钟制板法</h1>
+  <article class="article-body">
+<h1>墨水屏 24P 驱动板改 0402 小封装，重布单面板与双面板</h1>
+<ul>
+<li>Frok原项目：<a href="https://oshwhub.com/jie326513988/esp32c3-154-ink-screen-multi-function">oshwhub ESP32C3 墨水屏多功能</a></li>
+<li>修改0402小封装，重新Layout布局，重新拉线</li>
+<li>适配单面板，可以单面覆铜板一分钟制板法，蚀刻参考演示（强酸/氧化剂操作，务必看原视频安全规范）：</li>
+<li><ul>
+<li><a href="https://www.bilibili.com/video/BV1Dr42187u8" target="_blank" rel="noopener noreferrer"> Bilibili TSINGHUAJOKING卓晴 固态双氧水制作PCB 一分钟制板法</a></li>
+</ul>
+</li>
+<li><ul>
+<li><a href="https://www.bilibili.com/video/BV1wm411f7S4" target="_blank" rel="noopener noreferrer"> Bilibili TSINGHUAJOKING卓晴 清洁盐酸用于制作PCB 一分钟制板法</a></li>
+</ul>
+</li>
+<li><ul>
+<li>警示：PCB湿刻操作必须经由相关专业人员的指导下带好护目镜、手套等个人防护并且在通风橱下进行</li>
+</ul>
+</li>
+<li>本魔改版PCB工程：<a href="https://u.lceda.cn/join?type=project&key=d9d7f88eef897a592676e01b7a188774&inviter=b684ea91e80442fbbb556fa7a7a96fa1" target="_blank" rel="noopener noreferrer">立创 EDA 开源工程 协作邀请</a></li>
+</ul>
+<h2>电荷泵网络生成面板高压轨</h2>
+<p>原理图为墨水屏驱动常见电荷泵：L1 10uH 与 Q1 CJ3400 形成开关节点，经 D1/D2/D3（1N5819WS）整流出 PREVGH 与 PREVGL。C2 10uF、C4 4.7uF 做输入输出储能，R1 10k 与 U1 470mΩ 参与开关侧偏置与采样路径。FPC 侧 C1、C3、C5–C12 等 1uF 电容挂在面板供电与参考网络上。</p>
+<p><img src="/posts/epd-driver-24p-0402/PixPin_2026-09-21_01-02-21.webp" alt="原理图"></p>
+<p><img src="/posts/epd-driver-24p-0402/cover.webp" alt="双面板"></p>
+<p><img src="/posts/epd-driver-24p-0402/PixPin_2026-09-21_16-55-47.webp" alt="单层板"></p>
+<h2>刻蚀失败</h2>
+<p>不想等嘉立创打样，想自己做板子，结果打印机不灵了，印的十几张都糊了；热转印不好使了，加热台电源探针烧坏了，好不容易转印成功，结果洁厕灵不酸，双氧水不氧...无奈躺平，清退不环保的落后工艺，等嘉立创回来</p>
+<p><img src="/posts/epd-driver-24p-0402/PixPin_2026-09-21_18-51-26.webp" alt="1分钟制版"></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-21 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=epd-driver-24p-0402');
+  }
+  </script>
+</body>
+</html>

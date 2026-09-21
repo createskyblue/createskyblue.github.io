@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CmBacktrace 可以把 Cortex-M 的 HardFault 现场打印出来 - CacheRivulet小记</title>
+  <meta name="description" content="CmBacktrace还原Cortex-M崩溃调用栈">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="CmBacktrace">
+  <meta property="article:tag" content="Cortex-M">
+  <meta property="article:tag" content="HardFault">
+  <meta property="article:tag" content="嵌入式调试">
+  <meta property="article:published_time" content="2026-06-16">
+  <meta property="og:title" content="CmBacktrace 可以把 Cortex-M 的 HardFault 现场打印出来">
+  <meta property="og:description" content="CmBacktrace还原Cortex-M崩溃调用栈">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/cmbacktrace-cortexm-fault-debug/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/cmbacktrace-cortexm-fault-debug/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "CmBacktrace 可以把 Cortex-M 的 HardFault 现场打印出来",
+  "description": "CmBacktrace还原Cortex-M崩溃调用栈",
+  "datePublished": "2026-06-16",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/cmbacktrace-cortexm-fault-debug/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/cmbacktrace-cortexm-fault-debug/"
+  },
+  "keywords": "CmBacktrace, Cortex-M, HardFault, 嵌入式调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">CmBacktrace 可以把 Cortex-M 的 HardFault 现场打印出来</h1>
+  <article class="article-body">
+<h1>CmBacktrace 可以把 Cortex-M 的 HardFault 现场打印出来</h1>
+<p>CmBacktrace 是一个面向 ARM Cortex-M MCU 的错误追踪库。它主要解决一个常见调试痛点：设备发生 HardFault、BusFault、UsageFault 或断言失败后，现场信息很快丢失，只靠“程序死了”很难判断是哪一层函数触发了异常。</p>
+<p>它的工作方式很直接：故障发生时，库从异常现场读取寄存器、栈指针和调用栈地址，把故障原因、固件信息、栈内容和调用链地址打印出来。拿到这些地址后，再配合 <code>addr2line</code> 和带调试信息的可执行文件，就可以把地址还原成函数名和源码行号。</p>
+<h2>它能解决什么</h2>
+<p>在 Cortex-M 项目里，HardFault 经常来自这些情况：</p>
+<ul>
+<li>空指针或野指针访问。</li>
+<li>未对齐访问。</li>
+<li>除零。</li>
+<li>访问非法地址。</li>
+<li>栈溢出或任务栈配置过小。</li>
+<li>中断或任务里触发断言。</li>
+</ul>
+<p>没有工具时，常见做法是接上调试器、停在异常入口、手动看寄存器和汇编调用关系。问题偶发、现场设备不能接仿真器、故障后自动复位时，这种方法很难稳定复现。</p>
+<p>CmBacktrace 的价值在于把异常现场变成可保存、可复制、可离线分析的日志。串口能打印就可以看到诊断信息；如果项目有 Flash 日志，也可以把故障信息保存下来，设备重启后再读取。</p>
+<h2>输出信息包含哪些内容</h2>
+<p>CmBacktrace 的输出通常围绕几类信息展开：</p>
+<ul>
+<li>固件名称、硬件版本、软件版本。</li>
+<li>故障类型和原因分析。</li>
+<li>异常现场寄存器。</li>
+<li>主栈或线程栈信息。</li>
+<li>调用栈地址。</li>
+<li>可选的栈内容 dump。</li>
+</ul>
+<p>这些信息里，调用栈地址最适合定位源码。日志里只能看到地址时，还需要把地址交给 <code>addr2line</code> 转换。转换依赖编译产物中的符号信息，所以发布调试固件时要保留可用于定位的 ELF、OUT 或 AXF 文件。</p>
+<h2>先理解堆和栈</h2>
+<p>理解 CmBacktrace 前，需要先分清堆和栈。</p>
+<p>栈是函数调用使用的一块连续内存。函数被调用时，CPU 和编译器会把返回地址、部分寄存器、局部变量、临时变量等内容放到栈里。这个函数运行结束后，它占用的栈空间会被释放，程序回到调用它的位置继续执行。</p>
+<p>堆是动态内存分配使用的区域。<code>malloc()</code>、<code>calloc()</code>、<code>new</code> 这类接口通常从堆里申请空间，释放时再调用 <code>free()</code> 或 <code>delete</code>。堆上的数据生命周期由程序控制，适合存放运行期间才知道大小、需要跨函数继续使用的数据。</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 18px 0;">
+  <div style="padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+    <div style="font-weight: 700; color: #1e293b; margin-bottom: 8px;">栈 stack</div>
+    <div style="color: #334155; font-size: 14px; line-height: 1.8;">
+      跟随函数调用自动增长和回收。保存返回地址、寄存器、参数、局部变量。空间通常提前固定，溢出后容易破坏返回路径。
+    </div>
+  </div>
+  <div style="padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+    <div style="font-weight: 700; color: #1e293b; margin-bottom: 8px;">堆 heap</div>
+    <div style="color: #334155; font-size: 14px; line-height: 1.8;">
+      由动态内存分配器管理。对象生命周期由申请和释放决定。常见风险是泄漏、碎片、越界写和释放后继续使用。
+    </div>
+  </div>
+</div>
+
+<p>嵌入式项目里，栈空间通常在链接脚本或启动文件里提前固定好。裸机程序一般有主栈；RTOS 程序通常每个任务都有自己的任务栈。栈空间太小，函数调用层级太深，或者局部数组太大，都可能把栈撑爆。栈溢出后，轻则变量被踩坏，重则返回地址被破坏，程序跳到错误地址并触发 HardFault。</p>
+<p>递归会持续消耗栈空间。每递归调用一次，都会产生一层新的函数栈帧；这一层会保存自己的参数、局部变量和返回地址。递归深度越大，栈帧叠得越多。递归没有正确退出条件，或者输入数据让递归层数超过预期，就会很快耗尽栈空间。</p>
+<div style="margin: 18px 0; padding: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;">
+  <div style="font-weight: 700; color: #1e293b; margin-bottom: 12px;">递归调用时的栈帧叠加</div>
+  <div style="display: grid; gap: 6px; max-width: 520px;">
+    <div style="padding: 8px 10px; background: #dbeafe; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e293b;">第 4 层递归：参数、局部变量、返回地址</div>
+    <div style="padding: 8px 10px; background: #dbeafe; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e293b;">第 3 层递归：参数、局部变量、返回地址</div>
+    <div style="padding: 8px 10px; background: #dbeafe; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e293b;">第 2 层递归：参数、局部变量、返回地址</div>
+    <div style="padding: 8px 10px; background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 6px; color: #1e293b;">第 1 层调用：参数、局部变量、返回地址</div>
+    <div style="padding: 8px 10px; background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 6px; color: #334155;">栈底：任务栈或主栈的固定边界</div>
+  </div>
+  <div style="margin-top: 10px; color: #475569; font-size: 14px; line-height: 1.8;">
+    每多一层递归，都会新增一层栈帧。栈帧继续向固定边界外增长时，返回地址和相邻内存就可能被覆盖。
+  </div>
+</div>
+
+<p>调用栈表示函数逐层调用形成的栈帧链。CmBacktrace 打印调用栈，本质上是在崩溃后从 SP 指向的栈空间里寻找返回地址，尽量还原故障发生前的函数调用路径。</p>
+<h2>它的实现原理</h2>
+<p>CmBacktrace 的原理可以分成三层：先确定代码段和栈范围，再从异常现场取出硬件保存的寄存器，最后在栈里寻找可能的返回地址。</p>
+<p>初始化时，<code>cm_backtrace_init()</code> 会记录固件名、硬件版本和软件版本，同时从编译器或链接脚本导出的符号里读取主栈范围和代码段范围。Keil、IAR、GCC 的符号写法不同，所以库里分别处理了 <code>STACK</code>、<code>CSTACK</code>、<code>_sstack</code>、<code>_estack</code>、代码段起止地址这些信息。后面判断某个数值是否落在代码区，就依赖这个代码段范围。</p>
+<p>Cortex-M 进入异常时，硬件会自动把一组寄存器压到当前栈里，包括 <code>R0</code>、<code>R1</code>、<code>R2</code>、<code>R3</code>、<code>R12</code>、<code>LR</code>、<code>PC</code> 和 <code>xPSR</code>。CmBacktrace 的 HardFault 汇编入口负责把异常时的 LR 和 SP 传给 <code>cm_backtrace_fault()</code>。库再按固定顺序从这段自动压栈帧里读出寄存器。</p>
+<p>其中 <code>PC</code> 是异常发生时正在执行或即将执行的指令地址，通常是最直接的故障点。<code>LR</code> 是当前函数返回后要去的位置，可以帮助补出上一层调用关系。Cortex-M 使用 Thumb 指令集，函数地址最低位常带有 Thumb 状态标志，所以库在分析 LR/PC 时会做减 1 或减一个字长的修正，让地址落回真实指令附近。</p>
+<p>调用栈回溯没有完整运行时元数据可用时，只能从栈里做启发式扫描。CmBacktrace 会从当前 SP 向栈顶遍历，把栈里的 32 位数当成潜在返回地址检查：地址要落在代码段范围内，Thumb 地址形态要合理，前一条指令还要像 <code>BL</code> 或 <code>BLX</code> 调用指令。通过这些条件过滤后，剩下的地址就组成打印出来的调用栈。</p>
+<p>这也解释了调用栈偶尔不完整的原因。编译优化、尾调用、内联、栈损坏、栈溢出、手写汇编和异常发生位置都会影响栈上的返回地址形态。CmBacktrace 能显著提高定位效率，但它打印的是“基于异常现场和栈内容推导出来的调用链”，需要结合源码和 fault 类型一起判断。</p>
+<h2>崩溃日志里的地址是什么意思</h2>
+<p>崩溃日志里常见的地址可以分成三类。</p>
+<p>第一类是寄存器地址。<code>PC</code> 指向异常现场的执行位置，优先拿它定位故障行。<code>LR</code> 指向返回地址，通常能说明当前函数由谁调用。<code>R0</code> 到 <code>R3</code> 常用于传参，遇到空指针、非法地址访问时，这些寄存器里可能能看到可疑指针。</p>
+<p>第二类是 fault 状态寄存器。<code>HFSR</code>、<code>CFSR</code> 拆分出的 <code>MFSR</code>、<code>BFSR</code>、<code>UFSR</code>，以及 <code>MMAR</code>、<code>BFAR</code> 这类 fault address register，用来说明故障类别和访问地址。例如精确总线错误、非法状态、除零、未对齐访问等，会在不同 bit 上留下原因。</p>
+<p>第三类是调用栈地址。CmBacktrace 打印的 <code>call stack</code> 是一串代码区地址，代表库推导出的调用路径。地址越靠前，通常越接近故障现场；后面的地址表示更上层的调用者。这些地址需要用 <code>addr2line</code> 继续解析成源码行号。</p>
+<h2>基本移植路径</h2>
+<p>移植时先把库文件加入工程：</p>
+<ul>
+<li><code>cm_backtrace/cm_backtrace.c</code></li>
+<li><code>cm_backtrace/cm_backtrace.h</code></li>
+<li><code>cm_backtrace/cmb_def.h</code></li>
+<li>项目自己的 <code>cmb_cfg.h</code></li>
+<li>对应编译器的 <code>fault_handler</code> 汇编文件，可选但推荐新项目优先使用</li>
+</ul>
+<p><code>cmb_cfg.h</code> 是移植的核心。最少要配置日志输出、平台类型和 CPU 类型：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> cmb_println(...) </span><span style="color:#DCDCAA">printf</span><span style="color:#569CD6">(__VA_ARGS__); </span><span style="color:#DCDCAA">printf</span><span style="color:#569CD6">(</span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\r\n</span><span style="color:#CE9178">"</span><span style="color:#569CD6">)</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> CMB_USING_BARE_METAL_PLATFORM</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> CMB_CPU_PLATFORM_TYPE CMB_CPU_ARM_CORTEX_M3</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> CMB_USING_DUMP_STACK_INFO</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> CMB_PRINT_LANGUAGE CMB_PRINT_LANGUAGE_CHINESE_UTF8</span></span></code></pre><p>如果项目运行 RTOS，则改成 <code>CMB_USING_OS_PLATFORM</code>，并配置 <code>CMB_OS_PLATFORM_TYPE</code>。仓库里提供了 RT-Thread、UCOS、FreeRTOS 的 demo，可以先找接近的工程参考。</p>
+<p>初始化一般放在 BSP 和串口可用之后：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">cm_backtrace_init</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"firmware_name"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"hardware_v1.0"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"software_v0.1"</span><span style="color:#D4D4D4">);</span></span></code></pre><p>这三个字符串会出现在故障日志里，适合写入固件名、硬件版本和软件版本。量产设备排查问题时，这些信息能避免拿错固件和硬件版本。</p>
+<h2>HardFault 入口怎么接</h2>
+<p>CmBacktrace 提供两种接入方式。</p>
+<p>第一种是使用库里的 <code>cmb_fault.S</code>。它会定义 <code>HardFault_Handler</code>，准备好 LR 和 SP 后调用 <code>cm_backtrace_fault()</code>。这种方式对新项目更稳，因为异常入口的寄存器取值由汇编完成，手写错误的概率低。</p>
+<p>使用这种方式时，项目里原有的 <code>HardFault_Handler</code> 要移除或注释掉，否则会出现重复定义。</p>
+<p>第二种是在已有的 HardFault 入口里手动调用：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> cm_backtrace_fault</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> fault_handler_lr</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> fault_handler_sp</span><span style="color:#D4D4D4">);</span></span></code></pre><p>这种方式需要自己保证传入的 LR 和 SP 是异常现场对应的值。传错以后，库仍然会运行，但调用栈和故障分析可能失真。</p>
+<h2>断言也可以接入</h2>
+<p>除了硬件 fault，CmBacktrace 也能记录断言失败：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">cm_backtrace_assert</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">cmb_get_sp</span><span style="color:#D4D4D4">());</span></span></code></pre><p>断言里获取 SP 的位置要尽量靠近断言入口。README 里特别提醒，如果在断言钩子的子函数里再取 SP，函数嵌套已经改变了栈现场，可能需要人为修正偏移。实际工程里更推荐在断言入口处直接调用，减少人为修正。</p>
+<h2>用 addr2line 还原源码位置</h2>
+<p>CmBacktrace 打印出的调用栈通常是一串地址。定位源码时，把这些地址交给 <code>addr2line</code>：</p>
+<pre><code>addr2line -e firmware.elf -a -f 08000a60 08000141 0800313f</code></pre><p>常用参数含义：</p>
+<ul>
+<li><code>-e</code> 指定带符号信息的可执行文件。</li>
+<li><code>-a</code> 输出地址。</li>
+<li><code>-f</code> 输出函数名。</li>
+</ul>
+<p><code>addr2line</code> 属于 GNU Binutils。它做的事情是读取可执行文件里的符号表和 DWARF 调试信息，把一个机器地址映射回函数名、源文件路径和行号。符号表能告诉它地址落在哪个函数范围内，调试行号表能告诉它这个地址对应哪一行源码。</p>
+<p>如果编译器生成的是 <code>.axf</code> 或 <code>.out</code>，也可以用对应文件作为 <code>-e</code> 的输入。关键是这个文件必须和设备正在运行的固件一致，并且保留调试符号。固件重新链接后，即使源码没改，函数地址也可能变化；拿错构建产物会得到错误的函数名和行号。</p>
+<h2>学习这个库时要抓住的边界</h2>
+<p>CmBacktrace 负责采集和打印异常现场。fault 修复、系统级日志、看门狗和崩溃后恢复策略仍然属于应用工程职责。工程里仍然要考虑故障日志保存、复位策略、版本匹配和现场数据回传。</p>
+<p>它对栈信息很敏感。主栈名称、链接脚本里的栈符号、RTOS 任务栈获取方式都会影响调用栈结果。初始化时如果提示无法获取主栈，要先检查 <code>cmb_cfg.h</code> 里的栈配置和启动文件、链接脚本是否匹配。</p>
+<p>FreeRTOS 场景还需要注意仓库文档里的提示：部分能力依赖任务栈地址获取，可能需要按 demo 修改 FreeRTOS 源码或适配相关接口。</p>
+<h2>结论</h2>
+<p>CmBacktrace 适合作为 Cortex-M 项目的故障诊断基础设施。它把 HardFault 和断言现场整理成日志，再通过 <code>addr2line</code> 把调用栈地址还原到源码位置。</p>
+<p>学习它时重点看三件事：<code>cmb_cfg.h</code> 怎么匹配平台，HardFault 入口怎么把真实 LR/SP 交给库，构建产物怎么保留符号供 <code>addr2line</code> 使用。把这三件事打通后，很多偶发死机就可以从“只能复现调试”变成“日志可回收分析”。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-16 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=cmbacktrace-cortexm-fault-debug');
+  }
+  </script>
+</body>
+</html>

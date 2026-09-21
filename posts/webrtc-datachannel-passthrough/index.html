@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>70 行 Node 脚本跑通 WebRTC 数据透传：信令手动换，数据点对点 - CacheRivulet小记</title>
+  <meta name="description" content="两个终端各跑一个 70 行 Node 脚本，手动交换两行信令，即可建立点对点数据通道互发文本">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="JavaScript">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="WebRTC">
+  <meta property="article:published_time" content="2026-09-13">
+  <meta property="og:title" content="70 行 Node 脚本跑通 WebRTC 数据透传：信令手动换，数据点对点">
+  <meta property="og:description" content="两个终端各跑一个 70 行 Node 脚本，手动交换两行信令，即可建立点对点数据通道互发文本">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/webrtc-datachannel-passthrough/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/webrtc-datachannel-passthrough/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "70 行 Node 脚本跑通 WebRTC 数据透传：信令手动换，数据点对点",
+  "description": "两个终端各跑一个 70 行 Node 脚本，手动交换两行信令，即可建立点对点数据通道互发文本",
+  "datePublished": "2026-09-13",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/webrtc-datachannel-passthrough/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/webrtc-datachannel-passthrough/"
+  },
+  "keywords": "JavaScript, 通信协议, WebRTC"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">70 行 Node 脚本跑通 WebRTC 数据透传：信令手动换，数据点对点</h1>
+  <article class="article-body">
+<h1>70 行 Node 脚本跑通 WebRTC 数据透传：信令手动换，数据点对点</h1>
+<h2>组成：一条 DataChannel 加两次手动信令</h2>
+<p>WebRTC 数据透传只需要三样东西：两端各一个 <code>RTCPeerConnection</code>、一条 DataChannel、一次 ICE 打洞。DataChannel 可以理解为一条点对点的双向字节管道，用法接近 TCP socket；一条连接上还能随时开很多条通道，各自独立，开新通道不需要重新走信令。</p>
+<p>信令（交换连接参数的 SDP）不经过服务器，两端各打印一行 token，人工复制粘贴给对方。本文用纯 JS 实现的 <a href="https://www.npmjs.com/package/werift">werift</a> 库，<code>npm install werift</code> 即装，无原生编译依赖。</p>
+<p>完整脚本见附件 <a href="/posts/webrtc-datachannel-passthrough/peer.min.js" target="_blank" rel="noopener noreferrer">peer.min.js</a>，全文 70 行。</p>
+<h2>信令交换与数据回传时序</h2>
+<p><img src="/posts/webrtc-datachannel-passthrough/sequence.svg" alt="WebRTC 手动信令与数据回传时序"></p>
+<p>人工搬运只有两次：A 的 offer token 交给 B，B 的 answer token 交回 A。连接建立后 DataChannel 全双工，任意一方发送，接收端原样回传一份副本。</p>
+<h2>分步最小实现</h2>
+<p><strong>① 两端各建一个对等端</strong></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> { </span><span style="color:#9CDCFE">RTCPeerConnection</span><span style="color:#D4D4D4"> } </span><span style="color:#C586C0">from</span><span style="color:#CE9178"> "werift"</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> pc</span><span style="color:#D4D4D4"> = </span><span style="color:#569CD6">new</span><span style="color:#DCDCAA"> RTCPeerConnection</span><span style="color:#D4D4D4">({</span></span>
+<span class="line"><span style="color:#9CDCFE">  iceServers:</span><span style="color:#D4D4D4"> [{ </span><span style="color:#9CDCFE">urls:</span><span style="color:#CE9178"> "stun:stun.l.google.com:19302"</span><span style="color:#D4D4D4"> }], </span><span style="color:#6A9955">// 公共 STUN 打洞</span></span>
+<span class="line"><span style="color:#D4D4D4">});</span></span></code></pre><p><strong>② A：建通道，生成 offer，打印 token</strong></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// "chat" 只是给这条通道起的名字（对端能读到，用来区分通道用途），不做寻址</span></span>
+<span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> dc</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">createDataChannel</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"chat"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#6A9955">// 这行必须写在 createOffer 之前：werift 生成 offer 时如果一条通道都没有，</span></span>
+<span class="line"><span style="color:#6A9955">// 就不会启动 ICE gather，SDP 里连候选地址都没有，对端拿到的是废 token</span></span>
+<span class="line"><span style="color:#C586C0">await</span><span style="color:#9CDCFE"> pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">setLocalDescription</span><span style="color:#D4D4D4">(</span><span style="color:#C586C0">await</span><span style="color:#9CDCFE"> pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">createOffer</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#6A9955">// 返回时 ICE 候选收集（gathering）已完成，SDP 自带全部候选，之后无需再交换候选</span></span>
+<span class="line"><span style="color:#9CDCFE">console</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">log</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">encode</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pc</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">localDescription</span><span style="color:#D4D4D4">)); </span><span style="color:#6A9955">// 一行 base64url，人工粘给 B</span></span></code></pre><p><strong>③ B：收 offer，回 answer，打印 token</strong></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">await</span><span style="color:#9CDCFE"> pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">setRemoteDescription</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">decode</span><span style="color:#D4D4D4">(</span><span style="color:#C586C0">await</span><span style="color:#DCDCAA"> ask</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"offer token: "</span><span style="color:#D4D4D4">)));</span></span>
+<span class="line"><span style="color:#C586C0">await</span><span style="color:#9CDCFE"> pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">setLocalDescription</span><span style="color:#D4D4D4">(</span><span style="color:#C586C0">await</span><span style="color:#9CDCFE"> pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">createAnswer</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#9CDCFE">console</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">log</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">encode</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pc</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">localDescription</span><span style="color:#D4D4D4">)); </span><span style="color:#6A9955">// 一行 base64url，人工粘回 A</span></span>
+<span class="line"><span style="color:#6A9955">// 对端通道打开时的接收处理 pc.ondatachannel 见步⑤</span></span></code></pre><p><strong>④ A：粘贴 answer token，连接自动建立</strong></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">await</span><span style="color:#9CDCFE"> pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">setRemoteDescription</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">decode</span><span style="color:#D4D4D4">(</span><span style="color:#C586C0">await</span><span style="color:#DCDCAA"> ask</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"answer token: "</span><span style="color:#D4D4D4">)));</span></span>
+<span class="line"><span style="color:#6A9955">// ICE / DTLS / SCTP 自动完成，DataChannel 变为 open</span></span></code></pre><p><strong>⑤ 收发与 loop back</strong></p>
+<p>B 侧从头到尾没有调用过 <code>createDataChannel</code>。A 建的通道会在 B 侧通过 <code>ondatachannel</code> 事件自动送进来，拿到它才能收发：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// B 侧：收到即原样回传。双方都回传会无限乒乓，所以只让一侧回传</span></span>
+<span class="line"><span style="color:#569CD6">function</span><span style="color:#DCDCAA"> loopBack</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">channel</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">  channel</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">onMessage</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">subscribe</span><span style="color:#D4D4D4">((</span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span><span style="color:#9CDCFE"> channel</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">send</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#9CDCFE">pc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">ondatachannel</span><span style="color:#D4D4D4"> = (</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#DCDCAA">  loopBack</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">channel</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// A 侧：打印对端回传的内容（A 自己建的通道直接用 dc 变量收发）</span></span>
+<span class="line"><span style="color:#9CDCFE">dc</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">onMessage</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">subscribe</span><span style="color:#D4D4D4">((</span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span><span style="color:#9CDCFE"> console</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">log</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"[echo]"</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">msg</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#9CDCFE">rl</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">on</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"line"</span><span style="color:#D4D4D4">, (</span><span style="color:#9CDCFE">line</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">dc</span><span style="color:#D4D4D4"> &#x26;&#x26; </span><span style="color:#9CDCFE">dc</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">readyState</span><span style="color:#D4D4D4"> === </span><span style="color:#CE9178">"open"</span><span style="color:#D4D4D4">) </span><span style="color:#9CDCFE">dc</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">send</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">line</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">});</span></span></code></pre><p>token 的编解码各只有一行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">const</span><span style="color:#DCDCAA"> encode</span><span style="color:#D4D4D4"> = (</span><span style="color:#9CDCFE">d</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span></span>
+<span class="line"><span style="color:#9CDCFE">  Buffer</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">from</span><span style="color:#D4D4D4">(</span><span style="color:#4FC1FF">JSON</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">stringify</span><span style="color:#D4D4D4">({ </span><span style="color:#9CDCFE">type:</span><span style="color:#9CDCFE"> d</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">type</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">sdp:</span><span style="color:#9CDCFE"> d</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">sdp</span><span style="color:#D4D4D4"> }), </span><span style="color:#CE9178">"utf8"</span><span style="color:#D4D4D4">).</span><span style="color:#DCDCAA">toString</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"base64url"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">const</span><span style="color:#DCDCAA"> decode</span><span style="color:#D4D4D4"> = (</span><span style="color:#9CDCFE">line</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span></span>
+<span class="line"><span style="color:#4FC1FF">  JSON</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">parse</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">Buffer</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">from</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">line</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">trim</span><span style="color:#D4D4D4">(), </span><span style="color:#CE9178">"base64url"</span><span style="color:#D4D4D4">).</span><span style="color:#DCDCAA">toString</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"utf8"</span><span style="color:#D4D4D4">));</span></span></code></pre><h2>运行方式</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">node</span><span style="color:#CE9178"> peer.min.js</span><span style="color:#CE9178"> answer</span><span style="color:#6A9955">   # 终端 B：粘 offer token，打出 answer token</span></span>
+<span class="line"><span style="color:#DCDCAA">node</span><span style="color:#CE9178"> peer.min.js</span><span style="color:#CE9178"> offer</span><span style="color:#6A9955">    # 终端 A：粘 answer token，然后直接打字</span></span></code></pre><p>两端打印 <code>连接状态: connected</code> 后，任意一侧输入文本回车，对端收到并原样回传。</p>
+<p>werift 有两个专属的坑，脚本注释里有标注：<code>setLocalDescription</code> 的返回值里 <code>sdp</code> 为空，必须用 <code>pc.localDescription</code>；<code>SessionDescription.type</code> 是原型 getter，序列化 token 时必须显式取 <code>{type, sdp}</code>，否则 answer 侧推断类型，DataChannel 建立不可靠。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-13 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=webrtc-datachannel-passthrough');
+  }
+  </script>
+</body>
+</html>

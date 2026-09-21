@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 330" font-family="Arial, sans-serif">
+  <rect width="920" height="330" fill="#F8FAFC"/>
+  <text x="18" y="26" font-size="13" fill="#475569">C3 httpd 并发请求对比：并发时第二个必被重置，串行队列全部成功</text>
+
+  <!-- ===================== 面板 A：并发（修复前） ===================== -->
+  <rect x="20" y="44" width="430" height="256" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5"/>
+  <text x="235" y="68" text-anchor="middle" font-size="14" fill="#B91C1C" font-weight="bold">并发（修复前）</text>
+
+  <!-- 前端 -->
+  <rect x="60" y="84" width="150" height="44" rx="8" fill="#E0F2FE" stroke="#0284C7" stroke-width="1.5"/>
+  <text x="135" y="101" text-anchor="middle" font-size="12" fill="#0C4A6E" font-weight="bold">前端页面加载</text>
+  <text x="135" y="117" text-anchor="middle" font-size="11" fill="#0C4A6E">3 个请求同时发出</text>
+
+  <!-- 三条并发箭头 -->
+  <line x1="150" y1="128" x2="150" y2="158" stroke="#B91C1C" stroke-width="2"/>
+  <line x1="150" y1="128" x2="190" y2="158" stroke="#B91C1C" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="150" y1="128" x2="110" y2="158" stroke="#B91C1C" stroke-width="2" stroke-dasharray="4,3"/>
+
+  <!-- httpd 单任务 -->
+  <rect x="60" y="160" width="180" height="56" rx="8" fill="#FFE4E6" stroke="#E11D48" stroke-width="1.5"/>
+  <text x="150" y="182" text-anchor="middle" font-size="12" fill="#881337" font-weight="bold">httpd 单任务</text>
+  <text x="150" y="200" text-anchor="middle" font-size="11" fill="#881337">只处理第一个请求</text>
+
+  <!-- 结果：第 1 个成功，其余被重置 -->
+  <rect x="60" y="236" width="180" height="50" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="150" y="256" text-anchor="middle" font-size="11" fill="#14532D">第 1 个请求</text>
+  <text x="150" y="272" text-anchor="middle" font-size="11" fill="#14532D">成功</text>
+  <rect x="270" y="236" width="160" height="50" rx="8" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.5"/>
+  <text x="350" y="256" text-anchor="middle" font-size="11" fill="#7F1D1D">其余请求</text>
+  <text x="350" y="272" text-anchor="middle" font-size="11" fill="#7F1D1D">ECONNRESET 被重置</text>
+
+  <!-- 前端的失败路径 -->
+  <line x1="240" y1="188" x2="350" y2="234" stroke="#DC2626" stroke-width="1.5"/>
+
+  <!-- ===================== 面板 B：串行（修复后） ===================== -->
+  <rect x="470" y="44" width="430" height="256" rx="10" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.5"/>
+  <text x="685" y="68" text-anchor="middle" font-size="14" fill="#15803D" font-weight="bold">串行（修复后）</text>
+
+  <!-- 前端 + 队列 -->
+  <rect x="510" y="84" width="150" height="44" rx="8" fill="#E0F2FE" stroke="#0284C7" stroke-width="1.5"/>
+  <text x="585" y="101" text-anchor="middle" font-size="12" fill="#0C4A6E" font-weight="bold">前端页面加载</text>
+  <text x="585" y="117" text-anchor="middle" font-size="11" fill="#0C4A6E">请求进串行队列</text>
+
+  <!-- 队列到 httpd 的单条箭头（三条分段箭头表示逐个） -->
+  <line x1="585" y1="128" x2="585" y2="158" stroke="#16A34A" stroke-width="2"/>
+  <text x="600" y="145" font-size="10" fill="#15803D">队列逐个放行</text>
+
+  <!-- httpd -->
+  <rect x="510" y="160" width="180" height="56" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="600" y="182" text-anchor="middle" font-size="12" fill="#14532D" font-weight="bold">httpd 单任务</text>
+  <text x="600" y="200" text-anchor="middle" font-size="11" fill="#14532D">同一时刻只有一个请求</text>
+
+  <!-- 三个依次成功的块 -->
+  <rect x="510" y="236" width="56" height="50" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="538" y="268" text-anchor="middle" font-size="11" fill="#14532D">1 成功</text>
+  <rect x="576" y="236" width="56" height="50" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="604" y="268" text-anchor="middle" font-size="11" fill="#14532D">2 成功</text>
+  <rect x="642" y="236" width="56" height="50" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="670" y="268" text-anchor="middle" font-size="11" fill="#14532D">3 成功</text>
+
+  <!-- 底部说明 -->
+  <text x="470" y="320" font-size="11" fill="#64748B">串行让 C3 单任务 httpd 一次只处理一个请求，所有请求都完成，不再被并发重置。</text>
+</svg>

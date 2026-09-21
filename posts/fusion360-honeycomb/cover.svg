@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+  <rect width="1200" height="900" fill="#FFFFFF"/>
+
+  <!-- 蜂窝网格（右上，出血） -->
+  <g fill="#E6F5FB" stroke="#41AFE0" stroke-width="8" stroke-linejoin="round">
+    <!-- row 0 -->
+    <polygon points="929.9,45 929.9,195 800,270 670.1,195 670.1,45 800,-30"/>
+    <polygon points="1211.7,45 1211.7,195 1082,270 952.3,195 952.3,45 1082,-30"/>
+    <!-- row 1 -->
+    <polygon points="789.1,292 789.1,442 659.2,517 529.3,442 529.3,292 659.2,217"/>
+    <polygon points="1070.9,292 1070.9,442 941,517 811.1,442 811.1,292 941,217"/>
+    <polygon points="1352.7,292 1352.7,442 1222.8,517 1092.9,442 1092.9,292 1222.8,217"/>
+    <!-- row 2 -->
+    <polygon points="929.9,539 929.9,689 800,764 670.1,689 670.1,539 800,464"/>
+    <polygon points="1211.7,539 1211.7,689 1082,764 952.3,689 952.3,539 1082,464"/>
+    <!-- row 3 -->
+    <polygon points="789.1,786 789.1,936 659.2,1011 529.3,936 529.3,786 659.2,711"/>
+    <polygon points="1070.9,786 1070.9,936 941,1011 811.1,936 811.1,786 941,711"/>
+  </g>
+
+  <!-- 左侧文字区 -->
+  <text x="90" y="360" font-family="Arial, sans-serif" font-size="56" fill="#41AFE0" font-weight="bold">Fusion 360</text>
+  <text x="86" y="520" font-family="Arial, sans-serif" font-size="150" fill="#1F4E63" font-weight="bold">蜂窝镂空</text>
+  <text x="90" y="620" font-family="Arial, sans-serif" font-size="46" fill="#5B8CA3">草图脚本素材</text>
+</svg>

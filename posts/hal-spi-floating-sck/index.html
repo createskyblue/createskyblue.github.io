@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>硬件 SPI 多出一个时钟脉冲：HAL 的 Disable 让 SCK 失去驱动 - CacheRivulet小记</title>
+  <meta name="description" content="硬件SPI 为什么第一个SCK前 多出一个异常脉冲">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="SPI">
+  <meta property="article:tag" content="干扰">
+  <meta property="article:published_time" content="2026-09-08">
+  <meta property="og:title" content="硬件 SPI 多出一个时钟脉冲：HAL 的 Disable 让 SCK 失去驱动">
+  <meta property="og:description" content="硬件SPI 为什么第一个SCK前 多出一个异常脉冲">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/hal-spi-floating-sck/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/hal-spi-floating-sck/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "硬件 SPI 多出一个时钟脉冲：HAL 的 Disable 让 SCK 失去驱动",
+  "description": "硬件SPI\n为什么第一个SCK前\n多出一个异常脉冲",
+  "datePublished": "2026-09-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/hal-spi-floating-sck/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/hal-spi-floating-sck/"
+  },
+  "keywords": "嵌入式, MCU, SPI, 干扰"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">硬件 SPI 多出一个时钟脉冲：HAL 的 Disable 让 SCK 失去驱动</h1>
+  <article class="article-body">
+<h1>硬件 SPI 多出一个时钟脉冲：HAL 的 Disable 让 SCK 失去驱动</h1>
+<h2>概要</h2>
+<p>普冉 PY32（兼容 STM32F0 系列的国产 MCU）驱动一颗外部采样芯片，SPI 引脚配成 AF 复用，CS 由软件 GPIO 控制。同一组物理线路，软件 SPI 正常，硬件 SPI 发 1 字节时 SCK 出了 9 个脉冲（预期 8），多出的脉冲出现在数据之前，从设备数据整体错位。断点定位到 PY32 厂商 HAL 的 <code>HAL_SPI_Transmit</code>：它在每次传输开始前先把 SPE 清零再重新使能，关闭 SPI 这段时间 SCK 失去主动驱动，被外部周期干扰扰动出一个异常边沿。屏蔽掉这句 Disable 之后异常脉冲消失，从设备恢复正常。</p>
+<p>因果链：</p>
+<p><img src="/posts/hal-spi-floating-sck/causal-chain.webp" alt="多出的脉冲是怎么来的"></p>
+<h2>问题是怎么来的</h2>
+<p>项目需要读一颗外部采样芯片，硬件 SPI 死活驱动不了从设备。软件 SPI 可以正常驱动，说明接线和从设备本身基本正常，也因此把排查重点转向硬件 SPI 的时序和引脚状态。</p>
+<p>期间 GLM 5.3 Flash、GPT 5.6 Luna 和 Sol 都接了逻辑分析仪的 MCP 能自己抓波形，三个轮番试了 14 个小时没找出根因，最后人工下场。</p>
+<p><img src="/posts/hal-spi-floating-sck/no-slave-clean.webp" alt="未接从设备时抓到的 SCK 波形，起始处可见干扰"></p>
+<h2>实验：8bit 数据出了 9 个时钟</h2>
+<p>对比实验：分别用软件 SPI 和硬件 SPI 发送 1 字节、2 字节，接入逻辑分析仪抓波形。同样的线，软件 SPI 正常；硬件 SPI 发 1 字节时 SCK 出现 9 个脉冲（预期 8 个），多出的那个脉冲出现在数据之前，把整个字节流错位 1 bit：</p>
+<p><img src="/posts/hal-spi-floating-sck/logic-analyzer-9-pulses.webp" alt="逻辑分析仪波形：箭头处是多出的第 1 个脉冲"></p>
+<p><em>已降速抓取，速率与后面的示波器图不一致。</em></p>
+<p>上示波器看模拟波形，确认这个干扰正是多出来的那个脉冲：</p>
+<p><img src="/posts/hal-spi-floating-sck/with-slave-glitch.webp" alt="示波器：SCK 前沿前的干扰"></p>
+<h2>根因：HAL 入口的 Disable 让 SCK 失去驱动</h2>
+<p>断点调试定位到 <code>HAL_SPI_Transmit</code> 函数体，Disable 就在传输开始前的配置段。源码截图里两个红框分别标出 <code>__HAL_SPI_DISABLE(hspi)</code> 和 <code>__HAL_SPI_ENABLE(hspi)</code>，问题出在两个红框之间的这段区间：</p>
+<p><img src="/posts/hal-spi-floating-sck/hal-source-disable-enable.webp" alt="HAL_SPI_Transmit 源码：先 Disable 再 Enable"></p>
+<p>SPE 清零之后，SPI 外设不再主动驱动 SCK。对当前这颗 PY32 的 SPI/IO 实现，SCK 在该时间窗口内失去原有的主动驱动状态，实测表现为容易受到外部干扰影响。</p>
+<p>CS 在调用 <code>HAL_SPI_Transmit</code> 之前就由软件拉低，整个传输期间一直有效，这个时间窗口完全落在从设备的选中期内。把断点停在 Disable 之后，程序暂停、SPI 保持关闭，此时用示波器看 SCK 引脚，能看到持续的外部周期干扰：</p>
+<p><img src="/posts/hal-spi-floating-sck/disable-glitch.webp" alt="Disable 时刻 SCK 引脚出现的干扰"></p>
+<p>该干扰边沿落入 CS 有效期间，最终表现为从设备多接收了一个时钟，后续数据整体错位 1 bit。</p>
+<h2>缓解尝试</h2>
+<p>CPOL=0 时 SCK 空闲电平是低，按空闲电平给 SCK 加下拉，想把 Disable 期间失去主动驱动的引脚钉在低电平。效果不好，干扰仍在：</p>
+<p><img src="/posts/hal-spi-floating-sck/external-pulldown.webp" alt="采取外部下拉措施后的干扰"></p>
+<p>实际测试中，弱下拉仍无法消除落在输入阈值附近的毛刺。</p>
+<h2>最终修复</h2>
+<p>把 <code>HAL_SPI_Transmit</code> 入口的 <code>__HAL_SPI_DISABLE(hspi);</code> 屏蔽掉：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 厂商 HAL 的 HAL_SPI_Transmit()，传输开始前的配置段 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 屏蔽这句 Disable，让 SPE 保持常开 */</span></span>
+<span class="line"><span style="color:#6A9955">/* __HAL_SPI_DISABLE(hspi); */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* ... 写 CR1 / CR2 配置 ... */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (((hspi)->Instance->CR1 &#x26; SPI_CR1_SPE) != SPI_CR1_SPE)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">  __HAL_SPI_ENABLE</span><span style="color:#D4D4D4">(hspi);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>屏蔽之后，在当前 HAL 的这条传输路径中 SPI 保持使能状态，原先位于 Disable 和 Enable 之间的窗口被消除；后面那句条件使能因为 <code>CR1 &amp; SPI_CR1_SPE</code> 已经等于 <code>SPI_CR1_SPE</code> 也不再触发。SCK 始终由 MCU 强驱动，实验中观察到的异常边沿消失，多余的脉冲消失，从设备恢复正常。</p>
+<h2>同类问题</h2>
+<p>这个现象并不是 PY32 独有。ST 社区也有过类似案例：SPI 被关闭期间 SCK 出现异常跳变，最终导致从设备多收到一个 bit。ST 官方回帖给的解法是置 AFCNTR（Master Keep IO State）。</p>
+<p>Linux 侧也有人提过同一件事。Ben Wolsieffer 提交给 spi-stm32 驱动的补丁（<code>spi: stm32: enable controller before asserting CS</code>，<a href="https://www.spinics.net/lists/linux-spi/msg41140.html">邮件列表存档</a>）说明里写得很直白：STM32F4/F7 的 MOSI 和 CLK 在控制器禁用期间会浮空，而 CS 是普通 GPIO、一直被驱动，于是存在一段 CS 已选中、SPI 引脚却没人驱动的窗口，杂散信号可能扰乱通信。同一份说明还提到 STM32H7 没这个现象，因为驱动置了 AFCNTR。</p>
+<h2>一些补充</h2>
+<p>一些较新的 STM32 SPI 外设提供 AFCNTR 或类似的 IO 保持机制，用于在 SPI 禁用期间继续控制相关 AF 引脚，具体寄存器和行为以对应型号的参考手册为准。本文这颗 PY32 没有这个机制，只能软件规避：改 HAL 保持 SPE 常开，或者 Disable 期间用同组 GPIO 接管 SCK 电平。</p>
+<p>这不算&quot;HAL 有 Bug&quot;，更准确的说法是 HAL 的 Disable → Enable 流程触发了 SPI 外设在 Disable 状态下的 IO 行为问题。结论只针对 PY32 及其 HAL 实现。</p>
+<h2>工程经验</h2>
+<p>SPI 速率要求不高时我更倾向软件 SPI。硬件 SPI 的优势是性能、CPU 占用和 DMA，软件 SPI 的优势是可控性：CS、SCK、MOSI 的电平和时序都由代码直接控制，不依赖 SPI 外设自身的状态机以及对应 HAL 对外设状态的处理。MCU 还可能因为成本、供应链、国产替代被换掉，换一颗就要重新踩一遍外设差异的坑。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=hal-spi-floating-sck');
+  }
+  </script>
+</body>
+</html>

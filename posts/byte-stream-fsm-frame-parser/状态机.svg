@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="930" height="190" viewBox="0 0 930 190" font-family="'Microsoft YaHei', sans-serif">
+  <rect width="930" height="190" fill="#fafafa"/>
+  <text x="465" y="22" text-anchor="middle" fill="#1a1a1a" font-size="13">逐字节状态机：帧头 → 长度 → 变长数据 → 校验 → 返回一帧</text>
+  <g font-size="12.5" fill="#1a1a1a" text-anchor="middle">
+    <rect x="10" y="40" width="160" height="50" rx="4" fill="#dae8fc" stroke="#6c8ebf"/>
+    <text x="90" y="70">匹配帧头</text>
+    <rect x="200" y="40" width="160" height="50" rx="4" fill="#fff2cc" stroke="#d6b656"/>
+    <text x="280" y="70">匹配并检查用户数据长度</text>
+    <rect x="400" y="40" width="160" height="50" rx="4" fill="#fff2cc" stroke="#d6b656"/>
+    <text x="480" y="70">接收若干用户变长数据</text>
+    <rect x="600" y="40" width="160" height="50" rx="4" fill="#fff2cc" stroke="#d6b656"/>
+    <text x="680" y="70">匹配并检查校验值</text>
+    <rect x="800" y="40" width="120" height="50" rx="4" fill="#d5e8d4" stroke="#82b366"/>
+    <text x="860" y="70">返回一帧</text>
+  </g>
+  <g fill="none" stroke="#4a4a4a" stroke-width="2">
+    <path d="M170 65 H192"/>
+    <path d="M360 65 H392"/>
+    <path d="M560 65 H592"/>
+    <path d="M760 65 H792"/>
+  </g>
+  <g fill="#4a4a4a">
+    <path d="M192 59 L200 65 L192 71 Z"/>
+    <path d="M392 59 L400 65 L392 71 Z"/>
+    <path d="M592 59 L600 65 L592 71 Z"/>
+    <path d="M792 59 L800 65 L792 71 Z"/>
+  </g>
+  <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M90 140 H860"/>
+    <path d="M280 90 V140"/>
+    <path d="M680 90 V140"/>
+    <path d="M860 90 V140"/>
+    <path d="M90 90 V140"/>
+  </g>
+  <g fill="#4a4a4a">
+    <path d="M84 96 L90 87 L96 96 Z"/>
+  </g>
+  <g font-size="12" fill="#444444" text-anchor="middle">
+    <text x="280" y="158">匹配或检查失败</text>
+    <text x="680" y="158">检查失败</text>
+    <text x="860" y="158">新一轮帧匹配</text>
+    <text x="90" y="162">回到帧头</text>
+  </g>
+</svg>

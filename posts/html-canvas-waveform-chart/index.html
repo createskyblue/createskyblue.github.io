@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>右锚可信趋势卡片图：轻量化实时监测图表的设计理念 - CacheRivulet小记</title>
+  <meta name="description" content="分段着色折线图">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="前端">
+  <meta property="article:tag" content="Canvas">
+  <meta property="article:tag" content="数据可视化">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:published_time" content="2026-06-19">
+  <meta property="og:title" content="右锚可信趋势卡片图：轻量化实时监测图表的设计理念">
+  <meta property="og:description" content="分段着色折线图">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/html-canvas-waveform-chart/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/html-canvas-waveform-chart/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "右锚可信趋势卡片图：轻量化实时监测图表的设计理念",
+  "description": "分段着色折线图",
+  "datePublished": "2026-06-19",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/html-canvas-waveform-chart/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/html-canvas-waveform-chart/"
+  },
+  "keywords": "前端, Canvas, 数据可视化, 嵌入式, BLE"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">右锚可信趋势卡片图：轻量化实时监测图表的设计理念</h1>
+  <article class="article-body">
+<h1>右锚可信趋势卡片图：轻量化实时监测图表的设计理念</h1>
+<p><img src="/posts/html-canvas-waveform-chart/waveform-chart.webp" alt="波形图最终效果"></p>
+<p><strong>右锚可信趋势卡片图</strong>是一种面向实时监测的轻量化状态图表。它通过柔和折线、淡色可信区间、近期中位虚线、固定右侧刻度、当前点标记和简洁图例，弱化复杂分析感，突出&quot;现在是否正常、趋势是否稳定、结果是否可用&quot;。核心设计原则：</p>
+<ul>
+<li><strong>右锚</strong>：图表以右侧为当前时刻锚点，新数据出现在最右侧，旧数据依次左移。当前点用右侧空心圆点标记，与右侧刻度轴对齐，直接读取最新数值。刻度放在右侧而非传统左侧，避免打断数据从左到右的视觉流向。</li>
+<li><strong>固定范围</strong>：纵轴始终固定在业务范围内（如心率 40–120 BPM），不随个别异常值自动缩放。同一数值始终落在同一高度，位置即数值，趋势判断稳定。</li>
+<li><strong>等距铺满</strong>：只根据当前已有数据点从左到右铺满绘图区。5 个点就铺 5 个点，不预留未来空白。</li>
+<li><strong>面积填充</strong>：比纯折线多一重&quot;量感&quot;，渐变从上半透明到底部透明，趋势变化一目了然，无需图例。</li>
+<li><strong>逐段着色</strong>：数据质量持续变化，逐段着色同时展示有效段和无效段——红色可信，灰色受干扰，颜色随质量实时流动。</li>
+<li><strong>中位线</strong>：叠加近期中位虚线作为参考基准，不被极端值拉偏。当前值在中位线以上还是以下，比绝对值更有参考意义。</li>
+<li><strong>高分屏适配</strong>：自动适配不同分辨率，线条和文字始终保持清晰。</li>
+</ul>
+<h2>附件</h2>
+<ul>
+<li><a href="/posts/html-canvas-waveform-chart/%E5%A4%8D%E7%8E%B0%E6%8C%87%E5%8D%97.md" target="_blank" rel="noopener noreferrer">AI 复现指南</a> — 铁律、工作流清单、函数对照表、常见错误、完成检查</li>
+<li><a href="/posts/html-canvas-waveform-chart/%E5%A4%8D%E7%8E%B0%E6%8C%87%E5%8D%97.html" target="_blank" rel="noopener noreferrer">完整可运行示例（原生 Canvas）</a> — 零依赖，含阈值滑动条、原始采样折线图、分段着色趋势图、中位线、图例</li>
+<li><a href="/posts/html-canvas-waveform-chart/%E5%A4%8D%E7%8E%B0%E6%8C%87%E5%8D%97-echarts.html" target="_blank" rel="noopener noreferrer">完整可运行示例（ECharts）</a> — 基于 ECharts 5.5，同等效果，CDN 引入</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-19 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=html-canvas-waveform-chart');
+  }
+  </script>
+</body>
+</html>

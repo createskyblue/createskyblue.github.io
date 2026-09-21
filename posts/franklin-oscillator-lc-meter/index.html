@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>低端 Arduino 用 74HCU04 振荡器把 LC 阻抗测量转为频率计数 - CacheRivulet小记</title>
+  <meta name="description" content="电子圈笑 AVR 是玩具。它却把 VNA 的阻抗测量做成频率计数">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:tag" content="VNA">
+  <meta property="article:published_time" content="2026-08-06">
+  <meta property="og:title" content="低端 Arduino 用 74HCU04 振荡器把 LC 阻抗测量转为频率计数">
+  <meta property="og:description" content="电子圈笑 AVR 是玩具。它却把 VNA 的阻抗测量做成频率计数">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/franklin-oscillator-lc-meter/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/franklin-oscillator-lc-meter/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "低端 Arduino 用 74HCU04 振荡器把 LC 阻抗测量转为频率计数",
+  "description": "电子圈笑 AVR 是玩具。它却把 VNA 的阻抗测量做成频率计数",
+  "datePublished": "2026-08-06",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/franklin-oscillator-lc-meter/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/franklin-oscillator-lc-meter/"
+  },
+  "keywords": "嵌入式, MCU, 信号处理, VNA"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">低端 Arduino 用 74HCU04 振荡器把 LC 阻抗测量转为频率计数</h1>
+  <article class="article-body">
+<h1>低端 Arduino 用 74HCU04 振荡器把 LC 阻抗测量转为频率计数</h1>
+<blockquote>
+<p><strong>声明：</strong> Turning Impedance into Frequency: An LC Experiment 是一个开源项目，作者为 nobcha（<a href="https://hackaday.io/project/204883-turning-impedance-into-frequency-an-lc-experiment">Hackaday 项目页</a>）。本文是阅读该项目源码与文档后整理的学习笔记，用于理解「阻抗转频率」式 LC 测量的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>性能很弱的 MCU 也能完成 L/C 测量。这个项目给出的做法是：根本不用 MCU 去做采样或信号生成。待测电感或电容被放进 LC 谐振槽，由 74HCU04 反相器构成 Franklin 振荡器，输出频率由 f = 1/(2π√(LC)) 决定。MCU 只负责数这个频率。阻抗到频率的映射全部发生在模拟物理层面，代码里没有任何 ADC 或相位解调。</p>
+<h2>谐振频率映射阻抗的物理机制</h2>
+<p>传统阻抗测量（例如 VNA）需要注入扫频信号、同步采样电压与电流、再解算复阻抗。这个项目的做法绕开了整条链路：把待测件接入谐振槽，让振荡器自发工作在由槽路参数决定的频率上。</p>
+<p>关键点在分工：74HCU04 加 LC 槽是真正的模拟前端，承担阻抗到频率的全部转换；ATmega328P 不参与波形生成，也不做任何模拟采集。复杂度下沉到电路，MCU 退化为一个计数器。</p>
+<p><img src="/posts/franklin-oscillator-lc-meter/architecture.svg" alt="信号链：74HCU04 振荡器把阻抗映射为频率，Arduino 只数频率"></p>
+<h2>MCU 闸门计数与共振方程</h2>
+<p>ATmega328P 通过 FreqCount 库，在 1 秒闸门内对 Pin 5 的上升沿计数，直接得到整数频率。固件做两件事：</p>
+<ul>
+<li>校准：DPDT 开关把 1000 pF 参考电容切入槽路，测两次频率 F1（无 Cref）与 F2（有 Cref），由 C0 = Cref / (ratio² − 1) 和 L0 = 1 / ((2π·F1)² · C0) 解出槽路等效参数。</li>
+<li>测量：把待测件接入槽路后测频率 f，由 L = 1 / ((2π·f)² · C0) − L0 反推未知量。</li>
+</ul>
+<p>全文检索不到 analogRead、analogWrite、tone 或任何 ADC、同步采样调用。MCU 的全部负担是数脉冲加几行浮点除法。</p>
+<h2>复阻抗塌缩为标量频率的测量边界</h2>
+<p>振荡器只输出一个频率 f，它只反映槽路的净电抗。这一简化带来四个硬性边界：</p>
+<p><img src="/posts/franklin-oscillator-lc-meter/impedance_collapse.svg" alt="复阻抗塌缩为标量频率：VNA 给出矢量，振荡器只给一个标量 f"></p>
+<ul>
+<li>一次只能解一个未知量（L 或 C），且必须已知槽路拓扑。</li>
+<li>测不到电阻、ESR、Q 值、D 因子与相位，标量频率无法分离实部与虚部。</li>
+<li>待测件必须物理接入谐振槽，属于侵入式测量，不能在板在线测量。</li>
+<li>单频单点，无法刻画组件随频率变化的特性。</li>
+</ul>
+<h2>适用边界与设计取舍</h2>
+<p>优势是硬件极简、电路透明，下限可到约 0.1 μH 小电感，成本远低于 VNA。</p>
+<p>取舍同样明确：作者以结构清晰为目标，不追求绝对精度；每次上电或温度显著变化需重新校准，量程被固定 1–2 MHz 的槽路锁死，且 f 对 L 的映射是非线性的。</p>
+<p>选型建议：只关心单个 L/C 的数值、且希望用最廉价 MCU 完成时，这套方案合适。需要复阻抗矢量、Q 值或在板测量时，仍应使用 VNA。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-06 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=franklin-oscillator-lc-meter');
+  }
+  </script>
+</body>
+</html>

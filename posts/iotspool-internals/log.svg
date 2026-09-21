@@ -1,0 +1,43 @@
+<svg viewBox="0 0 720 310" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;background:#f8fafc;border-radius:8px;">
+  <text x="20" y="28" fill="#334155" font-size="13" font-weight="bold">磁盘日志：只往前追加</text>
+  <rect x="20" y="40" width="88" height="50" rx="4" fill="#e0e7ff" stroke="#6366f1"/>
+  <text x="64" y="70" text-anchor="middle" fill="#1e293b" font-size="12">文件头</text>
+  <rect x="108" y="40" width="88" height="50" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="152" y="62" text-anchor="middle" fill="#1e293b" font-size="12">ENQ #1</text>
+  <text x="152" y="78" text-anchor="middle" fill="#475569" font-size="10">消息</text>
+  <rect x="196" y="40" width="88" height="50" rx="4" fill="#dcfce7" stroke="#22c55e"/>
+  <text x="240" y="62" text-anchor="middle" fill="#1e293b" font-size="12">ACK #1</text>
+  <text x="240" y="78" text-anchor="middle" fill="#475569" font-size="10">已发出</text>
+  <rect x="284" y="40" width="88" height="50" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="328" y="70" text-anchor="middle" fill="#1e293b" font-size="12">ENQ #2</text>
+  <rect x="372" y="40" width="88" height="50" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="416" y="70" text-anchor="middle" fill="#1e293b" font-size="12">ENQ #3</text>
+  <rect x="460" y="40" width="88" height="50" rx="4" fill="#dcfce7" stroke="#22c55e"/>
+  <text x="504" y="70" text-anchor="middle" fill="#1e293b" font-size="12">ACK #2</text>
+  <rect x="548" y="40" width="152" height="50" rx="4" fill="#fee2e2" stroke="#ef4444" stroke-dasharray="4 3"/>
+  <text x="624" y="62" text-anchor="middle" fill="#1e293b" font-size="12">ENQ #4 半截</text>
+  <text x="624" y="78" text-anchor="middle" fill="#475569" font-size="10">掉电，校验不过</text>
+
+  <line x1="360" y1="98" x2="360" y2="128" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="372" y="118" fill="#64748b" font-size="12">整理：只抄还没发出去的，原子换掉旧文件</text>
+
+  <text x="20" y="150" fill="#334155" font-size="13" font-weight="bold">整理之后</text>
+  <rect x="20" y="162" width="88" height="50" rx="4" fill="#e0e7ff" stroke="#6366f1"/>
+  <text x="64" y="192" text-anchor="middle" fill="#1e293b" font-size="12">新文件头</text>
+  <rect x="108" y="162" width="88" height="50" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="152" y="184" text-anchor="middle" fill="#1e293b" font-size="12">ENQ #3</text>
+  <text x="152" y="200" text-anchor="middle" fill="#475569" font-size="10">唯一待发</text>
+  <rect x="196" y="162" width="504" height="50" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 2"/>
+  <text x="448" y="192" text-anchor="middle" fill="#94a3b8" font-size="12">空着，等新的入队</text>
+
+  <text x="20" y="242" fill="#334155" font-size="13" font-weight="bold">内存里的待发名单：只记位置，不囤正文</text>
+  <rect x="20" y="254" width="680" height="28" rx="6" fill="#ffffff" stroke="#94a3b8"/>
+  <rect x="108" y="254" width="88" height="28" fill="#dbeafe" stroke="#60a5fa"/>
+  <text x="152" y="273" text-anchor="middle" fill="#1e293b" font-size="12">#3 在这</text>
+  <text x="20" y="302" fill="#64748b" font-size="12">恢复时顺序重放 ENQ / ACK，重建这份名单；半截尾巴先砍掉。</text>
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+</svg>

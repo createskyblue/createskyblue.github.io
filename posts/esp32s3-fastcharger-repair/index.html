@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>嘉立创实战派 S3 插快充头烧板 排查维修 - CacheRivulet小记</title>
+  <meta name="description" content="语音输入板插快充头烧了，限流上电 + 热成像定位">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="语音输入">
+  <meta property="article:published_time" content="2026-09-05">
+  <meta property="og:title" content="嘉立创实战派 S3 插快充头烧板 排查维修">
+  <meta property="og:description" content="语音输入板插快充头烧了，限流上电 + 热成像定位">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32s3-fastcharger-repair/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32s3-fastcharger-repair/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "嘉立创实战派 S3 插快充头烧板 排查维修",
+  "description": "语音输入板插快充头烧了，限流上电 + 热成像定位",
+  "datePublished": "2026-09-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32s3-fastcharger-repair/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32s3-fastcharger-repair/"
+  },
+  "keywords": "嵌入式, ESP32-S3, 故障诊断, 工程调试, 语音输入"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">嘉立创实战派 S3 插快充头烧板 排查维修</h1>
+  <article class="article-body">
+<h1>嘉立创实战派 S3 插快充头烧板 排查维修</h1>
+<p>嘉立创实战派 S3 做的语音输入板：麦克风拾音，转文字喂给 AI 助手，平时挂一个快充头供电。用了几天，屏幕黑了，插电脑没反应。</p>
+<p><strong>快充头误升档打穿入口 DC-DC，连带伤了音频芯片。换两颗芯片，恢复正常。</strong></p>
+<table>
+<thead>
+<tr>
+<th>语音输入</th>
+<th>设置</th>
+<th>触控板</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/posts/esp32s3-fastcharger-repair/img/lcd_screenshot%20(1).bmp" alt=""></td>
+<td><img src="/posts/esp32s3-fastcharger-repair/img/lcd_screenshot%20(2).bmp" alt=""></td>
+<td><img src="/posts/esp32s3-fastcharger-repair/img/lcd_screenshot%20(3).bmp" alt=""></td>
+</tr>
+</tbody></table>
+<p><img src="/posts/esp32s3-fastcharger-repair/cover.webp" alt="拆开的实战派 S3 主板"></p>
+<h2>原因：快充头误升高压</h2>
+<p>板子对外只有一个 Type-C，直连 ESP32-S3 USB 引脚，中间没有隔离；供电侧先进 DC-DC 降压再喂给 ESP32-S3。</p>
+<p>快充头默认输出 5V，靠 CC 线协议握手后才升到 9V/20V。线缆接触不良或 CC 识别抖动时，快充头可能误判握手完成、直接放出高压档，入口那颗 DC-DC 直接承受过压，击穿后主供电断，整板没电。</p>
+<h2>排查：限流上电 + 热成像定位</h2>
+<p>坏板不能直接满压上电。飞线接外部可调电源，<strong>先 5V / 50mA</strong> 试探：ESP32-S3 未启动，电源进入恒流（CC）状态，后级低阻短路。</p>
+<p>切到 <strong>1V / 1A</strong>，电压低、电流足，故障点发热。用自制热成像工具扫描，发热点集中在序号 1、序号 2，两颗同型号 DC-DC：一颗供 ESP32，一颗供音频。高压从 Type-C 进来，首当其冲是入口那颗（序号 1）。</p>
+<p><img src="/posts/esp32s3-fastcharger-repair/img/seq1-front.webp" alt="序号 1 位置（正面，靠近 USB 口）"></p>
+<p><img src="/posts/esp32s3-fastcharger-repair/img/seq23-back.webp" alt="序号 2、序号 3 位置（背面）"></p>
+<h2>绕过 DC-DC，先启动系统</h2>
+<p>飞线绕过坏 DC-DC，外部直接给 3.3V；先不插屏幕，最小系统启动，避免外设干扰判断。</p>
+<h2>二次故障：I²C 扫不到录音芯片</h2>
+<p>接串口看日志，程序没跑起来：I²C 总线上扫不到音频 ADC。这颗芯片热成像只有 50 多度、微烫，但它挂在同一条被高压打过的供电链路上，判定连带损坏（序号 3，板子背面）。</p>
+<h2>修复</h2>
+<p>DC-DC 和音频芯片各换一颗。</p>
+<ul>
+<li>DC-DC 换掉：5V 短路消失，主供电恢复，屏幕点亮。</li>
+<li>音频芯片换掉：I²C 识别正常，录音恢复。</li>
+</ul>
+<h2>排查方法小结</h2>
+<ol>
+<li>故障板先限流上电（5V/50mA），确认有无短路，不满压复现。</li>
+<li>电源进 CC 恒流 = 短路，切低压大电流（1V/1A）让故障点发热，热成像定位。</li>
+<li>飞线绕过疑似故障点、最小化系统，先把能跑的部分跑起来，再看串口日志找二次损伤。</li>
+<li>同一条高压/电源链路上的芯片，热成像不烫也要怀疑，串口日志比温度更早报故障。</li>
+</ol>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32s3-fastcharger-repair');
+  }
+  </script>
+</body>
+</html>

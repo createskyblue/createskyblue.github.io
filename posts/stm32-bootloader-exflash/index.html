@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bootloader 从外挂 Flash 选择固件并引导启动 - CacheRivulet小记</title>
+  <meta name="description" content="Bootloader引导外挂Flash固件启动，用启动选项选版本">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="Bootloader">
+  <meta property="article:tag" content="OTA">
+  <meta property="article:tag" content="升级">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:published_time" content="2026-07-03">
+  <meta property="og:title" content="Bootloader 从外挂 Flash 选择固件并引导启动">
+  <meta property="og:description" content="Bootloader引导外挂Flash固件启动，用启动选项选版本">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32-bootloader-exflash/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32-bootloader-exflash/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Bootloader 从外挂 Flash 选择固件并引导启动",
+  "description": "Bootloader引导外挂Flash固件启动，用启动选项选版本",
+  "datePublished": "2026-07-03",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32-bootloader-exflash/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32-bootloader-exflash/"
+  },
+  "keywords": "嵌入式, STM32, Bootloader, OTA, 升级, Flash存储"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Bootloader 从外挂 Flash 选择固件并引导启动</h1>
+  <article class="article-body">
+<h1>Bootloader 从外挂 Flash 选择固件并引导启动</h1>
+<p>这个 Bootloader 的核心思路是把外挂 W25Q Flash 做成固件镜像池和启动决策区。Bootloader 复位后先读取外部 Flash 中的启动选项，再选择目标固件、完成校验、提交到内部 APP 运行区，最后跳转到 APP 向量表启动。</p>
+<p>这样做的直接收益是：OTA 链路可以分包、断点续写或分多次会话完成；内部 Flash 只在固件头、固件本体、启动选项都通过校验后才被擦写。Bootloader 不需要在接收过程中反复动内部 Flash，APP 区也不会因为半包数据变成不可启动状态。</p>
+<h2>升级目标</h2>
+<p>这个项目解决的是小容量 MCU 做 OTA 升级时的一个基本矛盾：内部 Flash 空间有限，升级链路又不适合把数据直接写进运行区。</p>
+<p>内部 Flash 被划成两块：</p>
+<ul>
+<li>Bootloader 固定放在起始位置，负责初始化外部 Flash、读取启动选项、选择目标固件、校验固件、擦写 APP 区、跳转 APP。</li>
+<li>用户 APP 放在后面的运行区。Bootloader 只在确认外部 Flash 中的目标固件有效后才覆盖这一段。</li>
+</ul>
+<p>外挂 Flash 承担三类状态：</p>
+<ul>
+<li>启动选项：记录本次要从外部 Flash 的哪个固件槽位引导启动。</li>
+<li>固件槽位：保存用户、DFU、工厂、升级、备份、临时等不同用途的固件入口。</li>
+<li>完整性信息：固件头和 CRC32 放在外部 Flash 中，Bootloader 从这里判断能否提交到内部 Flash。</li>
+</ul>
+<p>内部 Flash 因此只保留“当前可运行版本”。外部 Flash 保留“候选版本”和“启动意图”。</p>
+<h2>外挂 Flash 保存可启动固件</h2>
+<p>升级包先进入外挂 Flash。Bootloader 重启后先把这份数据视为候选固件，再按固定顺序判断它能否成为本次启动目标：</p>
+<ul>
+<li>先读固件头，检查头部自身的 CRC32。</li>
+<li>再检查固件大小，确认不会超过内部 APP 区。</li>
+<li>接着按分块方式读取外部 Flash，计算固件本体 CRC32。</li>
+<li>只有固件自带 CRC32 和本地计算结果一致，才允许提交到内部 APP 运行区。</li>
+<li>如果内部 Flash 里已有同样 CRC32 的 APP，则跳过重复写入。</li>
+</ul>
+<p>这套流程把“固件已写入外部 Flash”和“本次启动采用该固件”分开。外部 Flash 中可以长期保存多份固件镜像，Bootloader 每次复位后根据启动选项选择其中一份，再用完整性校验决定能否引导启动。</p>
+<p>这里的启动路径是：外部 Flash 保存固件镜像和启动意图，Bootloader 在复位后选择目标镜像，校验后写入内部 APP 运行区，再交给 APP 向量表启动。外挂 Flash 提供可重读、可校验的固件来源，真正的控制权交接发生在内部 APP 运行区。</p>
+<h2>启动选项做成主备记录</h2>
+<p>外挂 Flash 里不只保存固件，也保存启动选项。项目里有主记录和备份记录，两份记录都有 CRC32。</p>
+<p>Bootloader 启动后先读两份启动选项：</p>
+<ul>
+<li>主记录有效时使用主记录；备份记录损坏时用主记录覆盖备份记录。</li>
+<li>主记录损坏但备份记录有效时使用备份记录，并回写主记录。</li>
+<li>两份都无效时不执行升级决策，最后尝试跳转已有 APP。</li>
+</ul>
+<p>启动选项里最重要的是启动标志。它把外部 Flash 中的固件槽位分成几个启动目标：</p>
+<ul>
+<li>用户固件：正常运行路径。</li>
+<li>DFU 固件：进入设备固件升级能力。</li>
+<li>工厂固件：保留出厂或恢复路径。</li>
+<li>升级固件：把外部 Flash 中的新固件提交到内部 APP 区并作为本次启动目标。</li>
+<li>临时固件：用于一次性验证或特殊启动。</li>
+</ul>
+<p>每次启动选项被修改后，Bootloader 会重新计算 CRC32，再写回主备两份记录。这个动作让启动意图本身也具备掉电后的可恢复能力。</p>
+<h2>固件槽位保留回退余地</h2>
+<p>外挂 Flash 的价值不只在“比内部 Flash 大”。它让 Bootloader 可以把不同生命周期的可启动固件分开放。</p>
+<p>用户固件是日常运行目标，DFU 固件是升级能力本身，工厂固件提供恢复入口，升级固件作为待提交版本，备份固件用于保留旧版本，临时固件用于不改变默认启动策略的试运行。</p>
+<p>这些槽位让 Bootloader 的职责从“把一个 bin 写进 APP 区”扩展成“根据启动选项选择一个外部 Flash 固件槽位，再决定是否引导启动”。提交成功后，启动选项可以回到默认用户启动模式；需要保持工厂模式时，也可以让工厂启动标志继续保留。</p>
+<p>这里的重点是责任分层：</p>
+<ul>
+<li>外部通信负责把固件写入外挂 Flash 的指定槽位。</li>
+<li>Bootloader 负责读启动选项、验证槽位里的固件、提交到内部 Flash 并完成引导。</li>
+<li>APP 只负责运行自身逻辑，不参与擦写自己的运行区。</li>
+</ul>
+<p>这种分层减少了在线升级时最危险的耦合：业务 APP 不需要在自身运行期间覆盖自身所在的内部 Flash。</p>
+<h2>写内部 Flash 前先收口风险</h2>
+<p>内部 Flash 擦写是这个流程里风险最高的动作，所以它被放在最后。</p>
+<p>项目中的写入路径有几个保护点：</p>
+<ul>
+<li>写入前先完成头部校验、大小校验和固件本体校验。</li>
+<li>擦除内部 APP 区前先解锁 Flash，写完后及时加锁。</li>
+<li>外部 Flash 到内部 Flash 的复制使用固定大小缓冲区分块完成，避免一次性占用过多 RAM。</li>
+<li>跳转 APP 前关闭 SysTick、清中断挂起状态、反初始化 HAL，并设置 APP 的主栈指针。</li>
+</ul>
+<p>最后一个细节很重要。Bootloader 跳到 APP 属于固件控制权交接。跳转前如果外设、中断、SysTick 状态没有收干净，APP 会带着 Bootloader 的运行现场启动，后续问题会很难定位。</p>
+<h2>适用边界</h2>
+<p>这类外挂 Flash Bootloader 适合几种场景：</p>
+<ul>
+<li>MCU 内部 Flash 无法同时容纳两个完整 APP。</li>
+<li>升级链路可能分包、断连或跨多次会话完成。</li>
+<li>设备需要保留工厂固件、DFU 固件、备份固件等恢复路径。</li>
+<li>Bootloader 需要在启动阶段从多份外部 Flash 固件中选择目标版本。</li>
+</ul>
+<p>它也有明确代价：</p>
+<ul>
+<li>系统多依赖一颗外部 Flash，硬件和驱动初始化必须可靠。</li>
+<li>外部 Flash 的分区表、启动选项和上位机写入规则必须保持一致。</li>
+<li>如果启动选项和固件槽位的状态机没有定义清楚，升级成功、回退、临时启动会互相影响。</li>
+<li>Bootloader 必须足够小、足够稳定，后续升级机制都依赖它。</li>
+</ul>
+<p>这个项目的核心设计可以概括成一句话：外挂 Flash 保存可校验的固件镜像和启动选项，Bootloader 在启动阶段选择目标镜像并引导启动。内部 Flash 只承接最终运行结果，外挂 Flash 承接 OTA 传输过程、版本选择和恢复路径。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-03 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32-bootloader-exflash');
+  }
+  </script>
+</body>
+</html>

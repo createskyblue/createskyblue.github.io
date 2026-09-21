@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>软件 I2C 采样：中断只发事件、任务做读取，2kHz 跑不起来的 CPU 边界 - CacheRivulet小记</title>
+  <meta name="description" content="位总线 I2C 读取移出中断：事件通知加高优先级任务，GPIO 寄存器直写提速读取">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ESP32">
+  <meta property="article:tag" content="中断">
+  <meta property="article:tag" content="传感器">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:published_time" content="2026-08-08">
+  <meta property="og:title" content="软件 I2C 采样：中断只发事件、任务做读取，2kHz 跑不起来的 CPU 边界">
+  <meta property="og:description" content="位总线 I2C 读取移出中断：事件通知加高优先级任务，GPIO 寄存器直写提速读取">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32c3-soft-i2c-sampling-architecture/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32c3-soft-i2c-sampling-architecture/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "软件 I2C 采样：中断只发事件、任务做读取，2kHz 跑不起来的 CPU 边界",
+  "description": "位总线 I2C 读取移出中断：事件通知加高优先级任务，GPIO 寄存器直写提速读取",
+  "datePublished": "2026-08-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32c3-soft-i2c-sampling-architecture/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32c3-soft-i2c-sampling-architecture/"
+  },
+  "keywords": "嵌入式, ESP32, 中断, 传感器, 性能优化"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">软件 I2C 采样：中断只发事件、任务做读取，2kHz 跑不起来的 CPU 边界</h1>
+  <article class="article-body">
+<h1>软件 I2C 采样：中断只发事件、任务做读取，2kHz 跑不起来的 CPU 边界</h1>
+<p>任务背景：为电源控制板搭建 INA228 采样管线，在 ESP32-C3（160MHz）上用位总线 I2C 连续采样电压电流。目标是把采样率从 1kHz 提升到 2kHz。本文说明采样管线为何采用「中断只发事件、高优先级任务做读取」的架构，以及 2kHz 受三条约束限制、最终稳定在 1kHz 的边界。</p>
+<h2>采样管线：中断→事件→高优先级任务→软件 I2C</h2>
+<p><img src="/posts/esp32c3-soft-i2c-sampling-architecture/img/architecture.svg" alt="INA228 采样管线架构"></p>
+<p>esp_timer 以 1kHz 触发采样，回调里只做一件事：<code>xTaskNotifyGive</code> 向读取任务发事件。真正的位总线 I2C 读取、ADC 换挡、样本入队，全部在一个高优先级实时采样任务里完成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> sampling_timer_cb</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">) {</span><span style="color:#6A9955">           /* esp_timer 任务上下文 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    xTaskNotifyGive</span><span style="color:#D4D4D4">(s_reader_task_handle);</span><span style="color:#6A9955">            /* 只发事件，不做 I2C */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> ina228_reader_task</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">parameter</span><span style="color:#D4D4D4">) {</span><span style="color:#6A9955">     /* 读取任务 */</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        ulTaskNotifyTake</span><span style="color:#D4D4D4">(pdTRUE, portMAX_DELAY);</span></span>
+<span class="line"><span style="color:#4EC9B0">        ina228_sample_t</span><span style="color:#D4D4D4"> s;</span></span>
+<span class="line"><span style="color:#DCDCAA">        ina228_read_sample_fast</span><span style="color:#D4D4D4">(&#x26;s);</span><span style="color:#6A9955">                  /* 慢的位总线读取 */</span></span>
+<span class="line"><span style="color:#DCDCAA">        xQueueSendToBack</span><span style="color:#D4D4D4">(par20_sensor_queue, &#x26;s, </span><span style="color:#B5CEA8">0u</span><span style="color:#D4D4D4">);</span><span style="color:#6A9955"> /* 样本入队 */</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>为什么不直接让 esp_timer 回调读 I2C？这个候选方案在 2kHz 下被看门狗否决：回调每次要跑 ~1ms，esp_timer 任务连续被长回调占住，IDLE 任务饿死，任务看门狗复位设备。esp_timer 任务还托管显示、WiFi 等其它定时器，把 I2C 读取塞进去等于用最忙的一条线程干最慢的活。</p>
+<p>读取任务取高优先级保证采样实时性：事件通知一到就立即执行位总线读取，不被其它业务线程拖慢。下游一个 LTTB 降采样消费者每 200ms 取 10 个代表点（50 点/秒），只推电压和电流，经 WebSocket 给前端图表。</p>
+<h2>软件 I2C 而非硬件 I2C：400kHz 上限</h2>
+<p>不用 C3 的硬件 I2C 控制器，原因是硬件 I2C 上限 400kHz；此外这块板上原生 I2C 控制器曾经把状态机卡死在临界区（代码注释有记录），所以沿用原固件的位总线方案。</p>
+<p>位总线理论上可以更快：原 SoftWire 声称 3MHz。实际能跑多快，取决于 GPIO 操作的开销，而不是协议本身。</p>
+<h2>GPIO 寄存器直写：读取从 1ms 降到 240µs</h2>
+<p>驱动函数 <code>gpio_set_level()</code> / <code>gpio_get_level()</code> 带校验开销，实测把位总线压到 ~100-200kHz，一次 6 寄存器全读要 ~1ms。</p>
+<p>改成直接写 GPIO 寄存器：<code>out_w1ts</code>/<code>out_w1tc</code> 置位/清位，<code>in</code> 读输入。同样的位翻转逻辑，单次读取降到 ~240µs。</p>
+<p>实测 SCL 频率：按 I2C 协议位数换算，快速读取（216 个 SCL 时钟）240µs ≈ 0.9MHz，全量读取（360 时钟）340µs ≈ 1.06MHz。位总线实际跑在 Fast Mode Plus（1MHz）档位，超过硬件 I2C 的 400kHz 上限约 2.5 倍。</p>
+<p>顺带两个小优化：ADC 范围缓存（不每次读 CONFIG 寄存器），energy/charge 每 10 次采样才读一次（LCD 和 WebSocket 都不用这两个字段）。</p>
+<h2>2kHz 的三重约束与 1kHz 的 CPU 边界</h2>
+<p>要上 2kHz，位总线读取必须同时满足三条约束：</p>
+<ol>
+<li><strong>读取不能占用托管周期回调的任务</strong>：esp_timer 任务承载显示、网络等所有周期回调。若把 ~1ms 的位总线读取放进回调，2kHz（500µs 周期）下回调占满 esp_timer 任务，其它定时器被饿死，IDLE 无法喂看门狗 → 设备复位。慢读取必须移出 esp_timer 任务。</li>
+<li><strong>读取耗时必须小于采样周期</strong>：读取交回独立任务后，未优化的位总线一次全读 ~1ms，仍大于 500µs 周期。任务连续运转、无法让出 CPU → 看门狗。读取必须压到周期以内。</li>
+<li><strong>读取 CPU 占用不能挤占网络业务</strong>：位总线优化后读取 ~240µs，2kHz 下读取任务占 ~50% CPU。持久 WebSocket 连接下网页加载被拖到 2.7 秒。</li>
+</ol>
+<p>1kHz（周期放宽到 1000µs，读取占 ~24% CPU）同时满足三条，网页恢复正常（~0.4 秒）。这是 C3（160MHz，已是上限）+ 位总线 I2C 的实用边界。要真正上 2kHz，只能换硬件 I2C 控制器，把读取从任务里挪进硬件。</p>
+<h2>架构边界与移植结论</h2>
+<p>采样管线的正确形态：中断只发事件，慢的位总线读取交回一个高优先级任务。位总线提速靠 GPIO 寄存器直写，而不是带校验的驱动函数。2kHz 对这台 C3 不成立，1kHz 是 CPU 占用允许的极限；要更高采样率，需要换掉位总线方案本身。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32c3-soft-i2c-sampling-architecture');
+  }
+  </script>
+</body>
+</html>

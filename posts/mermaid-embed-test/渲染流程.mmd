@@ -1,0 +1,9 @@
+flowchart TD
+    A[Markdown 文章] -->|构建期| B[marked 渲染为 HTML]
+    B --> C{引用的是 .mmd 文件?}
+    C -->|是| D[保留 img 标签<br>资源随文章目录复制]
+    C -->|否| E[正常图片处理]
+    D -->|运行时| F[ArticleModal 注入内容]
+    F --> G[fetch .mmd 源码]
+    G --> H[动态 import mermaid]
+    H --> I[渲染为 SVG]

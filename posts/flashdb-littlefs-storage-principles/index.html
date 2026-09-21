@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据 - CacheRivulet小记</title>
+  <meta name="description" content="FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:tag" content="FlashDB">
+  <meta property="article:tag" content="LittleFS">
+  <meta property="article:tag" content="文件系统">
+  <meta property="article:published_time" content="2026-07-11">
+  <meta property="og:title" content="FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据">
+  <meta property="og:description" content="FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/flashdb-littlefs-storage-principles/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/flashdb-littlefs-storage-principles/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据",
+  "description": "FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据",
+  "datePublished": "2026-07-11",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/flashdb-littlefs-storage-principles/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/flashdb-littlefs-storage-principles/"
+  },
+  "keywords": "嵌入式, MCU, Flash存储, FlashDB, LittleFS, 文件系统"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据</h1>
+  <article class="article-body">
+<h1>FlashDB 与 LittleFS 如何在 MCU Flash 上管理数据</h1>
+<p><strong>FlashDB</strong> 是面向 MCU Flash 的数据管理组件，<strong>LittleFS（Little File System）</strong> 是为微控制器设计的文件系统。两者经常一起出现在 MCU 的 Flash 存储方案里。</p>
+<p>它们解决的问题不同：</p>
+<ul>
+<li><strong>FlashDB</strong>：面向 KV 数据和日志的数据管理层</li>
+<li><strong>LittleFS</strong>：文件系统</li>
+</ul>
+<p>FlashDB 与 LittleFS 通常使用不同分区并列工作：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>                    应用</span></span>
+<span class="line"><span>              +------+------+</span></span>
+<span class="line"><span>              |             |</span></span>
+<span class="line"><span>          FlashDB        LittleFS</span></span>
+<span class="line"><span>          KV / TSDB      文件与目录</span></span>
+<span class="line"><span>              |             |</span></span>
+<span class="line"><span>             FAL        块设备接口</span></span>
+<span class="line"><span>              |             |</span></span>
+<span class="line"><span>          数据库分区       文件分区</span></span>
+<span class="line"><span>              +------ Flash ------+</span></span></code></pre><p>FlashDB 也支持 POSIX 或 C 标准库文件模式。采用文件模式时，FlashDB 经文件接口访问底层文件系统；移植层提供相应文件接口适配后，该文件系统可以是 LittleFS。两者存在并列分区和文件模式两种组合，不能固定画成唯一的上下层关系。</p>
+<hr>
+<h2>一、LittleFS 的底层原理</h2>
+<p>LittleFS 是为 MCU NOR Flash 设计的文件系统。</p>
+<p>它主要解决三个问题：</p>
+<ol>
+<li>Flash 擦写寿命有限</li>
+<li>掉电保护</li>
+<li>在有限 RAM 下管理小块更新</li>
+</ol>
+<h3>1. Flash 的限制</h3>
+<p>普通 Flash：</p>
+<p>读取：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>addr -> data</span></span></code></pre><p>很简单。</p>
+<p>但是写入：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>1 -> 0</span></span></code></pre><p>在满足芯片 program size、对齐和编程次数限制时可以直接写。</p>
+<p>但是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>0 -> 1</span></span></code></pre><p>必须：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>擦除整个 sector</span></span></code></pre><p>例如：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Flash:</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Sector 0</span></span>
+<span class="line"><span>+----------------+</span></span>
+<span class="line"><span>|1111111111111111|</span></span>
+<span class="line"><span>+----------------+</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>写入:</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>11111111 -> 11110000</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>OK</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>00001111 -> 11111111</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>必须 erase</span></span></code></pre><p>erase 操作：</p>
+<ul>
+<li>慢</li>
+<li>有次数限制</li>
+</ul>
+<p>具体擦除寿命由 Flash 型号和数据手册决定。存储层需要避免少量 sector 承担全部高频更新。</p>
+<hr>
+<h3>LittleFS 如何保存文件</h3>
+<p>LittleFS 保存一个文件时，需要记住两类内容：</p>
+<ul>
+<li>文件说明：文件名、文件大小，以及文件内容存放在哪里。</li>
+<li>文件内容：用户真正写入的数据。</li>
+</ul>
+<p>很小的文件可以直接和文件说明放在一起。文件较大时，文件说明只记录内容的位置，真正的数据会放在其他数据块中。</p>
+<p>源码把存放文件说明的成对空间称为 <code>metadata pair</code>，把连接大文件数据块的结构称为 <code>CTZ skip-list</code>。理解后面的过程只需记住：前者负责指出文件在哪里，后者负责保存较大的文件内容。</p>
+<p>下面用单个数据块表示较大文件的一次更新。它只展示提交顺序，不代表 LittleFS 每次修改都会复制整个文件：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>修改前：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>文件说明中记录的位置</span></span>
+<span class="line"><span>    |</span></span>
+<span class="line"><span>    v</span></span>
+<span class="line"><span>+-----------+</span></span>
+<span class="line"><span>| block 10  |</span></span>
+<span class="line"><span>|   AAAA    |</span></span>
+<span class="line"><span>|  有效数据  |</span></span>
+<span class="line"><span>+-----------+</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>写入新数据：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>旧引用 -------------> block 10（旧数据仍然有效）</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>                       block 20</span></span>
+<span class="line"><span>                     +-----------+</span></span>
+<span class="line"><span>                     |   BBBB    |</span></span>
+<span class="line"><span>                     |  正在写入  |</span></span>
+<span class="line"><span>                     +-----------+</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>提交完成：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>更新后的文件说明</span></span>
+<span class="line"><span>    |</span></span>
+<span class="line"><span>    v</span></span>
+<span class="line"><span>+-----------+</span></span>
+<span class="line"><span>| block 20  |</span></span>
+<span class="line"><span>|   BBBB    |</span></span>
+<span class="line"><span>|  新数据    |</span></span>
+<span class="line"><span>+-----------+</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>block 10 不再被文件引用，之后可重新分配</span></span></code></pre><p>写入期间，旧文件状态仍可读取。文件内容及相关属性会在 <code>sync</code> 或 <code>close</code> 时提交到文件系统：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>写入新的数据块 → 在 metadata pair 中追加一条带 CRC 的提交，记录新的文件位置 → 旧数据块失去引用 → 以后重新使用旧空间</span></span></code></pre><p>这种“先写新内容，再追加提交新的文件位置”的做法叫作 copy-on-write，也就是写时复制。较大文件的 CTZ skip-list 本身含有块之间的引用，但 LittleFS 不会原地改写一张统一的指针表：新数据块写好后，新的 CTZ 位置会随 metadata commit 一起追加，并由 CRC 判断提交是否完整。小文件以内联形式保存在 metadata pair 中，更新时同样通过 metadata commit 提交。它的好处是新内容确认完成前，旧内容仍然有效。即使写入失败或途中断电，系统仍能使用旧文件；只有新内容完整写入且提交有效后，文件位置才会切换过去。</p>
+<hr>
+<h3>2. Metadata Pair（LittleFS 核心）</h3>
+<p>成对保存的直接好处是：更新过程中始终保留一个已经写完整的版本。平时追加新内容时，旧内容仍然存在；需要擦除、整理其中一块时，另一块仍保留可用内容。即使此时断电，重新启动后也能回到最近一次完整提交。</p>
+<p>一个 metadata pair 由两个 block 地址组成。这两个 block 不要求物理连续。每个 metadata block 自身是一段可追加的提交日志，一次提交由若干 metadata entry 和末尾的 CRC 组成。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>metadata pair = {block 5, block 21}</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>当前活动 block：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>revision | commit A + CRC | commit B + CRC | 未写空间</span></span></code></pre><p>空间足够时，更新会直接追加到当前 metadata log，不需要在两个 block 之间来回切换。当前 block 需要压缩时，LittleFS 擦除 pair 中作为目标的另一个 block，把仍然有效的最新条目和递增后的 revision count 写进去，并用 commit CRC 完成提交。原活动 block 会保留为旧版本，等以后角色再次轮换时才被擦除。</p>
+<p>挂载时，LittleFS 使用 revision count 比较两个 block，并通过 CRC 排除掉电时未完成的 commit。metadata pair 的掉电安全来自旧提交仍然存在、commit CRC 检错和压缩时的双 block 冗余，不能只概括成“先写 block 6，再切换指针”。</p>
+<hr>
+<h3>3. 均衡磨损</h3>
+<p>Flash 的每一小块空间都有擦除寿命。如果配置文件始终占用同一个位置，每次修改都让这一块承担擦除，其他位置却很少使用，这一块会最先老化。</p>
+<p>LittleFS 使用一小段 lookahead buffer 记录当前扫描范围内哪些块可以使用。需要新空间时，它从当前范围继续向后寻找，走到 Flash 末尾后再从头开始。挂载时，LittleFS 会根据已经通过 CRC 检查的提交计算一个 seed，再用它选择扫描起点；随着有效提交发生变化，起点也可能变化，因此不会固定从 block 0 开始。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>只使用固定位置：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>block 10：擦除、擦除、擦除、擦除……</span></span>
+<span class="line"><span>block 11：几乎不用</span></span>
+<span class="line"><span>block 12：几乎不用</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>LittleFS 分散使用：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>第一次使用 block 10</span></span>
+<span class="line"><span>下一次使用 block 11</span></span>
+<span class="line"><span>继续使用 block 12</span></span>
+<span class="line"><span>走到末尾后再从前面寻找空闲位置</span></span></code></pre><p>目录等信息如果长期占用同一块，LittleFS 也会在达到一定使用次数后把它换到其他位置。</p>
+<p>这种做法只能分散“允许换位置”的数据。一个文件写入后长期不变，LittleFS 不会为了平衡寿命主动搬动它。因此这里的“均衡”表示尽量分散擦除次数，不表示每一块的使用次数完全相同。</p>
+<hr>
+<h3>4. 垃圾回收</h3>
+<p>垃圾回收要解决的问题很直接：新内容写到新位置后，Flash 中会留下旧版本。旧版本不能立刻擦除，因为新版本可能还没有写完；确认新版本完整后，旧空间才可以重新使用。</p>
+<p>LittleFS 需要处理两类旧内容。</p>
+<p>第一类是目录、文件名和文件位置等信息。每次修改都会在后面追加一个新版本。空间逐渐写满后，LittleFS 把仍然有效的最新内容整理到成对的另一块中：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>整理前：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>A旧 | B有效 | A新 | C有效 | 剩余空间很少</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>整理后：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>A新 | B有效 | C有效 | 空闲空间</span></span></code></pre><p>新的一块写完并确认有效后，原来那块暂时保留为旧版本，以后轮换到它时再擦除使用。这样即使整理途中掉电，旧版本仍能用于恢复。</p>
+<p>第二类是文件内容。文件修改时，新内容写到新位置，文件记录随后改为指向新内容。旧位置失去引用，下一次寻找可用空间时就可以被识别出来：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>修改前：文件记录 -> block 10</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>修改后：文件记录 -> block 20</span></span>
+<span class="line"><span>                    block 10 已无文件引用</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>以后需要空间：擦除 block 10，再写入其他内容</span></span></code></pre><p>LittleFS 不会把所有有效数据集中搬到一片连续区域。它主要整理写满的目录信息，并在寻找空闲空间时重新利用已经没有文件引用的块。</p>
+<hr>
+<h2>二、FlashDB 原理</h2>
+<p>FlashDB 提供面向 Flash 的数据库接口，不提供目录、路径和普通文件语义。它包含两种数据库：</p>
+<ul>
+<li>KVDB</li>
+<li>TSDB</li>
+</ul>
+<hr>
+<h3>1. KVDB</h3>
+<p>Key Value Database</p>
+<p>例如：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>wifi_ssid = "home"</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>motor_speed = 100</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>device_id = 123456</span></span></code></pre><p>KV 不需要绑定固定物理地址：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>地址:</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>0x1000 wifi_ssid</span></span>
+<span class="line"><span>0x1100 motor_speed</span></span></code></pre><p>更新后的记录会写入新的空闲位置：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Flash:</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Record1:</span></span>
+<span class="line"><span>key=wifi_ssid</span></span>
+<span class="line"><span>value=home</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Record2:</span></span>
+<span class="line"><span>key=motor_speed</span></span>
+<span class="line"><span>value=100</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Record3:</span></span>
+<span class="line"><span>key=wifi_ssid</span></span>
+<span class="line"><span>value=office</span></span></code></pre><p>KVDB 可选用 KV cache 直接定位记录。未启用缓存或缓存未命中时，<code>find_kv</code> 会遍历 sector 中的记录，寻找名称匹配、CRC 正确且状态为 <code>FDB_KV_WRITE</code> 的记录。读取逻辑不能简化成每次扫描并取“最后一条同名记录”。</p>
+<hr>
+<h3>2. FlashDB 的核心：追加写与单向状态机</h3>
+<p>FlashDB 会先把数据库分区切成多个 sector，再在每个 sector 中顺序存放 KV：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>数据库分区</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>+------------+------------+------------+</span></span>
+<span class="line"><span>| sector 0   | sector 1   | sector 2   |</span></span>
+<span class="line"><span>+------------+------------+------------+</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>一个 sector 内部</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>+-------------+----------+----------+----------+</span></span>
+<span class="line"><span>| sector 说明 | KV 记录1 | KV 记录2 | 空闲空间 |</span></span>
+<span class="line"><span>+-------------+----------+----------+----------+</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>一条 KV 记录</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>+------+-------------------+------+-------+</span></span>
+<span class="line"><span>| 状态 | 长度、校验值等说明 | key  | value |</span></span>
+<span class="line"><span>+------+-------------------+------+-------+</span></span></code></pre><p>sector 开头的说明记录这一块当前是否正在使用、是否含有旧数据。每条 KV 开头也有自己的状态字段，后面才是 key 和 value。因此，“单向状态机”并非一个单独的控制器，它就保存在 Flash 中每条 KV 记录的开头，设备重启后仍然可以读到。</p>
+<p>状态变化利用 NOR Flash 可从 <code>1</code> 写成 <code>0</code> 的特点。每向前推进一个状态，只需把更多位写成 <code>0</code>，不用先擦除整个 sector；已经推进的状态无法原路改回，所以称为“单向”。KV 的主体数据仍采用追加写，旧记录只改变状态，新值写入后面的空闲位置。</p>
+<p>修改一个已有 KV 时，源码中的顺序是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>旧 KV：WRITE → PRE_DELETE</span></span>
+<span class="line"><span>新 KV：PRE_WRITE → 写入 header/name/value/CRC → WRITE</span></span>
+<span class="line"><span>旧 KV：PRE_DELETE → DELETED</span></span></code></pre><p>如果在更新中途掉电，初始化恢复会处理这些中间状态：CRC 正确的 <code>PRE_DELETE</code> 旧记录会被搬移恢复，停留在 <code>PRE_WRITE</code> 的未完成新记录会被标记为错误。这个状态机才是 KV 更新掉电恢复的关键。</p>
+<hr>
+<h3>3. 为什么不用直接改？</h3>
+<p>因为 Flash：</p>
+<p>修改：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>00001111</span></span></code></pre><p>想变：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>11111111</span></span></code></pre><p>需要：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>erase</span></span></code></pre><p>追加新记录时：</p>
+<p>只需要：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>写新位置</span></span></code></pre><hr>
+<h3>4. FlashDB 的垃圾回收</h3>
+<p>比如：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Flash:</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>A=1</span></span>
+<span class="line"><span>B=2</span></span>
+<span class="line"><span>A=3</span></span>
+<span class="line"><span>C=4</span></span>
+<span class="line"><span>A=5</span></span></code></pre><p>状态仍为 <code>WRITE</code> 的有效记录：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>A=5</span></span>
+<span class="line"><span>B=2</span></span>
+<span class="line"><span>C=4</span></span></code></pre><p>已经删除或写入失败的记录：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>A=1</span></span>
+<span class="line"><span>A=3</span></span></code></pre><p>KV 更新多次以后，同一个 sector 里会混合有效记录、已删除记录和写入失败的记录。完整空 sector 所剩不多时，KVDB 开始回收：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>1. 给准备回收的 sector 做标记</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>2. 逐条检查里面的记录</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>3. 把确认写完整、仍未删除的 KV 搬到其他可写位置</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>4. 擦除原 sector，使它重新变成空闲空间</span></span></code></pre><p>第一步的标记用于应对掉电。如果设备在搬运途中断电，下次启动时能发现回收尚未完成，并继续执行。FlashDB 会搬走一个 sector 里的有效 KV；LittleFS 则分别整理目录信息和寻找已经没有文件使用的旧块，两者做法不同。</p>
+<hr>
+<h3>5. TSDB（时间序列数据库）</h3>
+<p>TSDB 用来保存不断产生、按时间排列的数据。例如传感器每隔一段时间产生一条温度记录：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>time      temp</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>10:01     25</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>10:02     26</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>10:03     27</span></span></code></pre><p>每条记录由两部分组成：</p>
+<ul>
+<li>索引：记录状态、时间戳，以及实际数据的长度和位置。</li>
+<li>实际数据：温度、湿度、错误信息等用户内容。</li>
+</ul>
+<p>FlashDB 在一个 sector 的两端同时写入。索引从前向后增加，实际数据从后向前增加，中间是尚未使用的空间：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>低地址                                                    高地址</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>+------------+--------+--------+----------+--------+--------+</span></span>
+<span class="line"><span>| sector说明 | 索引1  | 索引2  | 空闲空间 | 数据2  | 数据1  |</span></span>
+<span class="line"><span>+------------+--------+--------+----------+--------+--------+</span></span>
+<span class="line"><span>                         →          ←</span></span>
+<span class="line"><span>                    索引向后增长   数据向前增长</span></span></code></pre><p>这样安排有两个好处：实际数据可以保持不同长度，不必给每条记录预留同样大的空间；索引长度固定，第 N 条索引的位置可以直接用“起始地址 + N × 索引长度”算出，也就可以在索引区使用二分查找。</p>
+<p>追加一条记录时，FlashDB 按下面的顺序写入：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>1. 在新索引中标记“正在写”</span></span>
+<span class="line"><span>2. 写入时间戳、数据长度和数据位置</span></span>
+<span class="line"><span>3. 把实际数据写到 sector 尾部</span></span>
+<span class="line"><span>4. 将索引状态改成“写入完成”</span></span></code></pre><p>最后一步相当于正式提交。设备在前三步中途断电，这条记录仍带有“正在写”标记，不会变成“写入完成”状态。重新启动后，FlashDB 能据此识别它没有完成。当前版本没有给每条时间序列记录单独保存 CRC，掉电时主要依靠这个写入顺序区分完整记录和半条记录。</p>
+<p>TSDB 要求新记录的时间戳大于上一条记录，这为二分查找提供了前提。实际代码不会对整个数据库直接二分：它先逐个检查 sector 的起止时间，找到可能包含目标时间的 sector；随后在这个 sector 的定长索引区中二分查找起点；找到后再按固定步长顺序读取索引，直到超出查询时间范围，并根据索引中的地址读取实际数据。它支持顺序查询、倒序查询和指定时间范围查询。</p>
+<p>一个 sector 写满后，TSDB 会继续写下一个 sector。默认开启循环覆盖：所有 sector 都用完后，擦除最旧的 sector，继续保存新数据。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>sector 0 → sector 1 → sector 2 → 回到 sector 0</span></span>
+<span class="line"><span>                                      ↓</span></span>
+<span class="line"><span>                              擦除最旧 sector 后继续写</span></span></code></pre><p>关闭循环覆盖后，所有 sector 写满就停止追加并返回空间不足，旧记录会一直保留。</p>
+<p>这种结构适合：</p>
+<ul>
+<li>IoT</li>
+<li>传感器</li>
+<li>日志</li>
+</ul>
+<hr>
+<h2>三、FlashDB 和 LittleFS 的区别</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>LittleFS</th>
+<th>FlashDB</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>类型</td>
+<td>文件系统</td>
+<td>数据库</td>
+</tr>
+<tr>
+<td>对象</td>
+<td>文件</td>
+<td>Key/Record</td>
+</tr>
+<tr>
+<td>访问</td>
+<td>open/read/write</td>
+<td>get/set</td>
+</tr>
+<tr>
+<td>目录</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>随机文件</td>
+<td>支持</td>
+<td>不适合</td>
+</tr>
+<tr>
+<td>掉电保护</td>
+<td>有</td>
+<td>有</td>
+</tr>
+<tr>
+<td>磨损均衡</td>
+<td>尽量把可移动数据分散到不同空闲块</td>
+<td>KVDB 通过垃圾回收搬走有效记录，再轮流擦除和复用 sector；TSDB 开启循环覆盖后按顺序擦除最旧 sector；文件模式的物理擦写由底层文件系统负责分散</td>
+</tr>
+<tr>
+<td>日志</td>
+<td>metadata pair 使用日志提交</td>
+<td>KVDB 日志式布局，TSDB 顺序追加</td>
+</tr>
+<tr>
+<td>适合</td>
+<td>配置文件、资源</td>
+<td>参数、日志、状态</td>
+</tr>
+</tbody></table>
+<p>两者分散磨损的方式不同。LittleFS 用 <code>block_cycles</code> 控制 metadata 达到一定使用次数后主动换块，并通过空闲块分配分散动态数据；FlashDB 不记录每个 sector 的擦除次数，KVDB 的分散效果来自垃圾回收和 sector 轮转，TSDB 则来自开启循环覆盖后的顺序复用。</p>
+<hr>
+<h2>四、实际 MCU 项目怎么选？</h2>
+<p>例如 ESP32：</p>
+<h3>存配置：</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>wifi账号</span></span>
+<span class="line"><span>设备参数</span></span>
+<span class="line"><span>校准值</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>FlashDB KVDB</span></span></code></pre><hr>
+<h3>存升级文件：</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>web页面</span></span>
+<span class="line"><span>图片</span></span>
+<span class="line"><span>模型文件</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>LittleFS</span></span></code></pre><hr>
+<h3>存运行日志：</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>温度历史</span></span>
+<span class="line"><span>错误记录</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>FlashDB TSDB</span></span></code></pre><hr>
+<p>实际工程常见组合：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>             APP</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>              |</span></span>
+<span class="line"><span>      +-------+-------+</span></span>
+<span class="line"><span>      |               |</span></span>
+<span class="line"><span>   FlashDB         LittleFS</span></span>
+<span class="line"><span>      |               |</span></span>
+<span class="line"><span>  参数/日志        文件资源</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>              |</span></span>
+<span class="line"><span>          SPI NOR Flash</span></span></code></pre><hr>
+<h2>五、源码阅读入口</h2>
+<ol>
+<li><strong>LittleFS源码里的 block allocator + metadata pair</strong></li>
+<li><strong>FlashDB源码里的 sector manager + KV cache + GC</strong></li>
+</ol>
+<p>这两组模块分别覆盖空间分配、元数据提交、记录检索和垃圾回收，是理解两套存储机制的主要入口。</p>
+<p>本文核对的源码基线：</p>
+<ul>
+<li><a href="https://github.com/armink/FlashDB/commit/8236571f6e29273a16bba62061bf0405e4186878">FlashDB commit 8236571</a></li>
+<li><a href="https://github.com/littlefs-project/littlefs/commit/6cb4e86540eca0d9ba62500a298385c9d863c8be">LittleFS commit 6cb4e86</a></li>
+</ul>
+<hr>
+<h2>六、FlashDB 和 LittleFS 如何处理数据错误</h2>
+<p>掉电中断和数据存放多年后发生位翻转，是两类不同的错误。前者发生在写入过程中，后者可能发生在一条记录或一个文件早已写完之后。</p>
+<table>
+<thead>
+<tr>
+<th>存储方式</th>
+<th>写入中途断电</th>
+<th>写完后发生位翻转</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FlashDB KVDB</td>
+<td>根据记录状态和 CRC32 排除未写完的 KV，并在启动时恢复未完成的更新或垃圾回收</td>
+<td>CRC32 覆盖 key、value 和长度信息，读取时通常能发现内容变化</td>
+</tr>
+<tr>
+<td>FlashDB TSDB</td>
+<td>根据记录状态区分准备写入和已经写完的记录</td>
+<td>用户数据默认没有 CRC，需要在每条 payload 中自行保存 CRC</td>
+</tr>
+<tr>
+<td>LittleFS</td>
+<td>metadata pair 保留旧提交，并用 commit CRC 判断新提交是否完整</td>
+<td>能检查元数据提交；普通文件内容默认没有逐块 CRC，内容位翻转可能无法发现</td>
+</tr>
+</tbody></table>
+<p>这些机制主要负责发现错误并避开不完整的数据，无法凭一份损坏的数据还原原值。需要长期冷存储时，可以在 TSDB payload 或 LittleFS 文件格式中加入 CRC；重要数据还应保存副本，检测到一份损坏后才能用另一份修复。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-11 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=flashdb-littlefs-storage-principles');
+  }
+  </script>
+</body>
+</html>

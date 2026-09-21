@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KCP 在 UDP 上做可靠传输：RTO 不翻倍、选择性重传与快速重传 - CacheRivulet小记</title>
+  <meta name="description" content="TCP 丢包延迟翻倍，KCP 用带宽换延迟做可靠传输">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="KCP">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:published_time" content="2026-07-22">
+  <meta property="og:title" content="KCP 在 UDP 上做可靠传输：RTO 不翻倍、选择性重传与快速重传">
+  <meta property="og:description" content="TCP 丢包延迟翻倍，KCP 用带宽换延迟做可靠传输">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/kcp-protocol/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/kcp-protocol/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "KCP 在 UDP 上做可靠传输：RTO 不翻倍、选择性重传与快速重传",
+  "description": "TCP 丢包延迟翻倍，KCP 用带宽换延迟做可靠传输",
+  "datePublished": "2026-07-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/kcp-protocol/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/kcp-protocol/"
+  },
+  "keywords": "通信协议, KCP, C语言, 性能优化"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">KCP 在 UDP 上做可靠传输：RTO 不翻倍、选择性重传与快速重传</h1>
+  <article class="article-body">
+<h1>KCP 在 UDP 上做可靠传输：RTO 不翻倍、选择性重传与快速重传</h1>
+<blockquote>
+<p><strong>声明：</strong> KCP 是一个开源项目，作者为 <a href="https://github.com/skywind3000/kcp">林伟 (skywind3000)</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解可靠传输协议的工程实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/skywind3000/kcp" target="_blank" rel="noopener noreferrer">github.com/skywind3000/kcp</a>（UDP 之上的快速可靠 ARQ 协议）</p>
+<p>TCP 在公网丢包时延迟表现不理想。超时重传让 RTO 翻倍，丢包后触发全部重传，延迟 ACK 又抬高 RTT 估算。这些机制为最大化吞吐量设计，代价是丢包时延迟显著上升。</p>
+<p>游戏、实时视频、VPN 隧道对延迟敏感，能容忍少量丢包和带宽冗余，但不能接受几百毫秒的卡顿。KCP 为这类场景设计，是一套快速可靠 ARQ 协议：比 TCP 多消耗 10% 至 20% 带宽，换取平均延迟下降 30% 至 40%、最大延迟下降约三倍。</p>
+<p>协议只有 <code>ikcp.h</code> 与 <code>ikcp.c</code> 两个文件，不含任何系统调用。底层收发、时钟源、定时调度全部由使用者通过回调提供。</p>
+<h2>协议分层：KCP 只做 ARQ 算法层</h2>
+<p>KCP 是一套纯 ARQ 算法层，不含完整网络库的收发与调度职责，连时钟也由外部传入。</p>
+<p>创建 KCP 对象后，使用者提供三样东西：</p>
+<ul>
+<li><strong>输出回调</strong>：KCP 组装好协议包，通过 <code>output</code> 回调交给使用者发送。底层是 UDP、串口还是其他通道，KCP 不关心。</li>
+<li><strong>时钟</strong>：<code>ikcp_update(kcp, current)</code> 需要外部传入当前毫秒时间戳。内部所有超时判断都基于这个时间。</li>
+<li><strong>定时调度</strong>：使用者周期调用 <code>ikcp_update</code>，或用 <code>ikcp_check</code> 获取下次调度的精确时间点。KCP 内部不启动任何定时器。</li>
+</ul>
+<p><strong>完整帧输入</strong>：<code>ikcp_input</code> 每次调用必须传入一个完整的 KCP 段：24 字节头部加上 <code>len</code> 字段指定的数据体，缺一不可。源码中 <code>size &lt; len</code> 直接返回 -2，内部没有对不完整段的缓冲。KCP 设计时假设底层是 UDP 这类数据报传输，一个 <code>send</code> 对应一个完整段；如果底层是串口、TCP 隧道等流式通道，调用方必须自己做帧定界，收齐一个完整段再交给 <code>ikcp_input</code>，否则会被当作协议错误。</p>
+<p>收到数据调 <code>ikcp_input</code> 喂入完整段，发送调 <code>ikcp_send</code>，接收调 <code>ikcp_recv</code>。五个 API 构成完整交互面。</p>
+<p>这种拆开的设计让 KCP 可嵌入任意协议栈：下层加 FEC 纠删码，上层加流加密，握手层做非对称密钥交换。每个协议单元独立可替换。</p>
+<h2>段格式与四条内部队列</h2>
+<p>KCP 只有一种包格式，数据和控制消息共用同一个 24 字节头部：</p>
+<svg viewBox="0 0 690 96" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;background:#f8fafc;border-radius:8px;">
+  <rect x="10" y="20" width="110" height="48" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="65" y="46" text-anchor="middle" fill="#1e293b" font-size="15" font-family="monospace">conv</text>
+  <text x="65" y="78" text-anchor="middle" fill="#475569" font-size="12">4 B</text>
+
+  <rect x="120" y="20" width="28" height="48" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="134" y="46" text-anchor="middle" fill="#1e293b" font-size="13" font-family="monospace">cmd</text>
+  <text x="134" y="78" text-anchor="middle" fill="#475569" font-size="12">1 B</text>
+
+  <rect x="148" y="20" width="28" height="48" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="162" y="46" text-anchor="middle" fill="#1e293b" font-size="13" font-family="monospace">frg</text>
+  <text x="162" y="78" text-anchor="middle" fill="#475569" font-size="12">1 B</text>
+
+  <rect x="176" y="20" width="56" height="48" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="204" y="46" text-anchor="middle" fill="#1e293b" font-size="13" font-family="monospace">wnd</text>
+  <text x="204" y="78" text-anchor="middle" fill="#475569" font-size="12">2 B</text>
+
+  <rect x="232" y="20" width="110" height="48" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="287" y="46" text-anchor="middle" fill="#1e293b" font-size="14" font-family="monospace">ts</text>
+  <text x="287" y="78" text-anchor="middle" fill="#475569" font-size="12">4 B</text>
+
+  <rect x="342" y="20" width="110" height="48" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="397" y="46" text-anchor="middle" fill="#1e293b" font-size="14" font-family="monospace">sn</text>
+  <text x="397" y="78" text-anchor="middle" fill="#475569" font-size="12">4 B</text>
+
+  <rect x="452" y="20" width="110" height="48" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="507" y="46" text-anchor="middle" fill="#1e293b" font-size="14" font-family="monospace">una</text>
+  <text x="507" y="78" text-anchor="middle" fill="#475569" font-size="12">4 B</text>
+
+  <rect x="562" y="20" width="110" height="48" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="617" y="46" text-anchor="middle" fill="#1e293b" font-size="14" font-family="monospace">len</text>
+  <text x="617" y="78" text-anchor="middle" fill="#475569" font-size="12">4 B</text>
+
+<p>  <text x="345" y="14" text-anchor="middle" fill="#64748b" font-size="12">← 24 字节固定头部 →</text>
+  <text x="617" y="14" text-anchor="middle" fill="#64748b" font-size="12">DATA（可选）</text>
+</svg></p>
+<ul>
+<li><strong>conv</strong>：会话编号，两端必须一致，用于区分不同连接</li>
+<li><strong>cmd</strong>：命令类型，PUSH(81) 数据推送、ACK(82) 确认、WASK(83) 窗口探测、WINS(84) 窗口通知</li>
+<li><strong>frg</strong>：分片编号，从 <code>count-1</code> 递减到 0，接收端据此合并分片</li>
+<li><strong>wnd</strong>：接收窗口剩余大小，用于流量控制</li>
+<li><strong>ts</strong>：时间戳，用于 RTT 计算</li>
+<li><strong>sn</strong>：包序号</li>
+<li><strong>una</strong>：未确认序号，此编号之前的包全部已收到</li>
+<li><strong>len</strong>：后续数据体字节数</li>
+</ul>
+<p>注意 <code>una</code> 字段：KCP 的每个包（包括数据包）都携带 UNA 信息。TCP 只在 ACK 包中确认，KCP 让每个发出的包同时承担 ACK 职责。即使反向没有独立 ACK 包，确认信息也能顺带到达。</p>
+<p>KCP 内部维护四条队列，收发两条路径各自独立：</p>
+<svg viewBox="0 0 690 180" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;background:#f8fafc;border-radius:8px;">
+  <text x="20" y="24" fill="#334155" font-size="13" font-weight="bold">发送路径</text>
+  <rect x="20" y="36" width="86" height="36" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="63" y="59" text-anchor="middle" fill="#1e293b" font-size="13">ikcp_send</text>
+  <line x1="106" y1="54" x2="128" y2="54" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="130" y="36" width="96" height="36" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="178" y="59" text-anchor="middle" fill="#1e293b" font-size="13">snd_queue</text>
+  <line x1="226" y1="54" x2="248" y2="54" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="250" y="36" width="150" height="36" rx="5" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="325" y="53" text-anchor="middle" fill="#1e293b" font-size="12">ikcp_flush</text>
+  <text x="325" y="66" text-anchor="middle" fill="#475569" font-size="11">分配序号/时间戳</text>
+  <line x1="400" y1="54" x2="422" y2="54" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="424" y="36" width="96" height="36" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="472" y="59" text-anchor="middle" fill="#1e293b" font-size="13">snd_buf</text>
+  <line x1="520" y1="54" x2="542" y2="54" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="544" y="36" width="110" height="36" rx="5" fill="#fef9c3" stroke="#eab308" stroke-width="1.5"/>
+  <text x="599" y="59" text-anchor="middle" fill="#1e293b" font-size="13">网络/UDP</text>
+
+<p>  <text x="20" y="118" fill="#334155" font-size="13" font-weight="bold">接收路径</text>
+  <rect x="20" y="130" width="96" height="36" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="68" y="153" text-anchor="middle" fill="#1e293b" font-size="13">ikcp_input</text>
+  <line x1="116" y1="148" x2="138" y2="148" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="140" y="130" width="96" height="36" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="188" y="153" text-anchor="middle" fill="#1e293b" font-size="13">rcv_buf</text>
+  <line x1="236" y1="148" x2="258" y2="148" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="260" y="130" width="96" height="36" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="308" y="153" text-anchor="middle" fill="#1e293b" font-size="13">rcv_queue</text>
+  <line x1="356" y1="148" x2="378" y2="148" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="380" y="130" width="96" height="36" rx="5" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="428" y="153" text-anchor="middle" fill="#1e293b" font-size="13">ikcp_recv</text></p>
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+</svg>
+
+<p><code>ikcp_send</code> 把数据写入 <code>snd_queue</code>，<code>ikcp_flush</code> 将其搬到 <code>snd_buf</code>，分配序号与时间戳，交给 <code>output</code> 发送。<code>snd_buf</code> 中已发送的包等待对方确认，确认后才移除。</p>
+<p>接收端 <code>ikcp_input</code> 把收到的包插入 <code>rcv_buf</code>（按序号排序的接收缓冲），再按序搬到 <code>rcv_queue</code>。<code>rcv_queue</code> 中的数据连续可读，<code>ikcp_recv</code> 从这里取走。</p>
+<h2>RTO 不翻倍与选择性重传</h2>
+<p>TCP 在超时重传时把 RTO 翻倍（RTO × 2），连续丢三次包变成 RTO × 8。丢包越多，等待时间指数增长。</p>
+<p>KCP 在快速模式下，RTO 每次只乘 1.5。RTO 增长曲线被压低，丢包后恢复更快。配合 <code>rx_minrto</code> 可设到 30ms（TCP 默认最小 RTO 为 200ms），进一步压低等待下限。</p>
+<p>重传策略上，TCP 采用累积确认：收到 ACK=N 只表示 N 之前的包全收到。如果包 2 丢失、包 3/4/5 已到达，TCP 仍只确认到包 1，发送方必须从包 2 开始全部重传（Go-Back-N）。</p>
+<p>KCP 同时使用 UNA 和独立 ACK。收到包 3 时，除了 UNA 告知&quot;包 1 之前全收到&quot;，还会为包 3 单独生成 ACK。发送方收到 ACK 1、3、4、5 后，知道包 2 被跳过，只重传包 2。</p>
+<svg viewBox="0 0 690 200" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;background:#f8fafc;border-radius:8px;">
+  <rect x="10" y="14" width="320" height="170" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="170" y="36" text-anchor="middle" fill="#334155" font-size="13" font-weight="bold">TCP 累积确认（Go-Back-N）</text>
+  <rect x="30" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="50" y="70" text-anchor="middle" fill="#1e293b" font-size="13">1</text>
+  <rect x="78" y="50" width="40" height="30" rx="4" fill="#fee2e2" stroke="#ef4444"/>
+  <text x="98" y="70" text-anchor="middle" fill="#1e293b" font-size="13">2✕</text>
+  <rect x="126" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="146" y="70" text-anchor="middle" fill="#1e293b" font-size="13">3</text>
+  <rect x="174" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="194" y="70" text-anchor="middle" fill="#1e293b" font-size="13">4</text>
+  <rect x="222" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="242" y="70" text-anchor="middle" fill="#1e293b" font-size="13">5</text>
+  <text x="170" y="102" text-anchor="middle" fill="#475569" font-size="13">ACK = 1（只确认到包 1）</text>
+  <line x1="170" y1="112" x2="170" y2="132" stroke="#475569" stroke-width="2" marker-end="url(#b)"/>
+  <rect x="70" y="138" width="200" height="32" rx="5" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="170" y="159" text-anchor="middle" fill="#1e293b" font-size="13">重传 2、3、4、5（全部）</text>
+
+  <rect x="350" y="14" width="320" height="170" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="510" y="36" text-anchor="middle" fill="#334155" font-size="13" font-weight="bold">KCP UNA + 独立 ACK</text>
+  <rect x="370" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="390" y="70" text-anchor="middle" fill="#1e293b" font-size="13">1</text>
+  <rect x="418" y="50" width="40" height="30" rx="4" fill="#fee2e2" stroke="#ef4444"/>
+  <text x="438" y="70" text-anchor="middle" fill="#1e293b" font-size="13">2✕</text>
+  <rect x="466" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="486" y="70" text-anchor="middle" fill="#1e293b" font-size="13">3</text>
+  <rect x="514" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="534" y="70" text-anchor="middle" fill="#1e293b" font-size="13">4</text>
+  <rect x="562" y="50" width="40" height="30" rx="4" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="582" y="70" text-anchor="middle" fill="#1e293b" font-size="13">5</text>
+  <text x="510" y="102" text-anchor="middle" fill="#475569" font-size="13">ACK 1、3、4、5（跳过 2）</text>
+  <line x1="438" y1="112" x2="438" y2="132" stroke="#475569" stroke-width="2" marker-end="url(#b)"/>
+  <rect x="378" y="138" width="120" height="32" rx="5" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="438" y="159" text-anchor="middle" fill="#1e293b" font-size="13">只重传 2</text>
+
+  <defs>
+    <marker id="b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+</svg>
+
+<p>两种确认的组合让 KCP 不必在&quot;全部重传&quot;与&quot;每条都独立 ACK 开销过大&quot;之间二选一。</p>
+<h2>快速重传：不等超时的 fastack 计数</h2>
+<p>选择性重传避免了全部重传，但仍要等到超时。KCP 的快速重传机制在超时前即可触发重传。</p>
+<p>每个已发送的段（<code>IKCPSEG</code>）内部维护一个 <code>fastack</code> 计数器。当收到的 ACK 跳过了某个包，包 2 的 <code>fastack</code> 随之累加：收到 ACK 3 时加 1，收到 ACK 4 时再加 1。<code>fastack</code> 达到阈值（<code>fastresend</code> 参数，通常设为 2）时，不等超时，立即重传。</p>
+<p>源码中 <code>ikcp_parse_fastack</code> 负责更新计数器，<code>ikcp_flush</code> 遍历 <code>snd_buf</code> 时检查 <code>segment-&gt;fastack &gt;= resent</code>，满足条件就标记 <code>needsend = 1</code>。</p>
+<p>快速重传配合 RTO × 1.5 和低 <code>rx_minrto</code>，形成 KCP 降低延迟的三层机制：丢包时先靠快速重传抢时间，抢不到再靠压低后的超时兜底。</p>
+<h2>可关闭的拥塞控制与可插拔 CC 接口</h2>
+<p>KCP 内置的流控算法与 TCP 类似：慢启动阶段 <code>cwnd</code> 指数增长，拥塞避免阶段线性增长，丢包时 <code>ssthresh</code> 减半、<code>cwnd</code> 回退。</p>
+<p>但 KCP 允许跳过拥塞控制。调用 <code>ikcp_nodelay(kcp, 1, 10, 2, 1)</code> 时，最后一个参数 <code>nc=1</code> 关闭流控。此时的发送窗口仅由 <code>snd_wnd</code> 和远端 <code>rmt_wnd</code> 决定，不再受丢包退让和慢启动约束。代价是牺牲公平性，网络上其他 TCP 流可能在竞争中吃亏。</p>
+<p>KCP V2 引入了可插拔的拥塞控制接口 <code>IKCPOPS</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> IKCPOPS {</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *name;</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#D4D4D4">  (*init)(ikcpcb *kcp);</span></span>
+<span class="line"><span style="color:#569CD6">    void</span><span style="color:#D4D4D4"> (*release)(ikcpcb *kcp);</span></span>
+<span class="line"><span style="color:#569CD6">    void</span><span style="color:#D4D4D4"> (*on_ack)(ikcpcb *kcp, IUINT32 acked_segs, IUINT32 acked_bytes, IUINT32 prior_in_flight);</span></span>
+<span class="line"><span style="color:#569CD6">    void</span><span style="color:#D4D4D4"> (*on_fast_retransmit)(ikcpcb *kcp, IUINT32 fast_retrans, IUINT32 inflight, IUINT32 prior_cwnd);</span></span>
+<span class="line"><span style="color:#569CD6">    void</span><span style="color:#D4D4D4"> (*on_timeout)(ikcpcb *kcp, IUINT32 prior_cwnd);</span></span>
+<span class="line"><span style="color:#6A9955">    // ...</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p>通过 <code>ikcp_setcc</code> 可以替换整套流控算法，不需要修改协议本身。内置算法与自定义算法可在同一份 KCP 代码上切换。</p>
+<h2>适用边界与上层职责</h2>
+<p>KCP 已被多个用户规模上亿的项目采用：米哈游《原神》用 KCP 降低游戏消息传输耗时，SpatialOS 用它加速大型多人游戏服务端，网易 CC 和 BOBO 用它加速视频推流，kcptun 用它做 TCP over UDP 隧道加速。</p>
+<p>KCP 适合的场景特征：延迟敏感、能容忍适度带宽增加、数据包较小且频繁发送。不适合的场景：需要严格公平共享带宽、传输大文件追求最高吞吐量。</p>
+<p>工程上要明确两层职责边界：KCP 默认不加密，加密由上层处理；KCP 不负责握手和连接管理，会话建立和 <code>conv</code> 分配由上层协议完成。</p>
+<hr>
+<p>源码只有两个文件，阅读入口清晰：</p>
+<ul>
+<li><code>ikcp.h</code>：数据结构定义（<code>IKCPSEG</code>、<code>IKCPCB</code>、<code>IKCPOPS</code>）和全部 API 声明</li>
+<li><code>ikcp.c</code>：<code>ikcp_input</code> 解析输入包并驱动 ACK/重传逻辑，<code>ikcp_flush</code> 组装输出包并执行发送，<code>ikcp_update</code> 按间隔触发 flush</li>
+</ul>
+<p>本文核对的源码基线：<a href="https://github.com/skywind3000/kcp/commit/b1a7a2101dcbb96017681a500d6b82bbe5a88766">KCP commit b1a7a21</a></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=kcp-protocol');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>资源受限 MCU 长周期故障，用内存 Dump 定位并用故障注入验证 - CacheRivulet小记</title>
+  <meta name="description" content="资源受限MCU长周期故障，内存Dump定位+故障注入验证">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="可观测性">
+  <meta property="article:published_time" content="2026-06-29">
+  <meta property="og:title" content="资源受限 MCU 长周期故障，用内存 Dump 定位并用故障注入验证">
+  <meta property="og:description" content="资源受限MCU长周期故障，内存Dump定位+故障注入验证">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/memory-dump-context-debugging/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/memory-dump-context-debugging/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "资源受限 MCU 长周期故障，用内存 Dump 定位并用故障注入验证",
+  "description": "资源受限MCU长周期故障，内存Dump定位+故障注入验证",
+  "datePublished": "2026-06-29",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/memory-dump-context-debugging/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/memory-dump-context-debugging/"
+  },
+  "keywords": "嵌入式, MCU, 低功耗, 故障诊断, 工程调试, 可观测性"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">资源受限 MCU 长周期故障，用内存 Dump 定位并用故障注入验证</h1>
+  <article class="article-body">
+<h1>资源受限 MCU 长周期故障，用内存 Dump 定位并用故障注入验证</h1>
+<p><img src="/posts/memory-dump-context-debugging/dump-compare-demo.webp" alt="十六进制内存 Dump 对比假数据演示"></p>
+<p>低端 MCU 上，长周期、低概率、重启即恢复的状态类故障很难查：不能断点，也铺不开日志。</p>
+<p>方法是在关键位置把上下文按原始字节 dump 成十六进制，带上触发点（休眠前、唤醒后、异常现场）。字段解析和差异高亮放到 PC 侧做；对比正常快照与异常快照，变化的字段就是证据。截图是纯假数据，只演示 dump 可被解析，不对应真实业务。</p>
+<p>修复后别再靠长时间挂机验证：把异常 dump 回灌测试路径，看能否稳定复现原故障，以及修复后能否从同一状态恢复。验证的是恢复能力。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-29 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=memory-dump-context-debugging');
+  }
+  </script>
+</body>
+</html>

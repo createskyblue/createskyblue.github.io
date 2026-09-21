@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 340" width="940" height="340" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif">
+  <rect width="940" height="340" fill="#f8fafc"/>
+  <text x="20" y="26" font-size="17" fill="#1e293b" font-weight="bold">换档瞬间：MOSFET 米勒电容注入的尖峰</text>
+
+  <!-- 25 sample bars: old gear(low) -> spike -> new gear(mid) -->
+  <g>
+    <rect x="60"  y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="92"  y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="124" y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="156" y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="188" y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="220" y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="252" y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="284" y="267" width="22" height="23" fill="#3b82f6"/>
+    <rect x="316" y="95"  width="22" height="195" fill="#dc2626"/>
+    <rect x="348" y="72"  width="22" height="218" fill="#dc2626"/>
+    <rect x="380" y="106" width="22" height="184" fill="#dc2626"/>
+    <rect x="412" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="444" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="476" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="508" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="540" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="572" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="604" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="636" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="668" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="700" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="732" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="764" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="796" y="198" width="22" height="92" fill="#16a34a"/>
+    <rect x="828" y="198" width="22" height="92" fill="#16a34a"/>
+  </g>
+
+  <!-- axis and switch line -->
+  <line x1="50" y1="290" x2="870" y2="290" stroke="#1e293b" stroke-width="2"/>
+  <line x1="310" y1="40" x2="310" y2="290" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 4"/>
+
+  <!-- labels -->
+  <text x="170" y="318" font-size="14" fill="#2563eb" text-anchor="middle" font-weight="bold">旧档（通道 A）</text>
+  <text x="360" y="318" font-size="14" fill="#dc2626" text-anchor="middle" font-weight="bold">换档瞬态 · 米勒电容电荷注入</text>
+  <text x="620" y="318" font-size="14" fill="#16a34a" text-anchor="middle" font-weight="bold">新档（通道 B）</text>
+</svg>

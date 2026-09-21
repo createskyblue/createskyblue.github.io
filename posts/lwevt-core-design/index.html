@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>lwevt 核心实现：两次 include 生成事件类型，一次遍历完成广播 - CacheRivulet小记</title>
+  <meta name="description" content="lwevt 实现思想：X-macro 生成类型、广播遍历分发">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="Cortex-M">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:published_time" content="2026-08-22">
+  <meta property="og:title" content="lwevt 核心实现：两次 include 生成事件类型，一次遍历完成广播">
+  <meta property="og:description" content="lwevt 实现思想：X-macro 生成类型、广播遍历分发">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/lwevt-core-design/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/lwevt-core-design/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "lwevt 核心实现：两次 include 生成事件类型，一次遍历完成广播",
+  "description": "lwevt 实现思想：X-macro 生成类型、广播遍历分发",
+  "datePublished": "2026-08-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/lwevt-core-design/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/lwevt-core-design/"
+  },
+  "keywords": "嵌入式, MCU, C语言, Cortex-M, 系统设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">lwevt 核心实现：两次 include 生成事件类型，一次遍历完成广播</h1>
+  <article class="article-body">
+<h1>lwevt 核心实现：两次 include 生成事件类型，一次遍历完成广播</h1>
+<blockquote>
+<p><strong>声明：</strong> lwevt 是一个开源项目，作者为 <a href="https://github.com/MaJerle/lwevt">Tilen MAJERLE</a>。本文是阅读该项目源码和文档后整理的学习笔记，用于理解 X-macro 类型生成与广播分发在嵌入式事件系统里的实现方式。<strong>本文作者不是该项目的开发者，未参与该项目的任何代码贡献。</strong> 文中所有工程细节均来自对开源代码的分析，不代表本文作者的设计决策。</p>
+</blockquote>
+<p>项目仓库：<a href="https://github.com/MaJerle/lwevt" target="_blank" rel="noopener noreferrer">github.com/MaJerle/lwevt</a></p>
+<p>这篇文章讲 lwevt 源码里的三个实现思想：类型系统交给编译器生成、分发退化成一次数组遍历、状态只有三个静态变量。</p>
+<h2>核心思想</h2>
+<p>lwevt 把整个事件系统压到最小：170 B 代码加 48 B RAM。三个落点：</p>
+<ul>
+<li>类型用 X-macro 生成：声明一次，枚举和 union 同时出来</li>
+<li>分发用广播：所有监听器收所有事件，过滤下沉到监听器</li>
+<li>状态用全局单例：一个静态句柄、一个静态监听表、一个计数，无堆无锁</li>
+</ul>
+<h2>X-macro：两次 include 生成类型系统</h2>
+<p>X-macro 的核心技巧：宏在 include 之前重新定义，让同一个头文件在两次 include 时展开成不同内容。</p>
+<p><code>lwevt_type.h</code> 先给两个宏提供空默认值，再 include 用户的 <code>lwevt_types.h</code>，最后 undef：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#ifndef</span><span style="color:#569CD6"> LWEVT_TYPE_BASIC</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> LWEVT_TYPE_BASIC(</span><span style="color:#9CDCFE">name</span><span style="color:#569CD6">)</span></span>
+<span class="line"><span style="color:#C586C0">#endif</span></span>
+<span class="line"><span style="color:#C586C0">#ifndef</span><span style="color:#569CD6"> LWEVT_TYPE_EXT</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> LWEVT_TYPE_EXT(</span><span style="color:#9CDCFE">name</span><span style="color:#569CD6">, </span><span style="color:#9CDCFE">data</span><span style="color:#569CD6">)</span></span>
+<span class="line"><span style="color:#C586C0">#endif</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "lwevt_types.h"</span><span style="color:#6A9955">   /* 用户的事件声明 */</span></span>
+<span class="line"><span style="color:#C586C0">#undef</span><span style="color:#569CD6"> LWEVT_TYPE_BASIC</span></span>
+<span class="line"><span style="color:#C586C0">#undef</span><span style="color:#569CD6"> LWEVT_TYPE_EXT</span></span></code></pre><p><code>lwevt.h</code> 第一次 include 前把宏定义成生成枚举成员，第二次定义成生成 union 成员：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 第一次：枚举 */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> LWEVT_TYPE_BASIC(</span><span style="color:#9CDCFE">name</span><span style="color:#569CD6">)   name,</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> LWEVT_TYPE_EXT(</span><span style="color:#9CDCFE">name</span><span style="color:#569CD6">, </span><span style="color:#9CDCFE">data</span><span style="color:#569CD6">) name,</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "lwevt/lwevt_type.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 第二次：union */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> LWEVT_TYPE_EXT(</span><span style="color:#9CDCFE">name</span><span style="color:#569CD6">, </span><span style="color:#9CDCFE">data</span><span style="color:#569CD6">) data;</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "lwevt/lwevt_type.h"</span></span></code></pre><p>用户在 <code>lwevt_types.h</code> 里只写一行声明：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">LWEVT_TYPE_EXT</span><span style="color:#D4D4D4">(LWEVT_TYPE_TEMP_READY, </span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> { </span><span style="color:#569CD6">int16_t</span><span style="color:#D4D4D4"> temp_x10; } temp)</span></span></code></pre><p>编译后同时得到枚举成员 <code>LWEVT_TYPE_TEMP_READY</code> 和 union 成员 <code>temp</code>，类型与数据绑定，改一处两端生效。</p>
+<p><img src="/posts/lwevt-core-design/xmacro-expand.svg" alt="X-macro 展开过程"></p>
+<h2>广播分发：一次遍历调用全部监听器</h2>
+<p><code>lwevt_dispatch_ex</code> 只有两个动作：</p>
+<ol>
+<li><code>evt_handle-&gt;type = type</code></li>
+<li><code>for (idx = 0; idx &lt; evt_fncs_cnt; ++idx) evt_fncs[idx](evt_handle)</code></li>
+</ol>
+<p>没有话题过滤，没有匹配逻辑。每个监听器收到每个事件，自己用 switch 或 if 判断 type。数据零拷贝：事件数据就在句柄的 union 里，监听器直接读写。</p>
+<p><img src="/posts/lwevt-core-design/broadcast-loop.svg" alt="广播遍历"></p>
+<h2>注册去重与全局单例</h2>
+<ul>
+<li><code>lwevt_register</code> 先遍历现有监听表查重，同一个函数指针直接返回 0，避免重复注册后每个事件触发两次</li>
+<li>状态是三个 static：默认句柄 <code>evt</code>、监听表 <code>evt_fncs[8]</code>、计数 <code>evt_fncs_cnt</code>。<code>LWEVT_CFG_ENABLE_DEFAULT_HANDLE=0</code> 时去掉默认句柄，改用 <code>lwevt_dispatch_ex</code> 传自己的句柄，再省 12 B</li>
+<li>没有退订接口：数组只追加不删除，这是把接口压到最小的取舍</li>
+</ul>
+<h2>设计取舍与边界</h2>
+<ul>
+<li>广播换简单：遍历没有匹配开销，代价是每个监听器都要处理无关事件</li>
+<li>类型生成换手感：X-macro 让事件声明集中在一处，代价是读代码要先理解宏展开</li>
+<li>单例换零成本：无堆无锁，代价是只能有一套监听表、无法退订</li>
+<li>边界：dispatch 同步执行，在中断里调用时回调也在中断上下文运行</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=lwevt-core-design');
+  }
+  </script>
+</body>
+</html>

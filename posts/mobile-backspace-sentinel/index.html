@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用零宽哨兵字符捕获手机软键盘的连续删除 - CacheRivulet小记</title>
+  <meta name="description" content="零宽字符，实现移动网页端连续删除按钮检测">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="前端">
+  <meta property="article:tag" content="移动端输入法">
+  <meta property="article:tag" content="远程输入">
+  <meta property="article:tag" content="JavaScript">
+  <meta property="article:published_time" content="2026-06-20">
+  <meta property="og:title" content="用零宽哨兵字符捕获手机软键盘的连续删除">
+  <meta property="og:description" content="零宽字符，实现移动网页端连续删除按钮检测">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/mobile-backspace-sentinel/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/mobile-backspace-sentinel/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用零宽哨兵字符捕获手机软键盘的连续删除",
+  "description": "零宽字符，实现移动网页端连续删除按钮检测",
+  "datePublished": "2026-06-20",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/mobile-backspace-sentinel/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/mobile-backspace-sentinel/"
+  },
+  "keywords": "前端, 移动端输入法, 远程输入, JavaScript"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用零宽哨兵字符捕获手机软键盘的连续删除</h1>
+  <article class="article-body">
+<h1>用零宽哨兵字符捕获手机软键盘的连续删除</h1>
+<p>手机浏览器里的软键盘删除键和桌面物理键盘不同。网页可以稳定收到文本输入变化，却不能稳定知道“用户正在按住软键盘上的删除键”。在远程输入工具里，这会影响一个具体动作：手机输入框已经空了，用户长按删除，电脑端也应该连续收到 Backspace。</p>
+<p>问题的边界很清楚：</p>
+<ul>
+<li>软键盘由系统输入法接管，页面拿不到可靠的 <code>pointerdown</code> / <code>pointerup</code>。</li>
+<li><code>keydown</code> 在移动端输入法里不稳定，有的浏览器不会按桌面键盘方式连续派发。</li>
+<li><code>beforeinput</code> 能描述一次删除意图，但输入框为空时，很多输入法不会持续产生可观测的文本变化。</li>
+<li>电脑端需要接收一串 Backspace，手机输入框里的内部字符不能进入业务文本。</li>
+</ul>
+<p>解决点不在“检测按住状态”，而在让每一次删除都变成输入框内可观测的变化。</p>
+<h2>零宽哨兵字符</h2>
+<p>输入框逻辑为空时，内部放一个不可见字符：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> BACKSPACE_SENTINEL</span><span style="color:#D4D4D4"> = </span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\u200B</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">;</span></span></code></pre><p><code>\u200B</code> 是零宽空格。它占据一个文本位置，但用户看不到。页面把它当成内部哨兵字符，不把它当作真实输入内容。</p>
+<p>这样输入框在视觉上仍然是空的，浏览器和输入法看到的文本里还有一个最小字符。用户按删除键时，软键盘会删除这个字符，<code>input</code> 事件就有了可以观察的状态变化。</p>
+<h2>删除变成可观测事件</h2>
+<p>核心流程是：</p>
+<ol>
+<li>输入框逻辑内容为空时，保持 <code>\u200B</code> 存在。</li>
+<li><code>beforeinput</code> 记录删除前的逻辑文本。</li>
+<li><code>input</code> 事件里检查哨兵字符是否消失。</li>
+<li>如果删除前逻辑文本为空、删除后哨兵消失，就向电脑同步一次 Backspace。</li>
+<li>立即把哨兵字符补回输入框，并把光标放到末尾。</li>
+</ol>
+<p>只要手机输入法长按删除时会持续发起删除动作，每次动作都会删掉刚补回的哨兵字符。页面每次都能观察到“哨兵消失”，于是连续发送 Backspace。</p>
+<h2>逻辑文本必须过滤哨兵</h2>
+<p>哨兵字符进入了 <code>textarea.value</code>，所以所有业务路径都不能直接使用原始 <code>text.value</code>。</p>
+<p>需要统一封装逻辑文本：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">function</span><span style="color:#DCDCAA"> getComposerText</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#9CDCFE"> text</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">value</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">split</span><span style="color:#D4D4D4">(</span><span style="color:#4FC1FF">BACKSPACE_SENTINEL</span><span style="color:#D4D4D4">).</span><span style="color:#DCDCAA">join</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">""</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>发送文本、自动发送倒计时、历史覆盖判断、历史回填、累计字数，都应使用 <code>getComposerText()</code>。这样用户输入的正文不会带上零宽字符，发送历史也不会出现不可见脏数据。</p>
+<p>清空输入框时也要恢复到哨兵状态：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#9CDCFE">text</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">value</span><span style="color:#D4D4D4"> = </span><span style="color:#4FC1FF">BACKSPACE_SENTINEL</span><span style="color:#D4D4D4">;</span></span></code></pre><p>从用户角度看，输入框仍然为空；从浏览器角度看，它还有一个可以被删除的最小字符。</p>
+<h2>输入事件分工</h2>
+<p><code>beforeinput</code> 和 <code>input</code> 的职责不同。</p>
+<p><code>beforeinput</code> 适合记录动作发生前的状态：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#9CDCFE">text</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">addEventListener</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"beforeinput"</span><span style="color:#D4D4D4">, (</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">  composerTextBeforeInput</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">getComposerText</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#D4D4D4">});</span></span></code></pre><p><code>input</code> 适合判断删除后的结果：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">function</span><span style="color:#DCDCAA"> restoreBackspaceSentinelAfterDelete</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span></span>
+<span class="line"><span style="color:#9CDCFE">    event</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">inputType</span><span style="color:#D4D4D4"> === </span><span style="color:#CE9178">"deleteContentBackward"</span><span style="color:#D4D4D4"> &#x26;&#x26;</span></span>
+<span class="line"><span style="color:#9CDCFE">    composerTextBeforeInput</span><span style="color:#D4D4D4"> === </span><span style="color:#CE9178">""</span><span style="color:#D4D4D4"> &#x26;&#x26;</span></span>
+<span class="line"><span style="color:#D4D4D4">    !</span><span style="color:#9CDCFE">text</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">value</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">includes</span><span style="color:#D4D4D4">(</span><span style="color:#4FC1FF">BACKSPACE_SENTINEL</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">  ) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    syncBackspace</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#DCDCAA">  ensureBackspaceSentinel</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这里没有在 <code>beforeinput</code> 里阻止默认删除。让输入法真的删掉哨兵字符，页面才能在 <code>input</code> 后确认这次删除动作已经发生。随后补回哨兵，为下一次长按重复删除准备条件。</p>
+<h2>与 Backspace 去重配合</h2>
+<p>移动端浏览器可能同时触发 <code>beforeinput(deleteContentBackward)</code> 和 <code>keydown(Backspace)</code>。如果两边都同步 Backspace，一次删除会变成两次。</p>
+<p>因此现代浏览器优先走 <code>beforeinput</code> / <code>input</code> 路径，<code>keydown</code> 只作为不支持 <code>beforeinput</code> 的兜底：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> canUseBeforeInput</span><span style="color:#D4D4D4"> = </span><span style="color:#CE9178">"onbeforeinput"</span><span style="color:#569CD6"> in</span><span style="color:#9CDCFE"> text</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">text</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">addEventListener</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"keydown"</span><span style="color:#D4D4D4">, (</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">) </span><span style="color:#569CD6">=></span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">key</span><span style="color:#D4D4D4"> === </span><span style="color:#CE9178">"Backspace"</span><span style="color:#D4D4D4"> &#x26;&#x26; !</span><span style="color:#9CDCFE">canUseBeforeInput</span><span style="color:#D4D4D4"> &#x26;&#x26; </span><span style="color:#DCDCAA">getComposerText</span><span style="color:#D4D4D4">() === </span><span style="color:#CE9178">""</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    syncBackspace</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#D4D4D4">});</span></span></code></pre><p>这个边界很重要。哨兵字符解决“长按删除没有连续可观测变化”，事件去重解决“同一次删除被两条事件链重复同步”。</p>
+<h2>适用范围与限制</h2>
+<p>这个方法适合远程输入、虚拟键盘桥接、手机控制桌面输入等场景。它依赖普通文本框的删除行为，不需要输入法私有接口。</p>
+<p>它也有边界：</p>
+<ul>
+<li>输入法如果完全不重复发起删除动作，页面仍然无法凭空知道用户在长按。</li>
+<li>代码必须保证哨兵字符只存在于 UI 内部，不能进入提交、历史、统计和搜索。</li>
+<li>光标需要放在哨兵字符后面，否则删除动作可能不作用在哨兵上。</li>
+<li>组合输入、语音输入、历史回填等路径都要经过逻辑文本过滤。</li>
+</ul>
+<p>工程上的经验是：移动端软键盘的“按键状态”不可控，但文本变化可控。把不可观察的按住动作转化成可观察的字符删除，再把内部字符从业务数据里剥离，就能用浏览器标准事件完成连续删除同步。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-20 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=mobile-backspace-sentinel');
+  }
+  </script>
+</body>
+</html>

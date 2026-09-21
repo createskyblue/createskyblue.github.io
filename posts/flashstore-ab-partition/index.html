@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlashStore: A/B 双页 Flash 存储，面向小型 MCU。零依赖，28 bytes RAM。 - CacheRivulet小记</title>
+  <meta name="description" content="FlashStore: 极简 A/B 分区配置存储方案">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="flash">
+  <meta property="article:tag" content="flashdb">
+  <meta property="article:tag" content="littlefs">
+  <meta property="article:published_time" content="2026-07-31">
+  <meta property="og:title" content="FlashStore: A/B 双页 Flash 存储，面向小型 MCU。零依赖，28 bytes RAM。">
+  <meta property="og:description" content="FlashStore: 极简 A/B 分区配置存储方案">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/flashstore-ab-partition/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/flashstore-ab-partition/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "FlashStore: A/B 双页 Flash 存储，面向小型 MCU。零依赖，28 bytes RAM。",
+  "description": "FlashStore: 极简 A/B 分区配置存储方案",
+  "datePublished": "2026-07-31",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/flashstore-ab-partition/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/flashstore-ab-partition/"
+  },
+  "keywords": "嵌入式, flash, flashdb, littlefs"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">FlashStore: A/B 双页 Flash 存储，面向小型 MCU。零依赖，28 bytes RAM。</h1>
+  <article class="article-body">
+<h1>FlashStore A/B Partition</h1>
+<p>A/B 双页 Flash 存储，面向小型 MCU。零依赖，无状态。</p>
+<p><a href="https://github.com/createskyblue/flashstore-ab-partition">https://github.com/createskyblue/flashstore-ab-partition</a></p>
+<p><strong>选哪个？</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>FlashStore</th>
+<th>FlashDB</th>
+<th>LittleFS</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>定位</td>
+<td>单块配置可靠存储</td>
+<td>嵌入式键值数据库</td>
+<td>嵌入式文件系统</td>
+</tr>
+<tr>
+<td>数据模型</td>
+<td>整块二进制</td>
+<td>键值对</td>
+<td>文件</td>
+</tr>
+<tr>
+<td>读写方式</td>
+<td>Save/Load 整块</td>
+<td>Set/Get 按 key</td>
+<td>Open/Read/Write</td>
+</tr>
+<tr>
+<td>磨损均衡</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>掉电保护</td>
+<td>✅ 双页冗余</td>
+<td>✅ 事务日志</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>适用</td>
+<td>配置参数，低频更新</td>
+<td>多配置项独立读写</td>
+<td>文件、日志、大块数据</td>
+</tr>
+</tbody></table>
+<h2>资源占用（Cortex-M0 -Os 实测）</h2>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>Flash</th>
+<th>静态 RAM</th>
+<th>栈</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>flash_store</td>
+<td>500 bytes</td>
+<td>0</td>
+<td>~20 bytes</td>
+</tr>
+<tr>
+<td>chacha20（可选）</td>
+<td>700 bytes</td>
+<td>0</td>
+<td>~200 bytes</td>
+</tr>
+<tr>
+<td>xxtea（可选）</td>
+<td>737 bytes</td>
+<td>0</td>
+<td>~0</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>flash_store 明细：Load 158B / load_page 108B / save_page 100B / Save 66B / CRC32 52B / MaxDataSize 16B。按需链接，不用就不占。</p>
+</blockquote>
+<h2>5 分钟接入</h2>
+<ol>
+<li>复制 <code>include/flash_store.h</code>、<code>src/flash_store.c</code>。需要加密再加 <code>chacha20</code> 或 <code>xxtea</code></li>
+<li>实现 3 个回调：</li>
+</ol>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">bool</span><span style="color:#DCDCAA"> my_read</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> addr</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">out</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    memcpy</span><span style="color:#D4D4D4">(out, (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *)(</span><span style="color:#569CD6">uintptr_t</span><span style="color:#D4D4D4">)addr, len);</span><span style="color:#6A9955">  // 或 HAL 读</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#569CD6"> true</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#569CD6">bool</span><span style="color:#DCDCAA"> my_erase</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> addr</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_FLASH_ErasePage</span><span style="color:#D4D4D4">(addr);</span><span style="color:#6A9955">                  // 整页擦除</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#569CD6"> true</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#569CD6">bool</span><span style="color:#DCDCAA"> my_program</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint32_t</span><span style="color:#9CDCFE"> addr</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">    // 按 word 编程，或 memcpy（支持字节寻址的 flash）</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#569CD6"> true</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><ol start="3">
+<li>初始化并读写：</li>
+</ol>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">FlashStore_IO io = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    .read = my_read, .erase = my_erase, .program = my_program,</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#D4D4D4">FlashStore_Config cfg = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    .io = &#x26;io, .page_a_address = </span><span style="color:#B5CEA8">0x0800FE00</span><span style="color:#D4D4D4">, .page_b_address = </span><span style="color:#B5CEA8">0x0800FE80</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    .page_size = </span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#DCDCAA">FlashStore_Save</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">cfg</span><span style="color:#D4D4D4">, data, len);</span><span style="color:#6A9955">   // 写</span></span>
+<span class="line"><span style="color:#DCDCAA">FlashStore_Load</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">cfg</span><span style="color:#D4D4D4">, data, len);</span><span style="color:#6A9955">   // 读</span></span></code></pre><blockquote>
+<p>需要加密？推荐 <a href="/posts/flashstore-ab-partition/src/chacha20.c" target="_blank" rel="noopener noreferrer">ChaCha20</a>——RFC 8439 标准，流密码不分块不要求对齐。实测 Cortex-M0 -Os：700B Flash + ~200B 栈，0 静态 RAM。极致省资源用 <a href="/posts/flashstore-ab-partition/src/xxtea.c" target="_blank" rel="noopener noreferrer">XXTEA</a>，仅混淆级别，要求 4 字节对齐且 ≥8 字节。加密在外部做：<code>encrypt → FlashStore_Save</code> / <code>FlashStore_Load → decrypt</code>。</p>
+</blockquote>
+<h2>为什么不会丢数据</h2>
+<p><strong>A 写完才写 B。</strong> 任意时刻断电，至少一份完整数据在 flash 上。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Save:  A 先 → B 后     Load: 读两页 → CRC 验 → 返回好的 → 顺手修坏的</span></span></code></pre><table>
+<thead>
+<tr>
+<th>断电在…</th>
+<th>A</th>
+<th>B</th>
+<th>Load 结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>空闲</td>
+<td>v2</td>
+<td>v2</td>
+<td>返回 v2</td>
+</tr>
+<tr>
+<td>写 A 中途</td>
+<td>坏</td>
+<td>v1</td>
+<td>返回 v1，修 A</td>
+</tr>
+<tr>
+<td>A 完成，B 前</td>
+<td>v2 (CRC=c2)</td>
+<td>v1 (CRC=c1)</td>
+<td>CRC 不同→A 新→返回 v2，修 B</td>
+</tr>
+<tr>
+<td>写 B 中途</td>
+<td>v2</td>
+<td>坏</td>
+<td>返回 v2，下次修 B</td>
+</tr>
+<tr>
+<td>两页都坏</td>
+<td>坏</td>
+<td>坏</td>
+<td><code>ERROR_NO_VALID_DATA</code></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><code>WARN_REPAIR_FAILED</code>？修复时 erase/program 失败，正常不会发生——收到应检查硬件。</p>
+</blockquote>
+<h2>Header 结构</h2>
+<p>每页 12 字节 header + payload：</p>
+<table>
+<thead>
+<tr>
+<th>偏移</th>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>magic (4B)</td>
+<td><code>0x46534142</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>length (4B)</td>
+<td>payload 大小</td>
+</tr>
+<tr>
+<td>8</td>
+<td>crc32 (4B)</td>
+<td>payload CRC32</td>
+</tr>
+</tbody></table>
+<h2>状态码</h2>
+<table>
+<thead>
+<tr>
+<th>返回值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>OK</code></td>
+<td>正常</td>
+</tr>
+<tr>
+<td><code>ERROR_ARGUMENT</code></td>
+<td>参数错误</td>
+</tr>
+<tr>
+<td><code>ERROR_WRITE</code></td>
+<td>擦除或编程失败</td>
+</tr>
+<tr>
+<td><code>ERROR_NO_VALID_DATA</code></td>
+<td>两页都坏了</td>
+</tr>
+<tr>
+<td><code>WARN_REPAIR_FAILED</code></td>
+<td>数据正确但冗余修复失败</td>
+</tr>
+</tbody></table>
+<h2>测试</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">cmake</span><span style="color:#569CD6"> -S</span><span style="color:#CE9178"> .</span><span style="color:#569CD6"> -B</span><span style="color:#CE9178"> build</span><span style="color:#D4D4D4"> &#x26;&#x26; </span><span style="color:#DCDCAA">cmake</span><span style="color:#569CD6"> --build</span><span style="color:#CE9178"> build</span><span style="color:#D4D4D4"> &#x26;&#x26; </span><span style="color:#DCDCAA">./build/flash_store_tests.exe</span></span></code></pre><p>10 个测试覆盖：正常读写、A 坏回退 B、B 坏从 A 修、A 写失败保 B、CRC 裁决新旧、双页全坏、MaxDataSize、Save/Load 参数校验、ConfigCheck、修复失败告警。</p>
+<h2>License</h2>
+<p><a href="LICENSE">MIT</a></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-31 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=flashstore-ab-partition');
+  }
+  </script>
+</body>
+</html>

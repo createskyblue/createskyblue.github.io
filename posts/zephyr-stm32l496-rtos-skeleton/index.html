@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自制 STM32L496 板移植 Zephyr 要先搭好最小工程 - CacheRivulet小记</title>
+  <meta name="description" content="Zephyr在STM32L496上搭RTOS最小工程">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Zephyr">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="STM32L496">
+  <meta property="article:tag" content="RTOS">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:published_time" content="2026-05-20">
+  <meta property="og:title" content="自制 STM32L496 板移植 Zephyr 要先搭好最小工程">
+  <meta property="og:description" content="Zephyr在STM32L496上搭RTOS最小工程">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/zephyr-stm32l496-rtos-skeleton/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/zephyr-stm32l496-rtos-skeleton/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "自制 STM32L496 板移植 Zephyr 要先搭好最小工程",
+  "description": "Zephyr在STM32L496上搭RTOS最小工程",
+  "datePublished": "2026-05-20",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/zephyr-stm32l496-rtos-skeleton/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/zephyr-stm32l496-rtos-skeleton/"
+  },
+  "keywords": "Zephyr, STM32, STM32L496, RTOS, 嵌入式"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">自制 STM32L496 板移植 Zephyr 要先搭好最小工程</h1>
+  <article class="article-body">
+<h1>自制 STM32L496 板移植 Zephyr 要先搭好最小工程</h1>
+<p>这次 demo 的目标很小：在一块自制 STM32L496RGT6 最小系统板上，把 Zephyr 从环境安装、工程创建、设备树适配、编译、烧录、串口验证完整跑通。</p>
+<p>完整仓库：</p>
+<p><a href="https://github.com/createskyblue/stm32l496-zephyr-rtos-skeleton">https://github.com/createskyblue/stm32l496-zephyr-rtos-skeleton</a></p>
+<h2>为什么要做这个 demo</h2>
+<p>STM32 裸机点灯只需要 GPIO 初始化和一个循环。Zephyr 的收益出现在工程结构上：硬件信息集中到 devicetree，功能裁剪集中到 Kconfig，应用逻辑拆成线程、消息队列、定时器和工作队列。</p>
+<p>这个 demo 保留最小硬件目标，同时加入几个能直接观察的 RTOS 对象：</p>
+<ul>
+<li>LED 线程：500 ms 周期翻转 PC13。</li>
+<li>ADC 线程：周期采样 PA2 / ADC1_IN7。</li>
+<li>I2C 扫描：由 <code>k_timer</code> 周期触发，再交给 <code>k_work</code> 执行。</li>
+<li>消息队列：LED、ADC、I2C 把事件投递到 <code>k_msgq</code>。</li>
+<li>logger 线程：统一从消息队列取事件，通过 UART 打印。</li>
+</ul>
+<p>运行时结构：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>LED线程 ─┐</span></span>
+<span class="line"><span>ADC线程 ─┼─> k_msgq ─> logger线程 ─> USART1</span></span>
+<span class="line"><span>I2C工作 ─┘</span></span>
+<span class="line"><span>   ↑</span></span>
+<span class="line"><span>k_timer</span></span></code></pre><p>这个结构的好处很直接：新增传感器、通信任务或状态机时，可以新增线程或 work item，再把结果投递给统一事件通道，主入口保持简单。</p>
+<h2>第一次使用过程</h2>
+<p>Windows 原生环境先准备基础工具：</p>
+<pre><code>winget install Kitware.CMake Ninja-build.Ninja Python.Python.3.12 Git.Git oss-winget.dtc 7zip.7zip</code></pre><p>Zephyr 工作用独立目录：</p>
+<pre><code>mkdir C:\zephyr
+cd C:\zephyr
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install west</code></pre><p>第一次容易直接执行完整 <code>west update</code>。实际体验是下载量和等待时间都很大。这个 demo 只面向 STM32L496 最小 bring-up，最后采用了较小的依赖范围：Zephyr 主仓库、<code>hal_stm32</code>、CMSIS 相关模块，以及 Zephyr SDK 的 <code>arm-zephyr-eabi</code> 和 host tools。</p>
+<p>安装完成后需要记住一点：<code>west</code> 在虚拟环境里。普通 PowerShell 直接输入 <code>west</code> 可能找不到命令，需要先激活 venv，或直接使用：</p>
+<pre><code>C:\zephyr\.venv\Scripts\west.exe</code></pre><h2>硬件确认</h2>
+<p>自制板不能直接套官方 Nucleo 或 Discovery 的 board 文件烧录。先从网表确认最小连接：</p>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>配置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MCU</td>
+<td>STM32L496RGT6</td>
+</tr>
+<tr>
+<td>LED</td>
+<td>PC13，低电平点亮</td>
+</tr>
+<tr>
+<td>UART console</td>
+<td>USART1，PA9/PA10，115200 8N1</td>
+</tr>
+<tr>
+<td>ADC</td>
+<td>PA2 / ADC1_IN7</td>
+</tr>
+<tr>
+<td>I2C</td>
+<td>PB8/PB9</td>
+</tr>
+<tr>
+<td>下载</td>
+<td>ST-LINK，SWD</td>
+</tr>
+<tr>
+<td>Flash</td>
+<td>1 MB</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>320 KB total</td>
+</tr>
+</tbody></table>
+<p>首次 board 配置使用 HSI + PLL，暂时不依赖外部 HSE/LSE。这样可以减少首次 bring-up 的排查变量。</p>
+<h2>设备树怎么写</h2>
+<p>自定义 board 放在应用仓库内部：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>boards/arm/my_stm32l496_board/</span></span></code></pre><p>应用 <code>CMakeLists.txt</code> 设置：</p>
+<pre><code>set(BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR})</code></pre><p>这样仓库移动到其它目录后，自定义 board 仍然能被 Zephyr 找到。</p>
+<p>设备树里描述 LED、ADC 和 I2C：</p>
+<pre><code>/ {
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		user_led: led_0 {
+			gpios = <&gpioc 13 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	zephyr,user {
+		io-channels = <&adc1 7>;
+	};
+
+	aliases {
+		led0 = &user_led;
+	};
+};
+
+&usart1 {
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&adc1 {
+	pinctrl-0 = <&adc1_in7_pa2>;
+	st,adc-clock-source = "SYNC";
+	st,adc-prescaler = <4>;
+	status = "okay";
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_scl_pb8 &i2c1_sda_pb9>;
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+};</code></pre><p><code>prj.conf</code> 打开最小驱动：</p>
+<pre><code>CONFIG_GPIO=y
+CONFIG_SERIAL=y
+CONFIG_CONSOLE=y
+CONFIG_UART_CONSOLE=y
+CONFIG_ADC=y
+CONFIG_I2C=y
+CONFIG_THREAD_NAME=y</code></pre><h2>应用代码的最小形状</h2>
+<p>应用入口只负责初始化和启动模块：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">	app_led_init</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">	app_adc_init</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">	app_i2c_scan_init</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">	app_logger_start</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">	app_led_start</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">	app_adc_start</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">	app_i2c_scan_start</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">	return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>模块之间不直接打印，统一投递事件：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> app_event {</span></span>
+<span class="line"><span style="color:#569CD6">	enum</span><span style="color:#D4D4D4"> app_event_type type;</span></span>
+<span class="line"><span style="color:#569CD6">	uint32_t</span><span style="color:#D4D4D4"> source;</span></span>
+<span class="line"><span style="color:#569CD6">	int32_t</span><span style="color:#D4D4D4"> value0;</span></span>
+<span class="line"><span style="color:#569CD6">	int32_t</span><span style="color:#D4D4D4"> value1;</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">K_MSGQ_DEFINE</span><span style="color:#D4D4D4">(app_msgq, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> app_event), </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> app_event_publish</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> app_event *</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#D4D4D4">	(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span><span style="color:#DCDCAA">k_msgq_put</span><span style="color:#D4D4D4">(&#x26;app_msgq, event, K_NO_WAIT);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>LED 线程只处理 LED：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> led_thread</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg0</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg1</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg2</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">	uint32_t</span><span style="color:#D4D4D4"> counter = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">	while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">		gpio_pin_toggle_dt</span><span style="color:#D4D4D4">(&#x26;led);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">		const</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> app_event event = {</span></span>
+<span class="line"><span style="color:#D4D4D4">			.type = APP_EVENT_LED,</span></span>
+<span class="line"><span style="color:#D4D4D4">			.value0 = counter++,</span></span>
+<span class="line"><span style="color:#D4D4D4">		};</span></span>
+<span class="line"><span style="color:#DCDCAA">		app_event_publish</span><span style="color:#D4D4D4">(&#x26;event);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">		k_msleep</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">500</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">	}</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>logger 线程只处理输出：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> logger_thread</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg0</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg1</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg2</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">	while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">		struct</span><span style="color:#D4D4D4"> app_event event;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">		app_event_wait</span><span style="color:#D4D4D4">(&#x26;event);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">		if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">type</span><span style="color:#D4D4D4"> == APP_EVENT_LED) {</span></span>
+<span class="line"><span style="color:#DCDCAA">			printk</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"[logger] blink counter = </span><span style="color:#9CDCFE">%u</span><span style="color:#D7BA7D">\r\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">event</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">value0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">		}</span></span>
+<span class="line"><span style="color:#D4D4D4">	}</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>I2C 扫描由 timer 触发 work：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> i2c_scan_timer_handler</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> k_timer *</span><span style="color:#9CDCFE">timer</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#D4D4D4">	(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span><span style="color:#DCDCAA">k_work_submit</span><span style="color:#D4D4D4">(&#x26;i2c_scan_work);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这几段代码能说明 Zephyr 的应用形态：外设驱动负责硬件操作，线程负责周期任务，消息队列负责模块解耦，work queue 负责延后执行较慢操作。</p>
+<h2>构建、烧录和串口验证</h2>
+<p>构建：</p>
+<pre><code>cd C:\zephyr
+.\.venv\Scripts\Activate.ps1
+$env:ZEPHYR_BASE = "C:\zephyr\zephyrproject\zephyr"
+
+cd C:\zephyr\stm32l496-demo
+west build -p always -b my_stm32l496_board .</code></pre><p>烧录：</p>
+<pre><code>west flash</code></pre><p>实测 ST-LINK 输出：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Device name : STM32L496xx/STM32L4A6xx</span></span>
+<span class="line"><span>Flash size  : 1 MBytes</span></span>
+<span class="line"><span>Application is running</span></span></code></pre><p>串口输出在 ST-LINK Virtual COM Port 上验证：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>[logger] blink counter = 237</span></span>
+<span class="line"><span>[logger] ADC PA2/ADC1_IN7 raw = 202, 162 mV</span></span>
+<span class="line"><span>[logger] I2C scan done, found 0 device(s)</span></span></code></pre><h2>VS Code CMake Tools 踩坑</h2>
+<p>直接用 VS Code CMake Tools 配置 Zephyr 工程时，需要显式指定 board：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>-DBOARD=my_stm32l496_board</span></span></code></pre><p>缺少该参数会报：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>BOARD is not being defined</span></span></code></pre><p>CMake 还需要使用 Zephyr venv 里的 Python。否则 Zephyr 脚本可能找不到依赖：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>ModuleNotFoundError: No module named 'jsonschema'</span></span></code></pre><p>可用配置：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "cmake.configureArgs"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#CE9178">    "-DBOARD=my_stm32l496_board"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">    "-DZEPHYR_TOOLCHAIN_VARIANT=zephyr"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">    "-DPython3_EXECUTABLE=C:/zephyr/.venv/Scripts/python.exe"</span></span>
+<span class="line"><span style="color:#D4D4D4">  ],</span></span>
+<span class="line"><span style="color:#9CDCFE">  "cmake.buildDirectory"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"${workspaceFolder}/build"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "cmake.generator"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"Ninja"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "cmake.configureEnvironment"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">    "ZEPHYR_BASE"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"C:/zephyr/zephyrproject/zephyr"</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>配置变更后执行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>CMake: Delete Cache and Reconfigure</span></span></code></pre><h2>结论</h2>
+<ul>
+<li>自制 STM32 板先确认网表，再写自定义 board。</li>
+<li>devicetree 负责硬件描述，<code>prj.conf</code> 负责功能裁剪。</li>
+<li>最小 RTOS demo 应包含线程、消息队列、定时器和工作队列。</li>
+<li>首次 bring-up 按 build、flash、serial 的顺序排查。</li>
+<li>VS Code 需要显式配置 board 和 Zephyr Python。</li>
+</ul>
+<p>完整示例仓库：</p>
+<p><a href="https://github.com/createskyblue/stm32l496-zephyr-rtos-skeleton">https://github.com/createskyblue/stm32l496-zephyr-rtos-skeleton</a></p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-20 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=zephyr-stm32l496-rtos-skeleton');
+  }
+  </script>
+</body>
+</html>

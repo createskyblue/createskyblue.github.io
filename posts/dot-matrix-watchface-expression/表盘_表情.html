@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=286, height=482, initial-scale=1.0, user-scalable=no">
+<title>手环表盘 · 压力表情</title>
+<style>
+  :root{
+    --on:#2eff2e;            /* 绿 */
+    --y:#ffd800;             /* 黄（表情） */
+    --bg:#070b06;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  body{ min-height:100vh; display:flex; align-items:center; justify-content:center; background:transparent; }
+
+  .watchface{
+    width:286px; height:482px; position:relative; overflow:hidden; border-radius:48px;
+    background:var(--bg); border:1px solid #0a120c;
+  }
+
+  .stack{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:flex-end; padding-bottom:56px; gap:26px;
+  }
+
+  /* ===== 点阵数字（绿） ===== */
+  .digit{ display:grid; grid-template-columns:repeat(5,var(--dot)); grid-auto-rows:var(--dot); gap:var(--gap); }
+  .px{ width:var(--dot); height:var(--dot); border-radius:50%; }
+  .px.on{ background:var(--on); }
+  .px.off{ background:#0b1d10; }
+  .colon{ display:flex; flex-direction:column; justify-content:center; gap:calc(var(--gap) + 4px); margin:0 2px; }
+  .colon i{ width:var(--dot); height:var(--dot); border-radius:50%; background:var(--on); }
+
+  /* ===== 压力表情（黄色，14x14 点阵） ===== */
+  .expr{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .pgrid{
+    display:grid;
+    grid-template-columns:repeat(14, var(--pdot));
+    gap:var(--pgap);
+    --pdot:8px;
+    --pgap:1px;
+  }
+  .ppx{ width:var(--pdot); height:var(--pdot); border-radius:50%; }
+  .ppx.on{ background:var(--y); }
+  .ppx.off{ background:#3a2c09; }
+
+  /* ===== 时间 / 日期 / 星期（绿，左对齐） ===== */
+  .time{ display:flex; align-items:center; justify-content:flex-start; gap:5px; --dot:6px; --gap:1px; }
+  .date{ display:flex; align-items:center; justify-content:flex-start; gap:5px; padding-left:18px; --dot:6px; --gap:1px; }
+  .wrow{ display:flex; justify-content:center; gap:4px; }
+  .wd{ width:34px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:#0b1d10; border:1px solid #0b1d10; }
+  .wd .n{ font-family:"Microsoft YaHei","PingFang SC",sans-serif; font-size:19px; font-weight:700; color:#0a1710; }
+  .wd.on{ background:var(--on); border-color:var(--on); }
+  .wd.on .n{ color:var(--bg); }
+</style>
+</head>
+<body>
+  <div class="watchface">
+    <div class="stack">
+      <!-- 压力表情（黄，循环切换） -->
+      <div class="expr">
+        <div class="pgrid" id="pgrid"></div>
+      </div>
+      <!-- 时间 -->
+      <div class="time" id="time"></div>
+      <!-- 日期 -->
+      <div class="date" id="date"></div>
+      <!-- 星期 -->
+      <div class="wrow" id="wrow"></div>
+    </div>
+  </div>
+
+<script>
+  const FONT = {
+    "0":["01110","10001","10001","10001","10001","10001","01110"],
+    "1":["00100","01100","00100","00100","00100","00100","01110"],
+    "2":["01110","10001","00001","00010","00100","01000","11111"],
+    "3":["11111","00010","00100","00010","00001","10001","01110"],
+    "4":["00010","00110","01010","10010","11111","00010","00010"],
+    "5":["11111","10000","11110","00001","00001","10001","01110"],
+    "6":["00110","01000","10000","11110","10001","10001","01110"],
+    "7":["11111","00001","00010","00100","01000","01000","01000"],
+    "8":["01110","10001","10001","01110","10001","10001","01110"],
+    "9":["01110","10001","10001","01111","00001","00010","01100"],
+    "/":["00000","00000","00000","01110","00000","00000","00000"]
+  };
+  const DAYCN = ['一','二','三','四','五','六','日'];
+
+  // 压力表情：放松 / 正常 / 中等 / 偏高 / 高 （每张 14x14）
+  const PRESS = [
+    { label:'放松', map:[
+      "00000000000000","00000000000000","01110000001110","11111000011111","11111000011111","11111000011111","11000000000011","00000000000000","00000000000000","00010011001000","00001100110000","00000000000000","00000000000000","00000000000000"]},
+    { label:'正常', map:[
+      "00000000000000","00000000000000","00011000011000","00011000011000","00011000011000","00011000011000","00011000011000","00000000000000","00000000000000","01111111111110","01111111111110","00111111111100","00001111110000","00000000000000"]},
+    { label:'中等', map:[
+      "00000000000000","00000000000000","00011000011000","00011000011000","00011000011000","00011000011000","00011000011000","00000000000000","00000000000000","01100000000110","01110000001110","00111111111100","00001111110000","00000000000000"]},
+    { label:'偏高', map:[
+      "00000000000000","00011000000000","00011000001100","00011000001100","00011000001100","00011000001100","00011000001100","00000000001100","00000000000000","00001111110000","00011111111100","00011000001110","00000000000000","00000000000000"]},
+    { label:'高', map:[
+      "00000000000000","00000000000000","00011000011000","00011000011000","00011000011000","00011000011000","00011000011000","00000000000000","00000000000000","00001111110000","00111111111100","01110000001110","01100000000110","00000000000000"]},
+    { label:'未知', map:[
+      "00000001100000","00000111111000","00011110011100","00011000001100","00000000011100","00000001110000","00000011100000","00000011000000","00000011000000","00000011000000","00000000000000","00000011000000","00000011000000","00000000000000"]}
+  ];
+
+  function digitHTML(ch){
+    const rows=FONT[ch]; let cells='';
+    for(let r=0;r<7;r++){ const row=rows?rows[r]:'00000';
+      for(let c=0;c<5;c++){ cells+='<span class="px '+(row[c]==='1'?'on':'off')+'"></span>'; } }
+    return '<span class="digit">'+cells+'</span>';
+  }
+  function setNum(elm,str){ let h=''; for(const ch of str) h+=digitHTML(ch); elm.innerHTML=h; }
+  function colonHTML(){ return '<span class="colon"><i></i><i></i></span>'; }
+  function pad(n){ return n<10?'0'+n:''+n; }
+
+  function renderWeek(idx){
+    let h='';
+    for(let i=0;i<7;i++){ const on=(i===idx); h+='<div class="wd'+(on?' on':'')+'"><span class="n">'+DAYCN[i]+'</span></div>'; }
+    document.getElementById('wrow').innerHTML=h;
+  }
+
+  let pIdx=0;
+  function renderPress(){
+    const m=PRESS[pIdx].map;
+    let cells='';
+    for(let r=0;r<14;r++){
+      const row=m[r]||'00000000000000';
+      for(let c=0;c<14;c++){ cells+='<span class="ppx '+(row[c]==='1'?'on':'off')+'"></span>'; }
+    }
+    document.getElementById('pgrid').innerHTML=cells;
+  }
+
+  function render(){
+    const d=new Date();
+    const dow=d.getDay();
+    const idx=(dow+6)%7;
+    renderWeek(idx);
+    setNum(document.getElementById('date'), pad(d.getMonth()+1)+'/'+pad(d.getDate()));
+    const t=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+    let tm=''; for(const ch of t) tm+=(ch===':')?colonHTML():digitHTML(ch);
+    document.getElementById('time').innerHTML=tm;
+  }
+
+  render();
+  setInterval(render,1000);
+  renderPress();
+  setInterval(()=>{ pIdx=(pIdx+1)%PRESS.length; renderPress(); }, 1500);
+</script>
+</body>
+</html>

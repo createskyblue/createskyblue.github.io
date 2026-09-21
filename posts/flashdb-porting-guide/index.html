@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlashDB 嵌入式数据库从移植到上手：KVDB/TSDB 双模式基础操作指南 - CacheRivulet小记</title>
+  <meta name="description" content="FlashDB 移植与基础操作，嵌入式 Flash 磨损平衡与掉电保护实战">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="FlashDB">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="数据库">
+  <meta property="article:tag" content="KVDB">
+  <meta property="article:tag" content="TSDB">
+  <meta property="article:tag" content="Flash存储">
+  <meta property="article:tag" content="FAL">
+  <meta property="article:published_time" content="2026-06-17">
+  <meta property="og:title" content="FlashDB 嵌入式数据库从移植到上手：KVDB/TSDB 双模式基础操作指南">
+  <meta property="og:description" content="FlashDB 移植与基础操作，嵌入式 Flash 磨损平衡与掉电保护实战">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/flashdb-porting-guide/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/flashdb-porting-guide/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "FlashDB 嵌入式数据库从移植到上手：KVDB/TSDB 双模式基础操作指南",
+  "description": "FlashDB 移植与基础操作，嵌入式 Flash 磨损平衡与掉电保护实战",
+  "datePublished": "2026-06-17",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/flashdb-porting-guide/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/flashdb-porting-guide/"
+  },
+  "keywords": "FlashDB, 嵌入式, 数据库, KVDB, TSDB, Flash存储, FAL"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">FlashDB 嵌入式数据库从移植到上手：KVDB/TSDB 双模式基础操作指南</h1>
+  <article class="article-body">
+<h1>FlashDB 嵌入式数据库从移植到上手：KVDB/TSDB 双模式基础操作指南</h1>
+<h2>简介</h2>
+<p><a href="https://github.com/armink/FlashDB">FlashDB</a> 是 armink 开源的一款超轻量级嵌入式数据库，专为嵌入式产品的数据存储场景设计。它不像传统数据库依赖文件系统，而是直接结合 Flash 存储特性，在保证极低资源占用的前提下，提供高性能、高可靠的数据存储。</p>
+<p>FlashDB 提供两种数据库模式：</p>
+<ul>
+<li><strong>KVDB（键值数据库）</strong>：非关系型数据库，数据以 Key-Value 键值对存储，操作简洁、扩展性强。适用于产品参数存储、用户配置信息管理、小文件管理等场景。</li>
+<li><strong>TSDB（时序数据库）</strong>：数据按时间顺序存储，支持大量数据的高速插入与查询。适用于传感器采集数据记录、设备运行日志存储、异常告警记录等场景。</li>
+</ul>
+<h2>核心特性</h2>
+<p>FlashDB 在设计上针对嵌入式 Flash 的特点做了深度优化：</p>
+<p><strong>资源占用极低</strong>。在 STM32F4 平台下，IAR 编译器编译后整个库仅占用约 7KB ROM，RAM 占用几乎为零。内部使用静态分配内存，不使用 malloc。</p>
+<p><strong>磨损平衡</strong>。Flash 的擦写次数有限，FlashDB 通过扇区轮转写入机制让擦写操作均匀分布在整个分区上，避免热点扇区过早失效。</p>
+<p><strong>掉电保护</strong>。写入机制类比 OTA 的 AB 分区：新数据写到扇区空白区域，旧数据原地不动。写完后用一次 Flash 编程脉冲把一个 bit 从 <code>1</code> 翻成 <code>0</code>，这一个 bit 就是提交信号。NOR Flash 的物理规则是擦除后全为 <code>1</code>，编程只能把 <code>1</code> 变 <code>0</code>，且单个 bit 的翻转是硬件保证的最小原子操作——要么打上去，要么没打，不存在&quot;翻了一半&quot;。于是只有两种结果：bit 还是 <code>1</code>（没提交，等效于没写过），bit 已经 <code>0</code>（提交成功），没有中间态。断电发生在翻转前——旧数据完好；发生在翻转后——新数据生效。</p>
+<p><strong>多分区、多实例</strong>。一个系统中可以同时存在多个 KVDB 或 TSDB 实例，各自坐落在不同的 Flash 分区上。当数据量大时，可按业务细分到不同分区以降低检索时间。</p>
+<p><strong>增量升级</strong>。启用 <code>FDB_KV_AUTO_UPDATE</code> 后，固件升级时 KVDB 能自动将新的默认 KV 集合合并到已有数据库中，无需手动迁移。</p>
+<p><strong>两种 KV 类型</strong>。支持字符串（string）和二进制（blob）两种值类型，blob 可兼容任意结构体数据。</p>
+<h2>快速上手：在 Linux 上运行 Demo</h2>
+<p>FlashDB 项目自带一个 Linux 平台的 demo，不依赖硬件，可以直接在 PC 上体验。demo 位于 <code>demos/linux</code> 目录下。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955"># 克隆项目</span></span>
+<span class="line"><span style="color:#DCDCAA">git</span><span style="color:#CE9178"> clone</span><span style="color:#CE9178"> https://github.com/armink/FlashDB.git</span></span>
+<span class="line"><span style="color:#DCDCAA">cd</span><span style="color:#CE9178"> FlashDB/demos/linux</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 编译</span></span>
+<span class="line"><span style="color:#DCDCAA">make</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 多次运行查看效果</span></span>
+<span class="line"><span style="color:#DCDCAA">cd</span><span style="color:#CE9178"> out</span></span>
+<span class="line"><span style="color:#DCDCAA">./FlashDBLinuxDemo</span></span>
+<span class="line"><span style="color:#DCDCAA">./FlashDBLinuxDemo</span></span></code></pre><p>每次运行时，demo 会执行 KVDB 和 TSDB 的基本操作并输出日志。第二次运行时可以看到 KVDB 中之前写入的 <code>boot_count</code> 值已被持久化保留。</p>
+<h2>配置文件说明</h2>
+<p>使用 FlashDB 前，需要在项目中创建 <code>fdb_cfg.h</code> 配置文件。项目提供了模板文件 <code>inc/fdb_cfg_template.h</code>，把它复制并重命名后按需修改即可。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#ifndef</span><span style="color:#569CD6"> _FDB_CFG_H_</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> _FDB_CFG_H_</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 启用 KVDB 功能 */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FDB_USING_KVDB</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 可选：启用 KV 增量升级 */</span></span>
+<span class="line"><span style="color:#6A9955">/* #define FDB_KV_AUTO_UPDATE */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 启用 TSDB 功能 */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FDB_USING_TSDB</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 使用 FAL 存储模式（直接操作 Flash） */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FDB_USING_FAL_MODE</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#ifdef</span><span style="color:#569CD6"> FDB_USING_FAL_MODE</span></span>
+<span class="line"><span style="color:#6A9955">/* Flash 写粒度，单位 bit</span></span>
+<span class="line"><span style="color:#6A9955"> * nor flash: 1,  stm32f2/f4: 8,  stm32f1: 32,  stm32l4: 64 */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FDB_WRITE_GRAN  </span><span style="color:#B5CEA8">8</span></span>
+<span class="line"><span style="color:#C586C0">#endif</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 或者使用文件模式（二选一） */</span></span>
+<span class="line"><span style="color:#6A9955">/* #define FDB_USING_FILE_LIBC_MODE   */</span></span>
+<span class="line"><span style="color:#6A9955">/* #define FDB_USING_FILE_POSIX_MODE */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 调试信息开关 */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FDB_DEBUG_ENABLE</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#endif</span><span style="color:#6A9955"> /* _FDB_CFG_H_ */</span></span></code></pre><p>关键配置项说明：</p>
+<table>
+<thead>
+<tr>
+<th>配置项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FDB_USING_KVDB</code></td>
+<td>编译 KVDB 模块，按需开启</td>
+</tr>
+<tr>
+<td><code>FDB_USING_TSDB</code></td>
+<td>编译 TSDB 模块，按需开启</td>
+</tr>
+<tr>
+<td><code>FDB_USING_FAL_MODE</code></td>
+<td>Flash 抽象层模式，直接操作 Flash，性能最优</td>
+</tr>
+<tr>
+<td><code>FDB_USING_FILE_POSIX_MODE</code></td>
+<td>POSIX 文件模式，通过 <code>open/read/write/close</code> 操作</td>
+</tr>
+<tr>
+<td><code>FDB_USING_FILE_LIBC_MODE</code></td>
+<td>C 标准库文件模式，通过 <code>fopen/fread/fwrite/fclose</code> 操作</td>
+</tr>
+<tr>
+<td><code>FDB_WRITE_GRAN</code></td>
+<td>Flash 写粒度，必须与所用 Flash 芯片一致</td>
+</tr>
+<tr>
+<td><code>FDB_DEBUG_ENABLE</code></td>
+<td>调试日志开关，移植阶段建议开启</td>
+</tr>
+<tr>
+<td><code>FDB_KV_AUTO_UPDATE</code></td>
+<td>KV 增量升级开关</td>
+</tr>
+<tr>
+<td><code>FDB_BIG_ENDIAN</code></td>
+<td>大端模式，默认小端</td>
+</tr>
+<tr>
+<td><code>FDB_PRINT(...)</code></td>
+<td>自定义打印宏，默认使用 <code>printf</code></td>
+</tr>
+</tbody></table>
+<p>FAL 模式和文件模式只能二选一。FAL 模式直接操作 Flash，性能更好；文件模式则不受硬件限制，可以存储在 SD 卡、文件系统等任意介质上。</p>
+<h2>KVDB 基础操作</h2>
+<p>KVDB 的所有操作都围绕 Key-Value 展开。在代码中需要先定义一个 <code>fdb_kvdb_t</code> 类型的数据库实例并完成初始化。</p>
+<h3>初始化 KVDB</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;flashdb.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 定义默认 KV 集合：首次初始化时自动写入 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fdb_default_kv_node default_kv_set</span><span style="color:#569CD6">[]</span><span style="color:#D4D4D4"> = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    { .key = </span><span style="color:#CE9178">"device_id"</span><span style="color:#D4D4D4">,  .value = </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, .value_len = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4"> },</span></span>
+<span class="line"><span style="color:#D4D4D4">    { .key = </span><span style="color:#CE9178">"boot_count"</span><span style="color:#D4D4D4">, .value = </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, .value_len = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4"> },</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fdb_default_kv default_kv = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    .kvs = default_kv_set,</span></span>
+<span class="line"><span style="color:#D4D4D4">    .num = </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(default_kv_set) / </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">default_kv_set</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]),</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 定义 KVDB 实例 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fdb_kvdb kvdb;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> kvdb_init_example</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#4EC9B0">    fdb_err_t</span><span style="color:#D4D4D4"> result;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* FAL 模式："kv_db" 是分区表中的分区名 */</span></span>
+<span class="line"><span style="color:#D4D4D4">    result = </span><span style="color:#DCDCAA">fdb_kvdb_init</span><span style="color:#D4D4D4">(&#x26;kvdb, </span><span style="color:#CE9178">"env"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"kv_db"</span><span style="color:#D4D4D4">, &#x26;default_kv, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (result != FDB_NO_ERR) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"KVDB init failed: </span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, result);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"KVDB init ok</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>初始化参数说明：</p>
+<ul>
+<li><code>&amp;kvdb</code>：数据库实例指针</li>
+<li><code>&quot;env&quot;</code>：数据库名称，用于日志标识</li>
+<li><code>&quot;kv_db&quot;</code>：FAL 模式下为分区名，文件模式下为存储路径</li>
+<li><code>&amp;default_kv</code>：默认 KV 集合，首次初始化时写入，不需要则传 NULL</li>
+<li><code>NULL</code>：用户自定义数据指针</li>
+</ul>
+<h3>字符串类型 KV</h3>
+<p>字符串类型操作最简单，直接使用 <code>char *</code> 指针即可。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> kvdb_string_ops</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_kvdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    char</span><span style="color:#D4D4D4"> *val;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 新增 / 修改 KV —— fdb_kv_set 自动判断 key 是否存在 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_kv_set</span><span style="color:#D4D4D4">(db, </span><span style="color:#CE9178">"wifi_ssid"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"MyWiFi_2.4G"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 读取 KV —— 返回值在内部 buffer，建议立即拷贝 */</span></span>
+<span class="line"><span style="color:#D4D4D4">    val = </span><span style="color:#DCDCAA">fdb_kv_get</span><span style="color:#D4D4D4">(db, </span><span style="color:#CE9178">"wifi_ssid"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (val != </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"wifi_ssid = </span><span style="color:#9CDCFE">%s</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, val);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 修改已有 KV */</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_kv_set</span><span style="color:#D4D4D4">(db, </span><span style="color:#CE9178">"wifi_ssid"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"MyWiFi_5G"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 删除 KV */</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_kv_del</span><span style="color:#D4D4D4">(db, </span><span style="color:#CE9178">"wifi_ssid"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>注意：<code>fdb_kv_get</code> 返回的指针指向内部缓冲区，不可重入，建议立即用 <code>strcpy</code> 或 <code>strdup</code> 拷贝到用户内存中。</p>
+<h3>Blob 类型 KV</h3>
+<p>Blob 类型支持任意二进制数据，如结构体、数组等。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> device_config {</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> baud_rate;</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4">  slave_id;</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4">  parity;</span></span>
+<span class="line"><span style="color:#569CD6">    uint16_t</span><span style="color:#D4D4D4"> timeout_ms;</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> kvdb_blob_ops</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_kvdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> fdb_blob blob;</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> device_config cfg_write, cfg_read;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 写入 blob */</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg_write</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">baud_rate</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">115200</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg_write</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">slave_id</span><span style="color:#D4D4D4">  = </span><span style="color:#B5CEA8">0x01</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg_write</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">parity</span><span style="color:#D4D4D4">    = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cfg_write</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">timeout_ms</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">500</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_kv_set_blob</span><span style="color:#D4D4D4">(db, </span><span style="color:#CE9178">"dev_cfg"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#DCDCAA">        fdb_blob_make</span><span style="color:#D4D4D4">(&#x26;blob, &#x26;cfg_write, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(cfg_write)));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 读取 blob */</span></span>
+<span class="line"><span style="color:#DCDCAA">    memset</span><span style="color:#D4D4D4">(&#x26;cfg_read, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(cfg_read));</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_kv_get_blob</span><span style="color:#D4D4D4">(db, </span><span style="color:#CE9178">"dev_cfg"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#DCDCAA">        fdb_blob_make</span><span style="color:#D4D4D4">(&#x26;blob, &#x26;cfg_read, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(cfg_read)));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">blob</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">saved</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">len</span><span style="color:#D4D4D4"> > </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"baud_rate = </span><span style="color:#9CDCFE">%u</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">cfg_read</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">baud_rate</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>fdb_blob_make</code> 的三步操作合为一句：</p>
+<ol>
+<li>用 <code>value_buf</code> 和 <code>buf_len</code> 初始化 blob 对象</li>
+<li>返回构造好的 <code>fdb_blob_t</code> 指针</li>
+<li>直接传给 <code>fdb_kv_set_blob</code> 或 <code>fdb_kv_get_blob</code></li>
+</ol>
+<p>读取 blob 后通过 <code>blob.saved.len &gt; 0</code> 判断是否成功获取到数据。</p>
+<h3>遍历所有 KV</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> kvdb_iterate_all</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_kvdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> fdb_kv_iterator itr;</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> fdb_blob blob;</span></span>
+<span class="line"><span style="color:#569CD6">    char</span><span style="color:#9CDCFE"> value_buf</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_kv_iterator_init</span><span style="color:#D4D4D4">(db, &#x26;itr);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">fdb_kv_iterate</span><span style="color:#D4D4D4">(db, &#x26;itr)) {</span></span>
+<span class="line"><span style="color:#4EC9B0">        fdb_kv_t</span><span style="color:#D4D4D4"> kv = &#x26;</span><span style="color:#9CDCFE">itr</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">curr_kv</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        /* 读取当前 KV 的值 */</span></span>
+<span class="line"><span style="color:#DCDCAA">        fdb_kv_to_blob</span><span style="color:#D4D4D4">(kv, </span><span style="color:#DCDCAA">fdb_blob_make</span><span style="color:#D4D4D4">(&#x26;blob, value_buf, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(value_buf)));</span></span>
+<span class="line"><span style="color:#DCDCAA">        fdb_blob_read</span><span style="color:#D4D4D4">((</span><span style="color:#4EC9B0">fdb_db_t</span><span style="color:#D4D4D4">)db, &#x26;blob);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"KV: name=</span><span style="color:#9CDCFE">%-20s</span><span style="color:#CE9178"> value_len=</span><span style="color:#9CDCFE">%u</span><span style="color:#CE9178"> status=</span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">               kv</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">name</span><span style="color:#D4D4D4">, (</span><span style="color:#569CD6">unsigned</span><span style="color:#D4D4D4">)</span><span style="color:#9CDCFE">kv</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">value_len</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">kv</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">status</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"遍历完成：共 </span><span style="color:#9CDCFE">%u</span><span style="color:#CE9178"> 条 KV, 占用 </span><span style="color:#9CDCFE">%zu</span><span style="color:#CE9178"> 字节</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">           (</span><span style="color:#569CD6">unsigned</span><span style="color:#D4D4D4">)</span><span style="color:#9CDCFE">itr</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">iterated_cnt</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">itr</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">iterated_obj_bytes</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>重置为默认值</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 将 KVDB 中所有 KV 重置为初始化时传入的 default_kv */</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kv_set_default</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">);</span></span></code></pre><h3>打印数据库信息</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 输出当前 KVDB 中所有 KV 的概要信息 */</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kv_print</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">);</span></span></code></pre><h2>TSDB 基础操作</h2>
+<p>TSDB 使用时序日志（TSL）作为存储单元，每条 TSL 包含时间戳和用户数据。</p>
+<h3>初始化 TSDB</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fdb_tsdb tsdb;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 获取当前时间戳的回调函数 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> fdb_time_t</span><span style="color:#DCDCAA"> get_current_time</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#DCDCAA"> time</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> tsdb_init_example</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#4EC9B0">    fdb_err_t</span><span style="color:#D4D4D4"> result;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    result = </span><span style="color:#DCDCAA">fdb_tsdb_init</span><span style="color:#D4D4D4">(&#x26;tsdb, </span><span style="color:#CE9178">"sensor_log"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"ts_db"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">                           get_current_time,</span><span style="color:#6A9955">   /* 获取时间戳函数 */</span></span>
+<span class="line"><span style="color:#B5CEA8">                           128</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">                /* 每条 TSL 最大长度 */</span></span>
+<span class="line"><span style="color:#569CD6">                           NULL</span><span style="color:#D4D4D4">);</span><span style="color:#6A9955">              /* 用户数据 */</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (result != FDB_NO_ERR) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"TSDB init failed: </span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, result);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"TSDB init ok</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>几个关键参数：</p>
+<ul>
+<li><code>get_current_time</code>：时间戳获取函数，嵌入式平台可对接 RTC</li>
+<li><code>128</code>：每条 TSL 数据部分的最大长度，超出会返回错误</li>
+<li>可选配置：通过 <code>fdb_tsdb_control</code> 设置扇区大小、翻转模式等</li>
+</ul>
+<h3>追加 TSL</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sensor_data {</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4"> temperature;</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4"> humidity;</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> timestamp;</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> tsdb_append_example</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_tsdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> fdb_blob blob;</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> sensor_data data;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">    data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">temperature</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">26.5f</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">humidity</span><span style="color:#D4D4D4">    = </span><span style="color:#B5CEA8">65.2f</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">    data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">timestamp</span><span style="color:#D4D4D4">   = </span><span style="color:#DCDCAA">get_current_time</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_tsl_append</span><span style="color:#D4D4D4">(db, </span><span style="color:#DCDCAA">fdb_blob_make</span><span style="color:#D4D4D4">(&#x26;blob, &#x26;data, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(data)));</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"已追加一条传感器数据</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>追加操作会自动打上时间戳。如果需要使用指定时间戳（如从 RTC 读取历史数据回填），使用 <code>fdb_tsl_append_with_ts</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">fdb_tsl_append_with_ts</span><span style="color:#D4D4D4">(db, </span><span style="color:#DCDCAA">fdb_blob_make</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">blob</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(data)),</span></span>
+<span class="line"><span style="color:#D4D4D4">                       custom_timestamp);</span></span></code></pre><h3>查询 TSL</h3>
+<p>TSDB 的查询通过迭代器回调实现。回调函数返回 <code>true</code> 时停止迭代。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 回调函数：每条 TSL 调用一次 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> bool</span><span style="color:#DCDCAA"> query_cb</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">fdb_tsl_t</span><span style="color:#9CDCFE"> tsl</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> fdb_blob blob;</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> sensor_data data;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_blob_read</span><span style="color:#D4D4D4">((</span><span style="color:#4EC9B0">fdb_db_t</span><span style="color:#D4D4D4">)arg,</span></span>
+<span class="line"><span style="color:#DCDCAA">                  fdb_tsl_to_blob</span><span style="color:#D4D4D4">(tsl, </span><span style="color:#DCDCAA">fdb_blob_make</span><span style="color:#D4D4D4">(&#x26;blob, &#x26;data, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(data))));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"TSL: time=</span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178">  temp=</span><span style="color:#9CDCFE">%.1f</span><span style="color:#CE9178">  humi=</span><span style="color:#9CDCFE">%.1f</span><span style="color:#CE9178">  status=</span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">           (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4">)</span><span style="color:#9CDCFE">tsl</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">time</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">temperature</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">humidity</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">tsl</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">status</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#569CD6"> false</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">  /* 返回 false 继续迭代 */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 遍历全部 TSL */</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> tsdb_query_all</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_tsdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"===== 全部 TSL =====</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_tsl_iter</span><span style="color:#D4D4D4">(db, query_cb, db);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 按时间范围遍历 */</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> tsdb_query_by_time</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_tsdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#4EC9B0">                        fdb_time_t</span><span style="color:#9CDCFE"> from</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">fdb_time_t</span><span style="color:#9CDCFE"> to</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"===== </span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178"> ~ </span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178"> 范围内的 TSL =====</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4">)from, (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4">)to);</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_tsl_iter_by_time</span><span style="color:#D4D4D4">(db, from, to, query_cb, db);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 同时查询满足条件的 TSL 数量 */</span></span>
+<span class="line"><span style="color:#569CD6">    size_t</span><span style="color:#D4D4D4"> count = </span><span style="color:#DCDCAA">fdb_tsl_query_count</span><span style="color:#D4D4D4">(db, from, to, FDB_TSL_WRITE);</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"范围内 TSL 数量: </span><span style="color:#9CDCFE">%zu</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, count);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 反向遍历（从最新到最旧） */</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> tsdb_query_reverse</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_tsdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"===== 反向遍历 =====</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_tsl_iter_reverse</span><span style="color:#D4D4D4">(db, query_cb, db);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>设置 TSL 状态</h3>
+<p>每条 TSL 都有状态标记，可用于数据管理。状态切换必须按顺序：
+<code>FDB_TSL_WRITE → FDB_TSL_USER_STATUS1 → FDB_TSL_DELETED → FDB_TSL_USER_STATUS2</code></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> bool</span><span style="color:#DCDCAA"> set_status_cb</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">fdb_tsl_t</span><span style="color:#9CDCFE"> tsl</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> fdb_tsdb *db = (</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_tsdb *)arg;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 将已写入状态改为用户自定义状态1 */</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">tsl</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">status</span><span style="color:#D4D4D4"> == FDB_TSL_WRITE) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        fdb_tsl_set_status</span><span style="color:#D4D4D4">(db, tsl, FDB_TSL_USER_STATUS1);</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"TSL time=</span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178"> 状态已更新</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4">)</span><span style="color:#9CDCFE">tsl</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">time</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#569CD6"> false</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> tsdb_set_status_example</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> fdb_tsdb *</span><span style="color:#9CDCFE">db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_tsl_iter</span><span style="color:#D4D4D4">(db, set_status_cb, db);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>两个用户自定义状态（<code>USER_STATUS1</code> / <code>USER_STATUS2</code>）可用于实现&quot;已读/未读&quot;、&quot;已上报/未上报&quot;等业务逻辑。</p>
+<h3>其他控制操作</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 设置 TSDB 翻卷模式：最旧数据可被覆盖（默认） */</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_tsdb_control</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">tsdb</span><span style="color:#D4D4D4">, FDB_TSDB_CTRL_SET_ROLLOVER, (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *)</span><span style="color:#9CDCFE">true</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 查询上次存储时间 */</span></span>
+<span class="line"><span style="color:#4EC9B0">fdb_time_t</span><span style="color:#D4D4D4"> last_time;</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_tsdb_control</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">tsdb</span><span style="color:#D4D4D4">, FDB_TSDB_CTRL_GET_LAST_TIME, &#x26;</span><span style="color:#9CDCFE">last_time</span><span style="color:#D4D4D4">);</span></span></code></pre><h2>移植指南</h2>
+<p>FlashDB 的移植工作集中在 FAL（Flash Abstraction Layer）一端。FAL 是 RT-Thread 开源的 Flash 抽象层软件包，也支持裸机运行，<strong>不依赖任何 RTOS</strong>。</p>
+<p>移植的整体架构如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span> ┌─────────────────────────────────┐</span></span>
+<span class="line"><span> │  KVDB / TSDB  (FlashDB)         │  ← 上层 API</span></span>
+<span class="line"><span> ├─────────────────────────────────┤</span></span>
+<span class="line"><span> │  FAL (Flash Abstraction Layer)  │  ← 分区 &#x26; 设备管理</span></span>
+<span class="line"><span> ├─────────────────────────────────┤</span></span>
+<span class="line"><span> │  Flash Driver (片内/片外)        │  ← 硬件驱动</span></span>
+<span class="line"><span> └─────────────────────────────────┘</span></span></code></pre><h3>第一步：集成 FAL</h3>
+<p>将 FAL 源码添加到工程。FAL 仓库地址：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>https://github.com/RT-Thread-packages/fal</span></span></code></pre><p>将 <code>fal/inc</code> 和 <code>fal/src</code> 目录加入工程头文件路径和源文件列表。</p>
+<h3>第二步：实现 Flash 驱动操作函数</h3>
+<p>根据目标平台实现四个操作函数。以下以 STM32F4 片内 Flash 为例：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;fal.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stm32f4xx_hal.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> stm32_onchip_init</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#6A9955">    /* 片内 Flash 通常无需额外初始化 */</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> stm32_onchip_read</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">long</span><span style="color:#9CDCFE"> offset</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">buf</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> size</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    size_t</span><span style="color:#D4D4D4"> i;</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> addr = STM32_FLASH_START_ADDR + offset;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; size; i++, addr++, buf++) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        *buf = *(</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *)addr;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> size;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> stm32_onchip_write</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">long</span><span style="color:#9CDCFE"> offset</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">buf</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> size</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    size_t</span><span style="color:#D4D4D4"> i;</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> addr = STM32_FLASH_START_ADDR + offset;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_FLASH_Unlock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; size; i++, addr++, buf++) {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">HAL_FLASH_Program</span><span style="color:#D4D4D4">(FLASH_TYPEPROGRAM_BYTE, addr, *buf) != HAL_OK) {</span></span>
+<span class="line"><span style="color:#DCDCAA">            HAL_FLASH_Lock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">            return</span><span style="color:#D4D4D4"> i;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_FLASH_Lock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> size;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> stm32_onchip_erase</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">long</span><span style="color:#9CDCFE"> offset</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> size</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> err_sector;</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> start_addr = STM32_FLASH_START_ADDR + offset;</span></span>
+<span class="line"><span style="color:#D4D4D4">    FLASH_EraseInitTypeDef erase_cfg;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">    erase_cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">TypeErase</span><span style="color:#D4D4D4">    = FLASH_TYPEERASE_SECTORS;</span></span>
+<span class="line"><span style="color:#9CDCFE">    erase_cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">Sector</span><span style="color:#D4D4D4">       = </span><span style="color:#DCDCAA">stm32_get_sector</span><span style="color:#D4D4D4">(start_addr);</span></span>
+<span class="line"><span style="color:#9CDCFE">    erase_cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">NbSectors</span><span style="color:#D4D4D4">    = size / FLASH_SECTOR_SIZE;</span></span>
+<span class="line"><span style="color:#9CDCFE">    erase_cfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">VoltageRange</span><span style="color:#D4D4D4"> = FLASH_VOLTAGE_RANGE_3;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_FLASH_Unlock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">HAL_FLASHEx_Erase</span><span style="color:#D4D4D4">(&#x26;erase_cfg, &#x26;err_sector) != HAL_OK) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        HAL_FLASH_Lock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_FLASH_Lock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> size;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 定义 Flash 设备对象 */</span></span>
+<span class="line"><span style="color:#569CD6">const</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fal_flash_dev stm32_onchip_flash = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    .name       = </span><span style="color:#CE9178">"stm32_onchip"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    .addr       = </span><span style="color:#B5CEA8">0x08000000</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    .len        = </span><span style="color:#B5CEA8">1024</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">1024</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">      /* 1MB */</span></span>
+<span class="line"><span style="color:#D4D4D4">    .blk_size   = </span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">1024</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">       /* 最大扇区大小 128KB */</span></span>
+<span class="line"><span style="color:#D4D4D4">    .ops        = { stm32_onchip_init,</span></span>
+<span class="line"><span style="color:#D4D4D4">                    stm32_onchip_read,</span></span>
+<span class="line"><span style="color:#D4D4D4">                    stm32_onchip_write,</span></span>
+<span class="line"><span style="color:#D4D4D4">                    stm32_onchip_erase },</span></span>
+<span class="line"><span style="color:#D4D4D4">    .write_gran = </span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955">                /* STM32F4 写粒度: 8 bit */</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p>操作函数说明：</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+<th>返回值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>init</code></td>
+<td>可选初始化，不需要可置 NULL</td>
+<td>≥0 成功</td>
+</tr>
+<tr>
+<td><code>read</code></td>
+<td>从 Flash 偏移处读取数据</td>
+<td>实际读取字节数</td>
+</tr>
+<tr>
+<td><code>write</code></td>
+<td>向 Flash 偏移处写入数据</td>
+<td>实际写入字节数</td>
+</tr>
+<tr>
+<td><code>erase</code></td>
+<td>擦除 Flash 指定区域</td>
+<td>实际擦除字节数</td>
+</tr>
+</tbody></table>
+<p><code>write_gran</code> 写粒度必须准确设置——它决定了 FlashDB 内部按什么粒度对齐写入数据。常见 Flash 写粒度：</p>
+<table>
+<thead>
+<tr>
+<th>Flash 类型</th>
+<th>write_gran</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>NOR Flash (SPI)</td>
+<td>1 bit</td>
+</tr>
+<tr>
+<td>STM32F2 / STM32F4</td>
+<td>8 bit</td>
+</tr>
+<tr>
+<td>STM32F1</td>
+<td>32 bit</td>
+</tr>
+<tr>
+<td>STM32L4</td>
+<td>64 bit</td>
+</tr>
+<tr>
+<td>STM32H5</td>
+<td>128 bit</td>
+</tr>
+<tr>
+<td>STM32H7</td>
+<td>256 bit</td>
+</tr>
+</tbody></table>
+<h3>第三步：创建 fal_cfg.h</h3>
+<p>在工程目录下新建 <code>fal_cfg.h</code> 文件，定义 Flash 设备表和分区表：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#ifndef</span><span style="color:#569CD6"> _FAL_CFG_H_</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> _FAL_CFG_H_</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;fal.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 声明 Flash 设备 */</span></span>
+<span class="line"><span style="color:#569CD6">extern</span><span style="color:#569CD6"> const</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fal_flash_dev stm32_onchip_flash;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* ============ Flash 设备表 ============ */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FAL_FLASH_DEV_TABLE        </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">{                                  </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#D4D4D4">    &#x26;</span><span style="color:#569CD6">stm32_onchip_flash,           </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* ============ Flash 分区表 ============ */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FAL_PART_TABLE                                                          </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">{                                                                               </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    {FAL_PART_MAGIC_WORD, </span><span style="color:#CE9178">"boot"</span><span style="color:#569CD6">,    </span><span style="color:#CE9178">"stm32_onchip"</span><span style="color:#569CD6">,         </span><span style="color:#B5CEA8">0</span><span style="color:#569CD6">,  </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">*</span><span style="color:#B5CEA8">1024</span><span style="color:#569CD6">,   </span><span style="color:#B5CEA8">0</span><span style="color:#569CD6">}, </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    {FAL_PART_MAGIC_WORD, </span><span style="color:#CE9178">"app"</span><span style="color:#569CD6">,     </span><span style="color:#CE9178">"stm32_onchip"</span><span style="color:#569CD6">,  </span><span style="color:#B5CEA8">64</span><span style="color:#D4D4D4">*</span><span style="color:#B5CEA8">1024</span><span style="color:#569CD6">, </span><span style="color:#B5CEA8">256</span><span style="color:#D4D4D4">*</span><span style="color:#B5CEA8">1024</span><span style="color:#569CD6">,   </span><span style="color:#B5CEA8">0</span><span style="color:#569CD6">}, </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    {FAL_PART_MAGIC_WORD, </span><span style="color:#CE9178">"kv_db"</span><span style="color:#569CD6">,   </span><span style="color:#CE9178">"stm32_onchip"</span><span style="color:#569CD6">, </span><span style="color:#B5CEA8">320</span><span style="color:#D4D4D4">*</span><span style="color:#B5CEA8">1024</span><span style="color:#569CD6">, </span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">*</span><span style="color:#B5CEA8">1024</span><span style="color:#569CD6">,   </span><span style="color:#B5CEA8">0</span><span style="color:#569CD6">}, </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">    {FAL_PART_MAGIC_WORD, </span><span style="color:#CE9178">"ts_db"</span><span style="color:#569CD6">,   </span><span style="color:#CE9178">"stm32_onchip"</span><span style="color:#569CD6">, </span><span style="color:#B5CEA8">448</span><span style="color:#D4D4D4">*</span><span style="color:#B5CEA8">1024</span><span style="color:#569CD6">, </span><span style="color:#B5CEA8">512</span><span style="color:#D4D4D4">*</span><span style="color:#B5CEA8">1024</span><span style="color:#569CD6">,   </span><span style="color:#B5CEA8">0</span><span style="color:#569CD6">}, </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#569CD6">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#endif</span><span style="color:#6A9955"> /* _FAL_CFG_H_ */</span></span></code></pre><p>分区表定义了 4 个分区：</p>
+<table>
+<thead>
+<tr>
+<th>分区名</th>
+<th>设备</th>
+<th>偏移</th>
+<th>大小</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>boot</td>
+<td>stm32_onchip</td>
+<td>0</td>
+<td>64KB</td>
+<td>Bootloader</td>
+</tr>
+<tr>
+<td>app</td>
+<td>stm32_onchip</td>
+<td>64KB</td>
+<td>256KB</td>
+<td>应用程序</td>
+</tr>
+<tr>
+<td>kv_db</td>
+<td>stm32_onchip</td>
+<td>320KB</td>
+<td>128KB</td>
+<td>KVDB 数据库</td>
+</tr>
+<tr>
+<td>ts_db</td>
+<td>stm32_onchip</td>
+<td>448KB</td>
+<td>512KB</td>
+<td>TSDB 数据库</td>
+</tr>
+</tbody></table>
+<p>注意：</p>
+<ul>
+<li>分区名不可重复</li>
+<li>关联的 Flash 设备必须在设备表中已定义且名称一致</li>
+<li>分区起始地址和大小不能超出 Flash 设备的地址范围</li>
+<li>每个分区记录末尾保留 <code>0</code> 作为保留字段</li>
+</ul>
+<h3>第四步：应用层初始化</h3>
+<p>在 <code>main</code> 函数中依次初始化 FAL 和 FlashDB：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;flashdb.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;fal.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fdb_kvdb kvdb;</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> fdb_tsdb tsdb;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#4EC9B0">    fdb_err_t</span><span style="color:#D4D4D4"> result;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 1. 初始化 FAL */</span></span>
+<span class="line"><span style="color:#DCDCAA">    fal_init</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 2. 初始化 KVDB —— 分区名对应 fal_cfg.h 中的 "kv_db" */</span></span>
+<span class="line"><span style="color:#D4D4D4">    result = </span><span style="color:#DCDCAA">fdb_kvdb_init</span><span style="color:#D4D4D4">(&#x26;kvdb, </span><span style="color:#CE9178">"env"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"kv_db"</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (result != FDB_NO_ERR) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"KVDB init failed: </span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, result);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 3. 初始化 TSDB —— 分区名对应 fal_cfg.h 中的 "ts_db" */</span></span>
+<span class="line"><span style="color:#D4D4D4">    result = </span><span style="color:#DCDCAA">fdb_tsdb_init</span><span style="color:#D4D4D4">(&#x26;tsdb, </span><span style="color:#CE9178">"sensor_log"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"ts_db"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">                           get_current_time, </span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (result != FDB_NO_ERR) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"TSDB init failed: </span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, result);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 4. 正常使用 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    fdb_kv_set</span><span style="color:#D4D4D4">(&#x26;kvdb, </span><span style="color:#CE9178">"fw_version"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"1.0.0"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"fw_version = </span><span style="color:#9CDCFE">%s</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, </span><span style="color:#DCDCAA">fdb_kv_get</span><span style="color:#D4D4D4">(&#x26;kvdb, </span><span style="color:#CE9178">"fw_version"</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">        /* 业务循环 */</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>文件模式移植（无需 Flash 硬件）</h3>
+<p>如果开发阶段没有 Flash 硬件，或需要将数据库存储在 SD 卡/文件系统中，可以使用文件模式：</p>
+<p>在 <code>fdb_cfg.h</code> 中选择文件模式：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 使用 POSIX 文件模式（Linux / ESP-IDF 等） */</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FDB_USING_FILE_POSIX_MODE</span></span>
+<span class="line"><span style="color:#6A9955">/* 注意：同时关闭 FAL 模式 */</span></span>
+<span class="line"><span style="color:#6A9955">/* #define FDB_USING_FAL_MODE */</span></span></code></pre><p>初始化时通过 control 接口设置文件模式参数：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 设置文件模式 */</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kvdb_control</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">, FDB_KVDB_CTRL_SET_FILE_MODE, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#6A9955">/* 设置扇区大小（字节） */</span></span>
+<span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> sec_size = </span><span style="color:#B5CEA8">4096</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kvdb_control</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">, FDB_KVDB_CTRL_SET_SEC_SIZE, &#x26;</span><span style="color:#9CDCFE">sec_size</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#6A9955">/* 设置数据库最大大小 */</span></span>
+<span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> max_size = </span><span style="color:#B5CEA8">256</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">1024</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">  /* 256KB */</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kvdb_control</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">, FDB_KVDB_CTRL_SET_MAX_SIZE, &#x26;</span><span style="color:#9CDCFE">max_size</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 路径参数传入文件目录 */</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kvdb_init</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"env"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"/data/flashdb_kv"</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span></code></pre><p>C 标准库模式 (<code>FDB_USING_FILE_LIBC_MODE</code>) 与 POSIX 模式类似，区别在于底层使用 <code>fopen/fread/fwrite/fclose</code> 接口。</p>
+<h3>加锁保护</h3>
+<p>在多线程或中断环境中需要保护 Flash 操作，通过 control 接口注册加锁/解锁函数：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> db_lock</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">fdb_db_t</span><span style="color:#9CDCFE"> db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    mutex_lock</span><span style="color:#D4D4D4">(&#x26;flash_mutex);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> db_unlock</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">fdb_db_t</span><span style="color:#9CDCFE"> db</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    mutex_unlock</span><span style="color:#D4D4D4">(&#x26;flash_mutex);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 初始化前注册 */</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kvdb_control</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">, FDB_KVDB_CTRL_SET_LOCK, (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *)</span><span style="color:#9CDCFE">db_lock</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">fdb_kvdb_control</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">kvdb</span><span style="color:#D4D4D4">, FDB_KVDB_CTRL_SET_UNLOCK, (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *)</span><span style="color:#9CDCFE">db_unlock</span><span style="color:#D4D4D4">);</span></span></code></pre><h3>常见移植问题</h3>
+<ol>
+<li><p><strong>分区找不到</strong>：检查 <code>fdb_kvdb_init</code> 传入的分区名与 <code>fal_cfg.h</code> 中的分区名是否完全一致，以及 <code>fal_init()</code> 是否在数据库初始化之前调用。</p>
+</li>
+<li><p><strong>写入后读取数据不匹配</strong>：检查 <code>FDB_WRITE_GRAN</code> 写粒度是否与 Flash 芯片一致。nor flash 通常为 1，STM32 系列因型号不同而异。</p>
+</li>
+<li><p><strong>扇区大小对齐问题</strong>：KVDB/TSDB 的扇区大小必须是 Flash 块大小的整数倍。如果数据库保存的数据较大，可通过 <code>FDB_KVDB_CTRL_SET_SEC_SIZE</code> 调大扇区。</p>
+</li>
+<li><p><strong>编译提示找不到 <code>fal_cfg.h</code></strong>：确认文件已创建在工程目录下且头文件路径已加入编译器 include path。</p>
+</li>
+</ol>
+<h2>API 速查表</h2>
+<h3>KVDB API</h3>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fdb_kvdb_init(db, name, path, default_kv, user_data)</code></td>
+<td>初始化 KVDB</td>
+</tr>
+<tr>
+<td><code>fdb_kvdb_deinit(db)</code></td>
+<td>反初始化</td>
+</tr>
+<tr>
+<td><code>fdb_kvdb_control(db, cmd, arg)</code></td>
+<td>控制操作（设置扇区大小、锁等）</td>
+</tr>
+<tr>
+<td><code>fdb_kv_set(db, key, value)</code></td>
+<td>写入字符串类型 KV</td>
+</tr>
+<tr>
+<td><code>fdb_kv_get(db, key)</code></td>
+<td>读取字符串类型 KV（返回内部 buffer 指针）</td>
+</tr>
+<tr>
+<td><code>fdb_kv_set_blob(db, key, blob)</code></td>
+<td>写入 blob 类型 KV</td>
+</tr>
+<tr>
+<td><code>fdb_kv_get_blob(db, key, blob)</code></td>
+<td>读取 blob 类型 KV</td>
+</tr>
+<tr>
+<td><code>fdb_kv_get_obj(db, key, kv)</code></td>
+<td>获取 KV 对象（不读数据）</td>
+</tr>
+<tr>
+<td><code>fdb_kv_del(db, key)</code></td>
+<td>删除指定 KV</td>
+</tr>
+<tr>
+<td><code>fdb_kv_set_default(db)</code></td>
+<td>重置为默认 KV 集合</td>
+</tr>
+<tr>
+<td><code>fdb_kv_print(db)</code></td>
+<td>打印 KVDB 信息</td>
+</tr>
+<tr>
+<td><code>fdb_kv_iterator_init(db, itr)</code></td>
+<td>初始化 KV 迭代器</td>
+</tr>
+<tr>
+<td><code>fdb_kv_iterate(db, itr)</code></td>
+<td>遍历下一个 KV，返回 false 表示结束</td>
+</tr>
+</tbody></table>
+<h3>TSDB API</h3>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fdb_tsdb_init(db, name, path, get_time, max_len, user_data)</code></td>
+<td>初始化 TSDB</td>
+</tr>
+<tr>
+<td><code>fdb_tsdb_deinit(db)</code></td>
+<td>反初始化</td>
+</tr>
+<tr>
+<td><code>fdb_tsdb_control(db, cmd, arg)</code></td>
+<td>控制操作（翻卷、扇区大小等）</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_append(db, blob)</code></td>
+<td>追加 TSL（自动时间戳）</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_append_with_ts(db, blob, timestamp)</code></td>
+<td>追加 TSL（指定时间戳）</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_iter(db, cb, arg)</code></td>
+<td>遍历全部 TSL</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_iter_reverse(db, cb, arg)</code></td>
+<td>反向遍历全部 TSL</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_iter_by_time(db, from, to, cb, arg)</code></td>
+<td>按时间范围遍历</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_query_count(db, from, to, status)</code></td>
+<td>查询符合条件 TSL 数量</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_set_status(db, tsl, status)</code></td>
+<td>设置 TSL 状态</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_clean(db)</code></td>
+<td>清空 TSDB</td>
+</tr>
+</tbody></table>
+<h3>Blob 工具 API</h3>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fdb_blob_make(blob, buf, len)</code></td>
+<td>构造 blob 对象</td>
+</tr>
+<tr>
+<td><code>fdb_blob_read(db, blob)</code></td>
+<td>读取 blob 数据到用户 buffer</td>
+</tr>
+<tr>
+<td><code>fdb_kv_to_blob(kv, blob)</code></td>
+<td>KV 对象转 blob</td>
+</tr>
+<tr>
+<td><code>fdb_tsl_to_blob(tsl, blob)</code></td>
+<td>TSL 对象转 blob</td>
+</tr>
+</tbody></table>
+<h3>KVDB 控制命令</h3>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FDB_KVDB_CTRL_SET_SEC_SIZE</code></td>
+<td>设置扇区大小（初始化前）</td>
+</tr>
+<tr>
+<td><code>FDB_KVDB_CTRL_GET_SEC_SIZE</code></td>
+<td>获取扇区大小</td>
+</tr>
+<tr>
+<td><code>FDB_KVDB_CTRL_SET_LOCK</code></td>
+<td>设置加锁函数</td>
+</tr>
+<tr>
+<td><code>FDB_KVDB_CTRL_SET_UNLOCK</code></td>
+<td>设置解锁函数</td>
+</tr>
+<tr>
+<td><code>FDB_KVDB_CTRL_SET_FILE_MODE</code></td>
+<td>启用文件模式（初始化前）</td>
+</tr>
+<tr>
+<td><code>FDB_KVDB_CTRL_SET_MAX_SIZE</code></td>
+<td>设置数据库最大大小（文件模式，初始化前）</td>
+</tr>
+<tr>
+<td><code>FDB_KVDB_CTRL_SET_NOT_FORMAT</code></td>
+<td>禁自动格式化（初始化前）</td>
+</tr>
+</tbody></table>
+<h3>TSDB 控制命令</h3>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FDB_TSDB_CTRL_SET_SEC_SIZE</code></td>
+<td>设置扇区大小（初始化前）</td>
+</tr>
+<tr>
+<td><code>FDB_TSDB_CTRL_SET_ROLLOVER</code></td>
+<td>设置翻卷模式（初始化后）</td>
+</tr>
+<tr>
+<td><code>FDB_TSDB_CTRL_GET_ROLLOVER</code></td>
+<td>获取翻卷模式</td>
+</tr>
+<tr>
+<td><code>FDB_TSDB_CTRL_GET_LAST_TIME</code></td>
+<td>获取最后一次存储时间</td>
+</tr>
+<tr>
+<td><code>FDB_TSDB_CTRL_SET_FILE_MODE</code></td>
+<td>启用文件模式（初始化前）</td>
+</tr>
+<tr>
+<td><code>FDB_TSDB_CTRL_SET_MAX_SIZE</code></td>
+<td>设置数据库最大大小（文件模式，初始化前）</td>
+</tr>
+</tbody></table>
+<h2>与 LittleFS 的设计对比</h2>
+<p>FlashDB 和 LittleFS 同为嵌入式 Flash 存储方案，都遵循 Copy-on-Write + 原子提交的设计原则，但抽象层级和适用场景完全不同。</p>
+<p><strong>共同的设计哲学</strong>：</p>
+<p>两者都&quot;不信任 Flash&quot;——不用原地修改，每次写入走新位置；两者都靠 Flash 的单向翻转特性做原子提交——写完后改一个标志位或版本号，改完即提交，断在中间就当没写；两者都不依赖 OS，静态分配内存，裸机和 RTOS 都能跑。</p>
+<p><strong>提交机制的对比</strong>：</p>
+<p>FlashDB 用<strong>单 bit 翻转</strong>做提交。写入一条 KV 后，把记录头部一个 bit 从 <code>1</code> 翻成 <code>0</code>，这条记录就生效了。bit 是 Flash 编程的最小原子单位，断电时只有翻之前（回退旧数据）和翻之后（新数据生效）两种状态。</p>
+<p>LittleFS 用<strong>双 metadata block 交替</strong>做提交。因为它管理的是整个文件系统的目录树——一次操作可能牵扯多个 inode、目录项、文件大小更新。一个 bit 表达不了这么多改动的&quot;一致性提交&quot;，于是它用两个 metadata block 轮换写入，每次写新的、让 revision count 递增，上电时比较两个 block，取 revision 更大且 CRC 正确的那个。</p>
+<p>本质是同一个 AB 切换思想，FlashDB 缩到了一个 bit，LittleFS 扩到了两个 block。不是谁更聪明，是各自要保护的数据复杂度不同。</p>
+<p><strong>抽象层级</strong>：FlashDB 是<strong>记录导向</strong>的数据库——接口是 <code>set(&quot;key&quot;, value)</code>，它理解数据的语义，能做遍历、状态过滤、增量升级。LittleFS 是<strong>流导向</strong>的文件系统——接口是 <code>fopen/fwrite</code>，只管理字节序列和目录结构，不关心文件里存了什么。</p>
+<p><strong>选择依据</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>推荐</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>存产品参数、用户配置</td>
+<td>FlashDB KVDB</td>
+</tr>
+<tr>
+<td>记录传感器日志、运行日志</td>
+<td>FlashDB TSDB</td>
+</tr>
+<tr>
+<td>存固件 OTA 包、资源文件、任意格式文件</td>
+<td>LittleFS</td>
+</tr>
+<tr>
+<td>需要 PC 端熟悉的目录/文件操作模式</td>
+<td>LittleFS</td>
+</tr>
+<tr>
+<td>资源极度受限（几 KB RAM）</td>
+<td>FlashDB</td>
+</tr>
+</tbody></table>
+<p>也可以一起用：FlashDB 的文件模式底层跑在 LittleFS 之上，LittleFS 管 Flash 分区，FlashDB 把数据库当做文件存在上面。</p>
+<h2>总结</h2>
+<p>FlashDB 为嵌入式设备提供了一套开箱即用的数据库方案。KVDB 解决键值存储需求，TSDB 解决时序数据记录需求，二者共享同一套底层 Flash 管理机制。移植过程的核心在 FAL 层——只要实现 <code>init/read/write/erase</code> 四个 Flash 操作函数并配置好分区表，即可在裸机或 RTOS 环境下运行。对于没有 Flash 硬件的开发阶段，文件模式可以无缝切换到 PC 端进行调试。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-17 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=flashdb-porting-guide');
+  }
+  </script>
+</body>
+</html>

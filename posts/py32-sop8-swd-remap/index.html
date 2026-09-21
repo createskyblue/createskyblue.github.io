@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PY32F002A SOP8 封装下 SWD 引脚复用的防砖指南 - CacheRivulet小记</title>
+  <meta name="description" content="SOP8 只有 8 个引脚，SWD、NRST、GPIO 抢着用。怎么开发时不砖、量产时省引脚">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="PY32F002A">
+  <meta property="article:tag" content="SWD">
+  <meta property="article:tag" content="SOP8">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="Cortex-M0+">
+  <meta property="article:published_time" content="2026-07-08">
+  <meta property="og:title" content="PY32F002A SOP8 封装下 SWD 引脚复用的防砖指南">
+  <meta property="og:description" content="SOP8 只有 8 个引脚，SWD、NRST、GPIO 抢着用。怎么开发时不砖、量产时省引脚">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/py32-sop8-swd-remap/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/py32-sop8-swd-remap/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "PY32F002A SOP8 封装下 SWD 引脚复用的防砖指南",
+  "description": "SOP8 只有 8 个引脚，SWD、NRST、GPIO 抢着用。怎么开发时不砖、量产时省引脚",
+  "datePublished": "2026-07-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/py32-sop8-swd-remap/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/py32-sop8-swd-remap/"
+  },
+  "keywords": "嵌入式, PY32F002A, SWD, SOP8, 工程调试, Cortex-M0+"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">PY32F002A SOP8 封装下 SWD 引脚复用的防砖指南</h1>
+  <article class="article-body">
+<h1>PY32F002A SOP8 封装下 SWD 引脚复用的防砖指南</h1>
+<p>SOP8 只有 8 个引脚。VCC 和 VSS 吃掉两个，剩下 6 个。如果你需要两路通信接口、两路传感器输入、一路控制输出，6 个引脚刚好用完。然后你发现 PA13（SWDIO）、PA14（SWCLK）和 PF2（NRST）全都被迫让位给了业务功能。接着你烧不进去程序了。</p>
+<p>这篇文章梳理 SOP8 封装的 SWD 引脚复用策略、恢复机制和防砖实践，不涉及具体产品设计，只讲通用方法。</p>
+<h2>SOP8 的引脚布局</h2>
+<p>PY32F002AL15S（SOP8）的引脚分配：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>     VCC  1    8  VSS</span></span>
+<span class="line"><span>PA4/PA10  2    7  PA1</span></span>
+<span class="line"><span>     PA3  3    6  PA2/PF2-NRST</span></span>
+<span class="line"><span>PA14-SWC  4    5  PA13-SWD</span></span>
+<span class="line"><span>    /PB3</span></span></code></pre><p>注意三个共享焊盘：</p>
+<ul>
+<li>Pin 2：PA4 和 PA10 二选一（通过 SYSCFG 寄存器选择）</li>
+<li>Pin 4：PA14（SWCLK）和 PB3 二选一</li>
+<li>Pin 6：PA2 和 PF2-NRST 二选一（PF2/NRST 通过 Option Bytes 切换）</li>
+</ul>
+<p>每个被占用的调试引脚意味着什么：</p>
+<table>
+<thead>
+<tr>
+<th>引脚</th>
+<th>被占用的后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PA13 (SWDIO)</td>
+<td>调试器无法与芯片通信</td>
+</tr>
+<tr>
+<td>PA14 (SWCLK)</td>
+<td>调试器没有时钟</td>
+</tr>
+<tr>
+<td>PF2 (NRST)</td>
+<td>Connect Under Reset 不可用</td>
+</tr>
+</tbody></table>
+<p>三者全占 = 常规 SWD 调试通路全部切断。</p>
+<h2>SWD 引脚的生存窗口</h2>
+<p>ARM Cortex-M0+ 上电后，PA13 和 PA14 的默认状态是 AF0（SWDIO + SWCLK）。这个状态一直保持到用户固件执行 GPIO 初始化把它们切走。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>上电 -> SystemInit -> main -> GPIO_Init(PA13, ...) -> SWD 消失</span></span>
+<span class="line"><span>                              ^</span></span>
+<span class="line"><span>                     窗口在这里关闭，微秒级</span></span></code></pre><p>在 24MHz 的 PY32F002A 上，从复位释放到 GPIO 初始化执行完，通常不到 1 毫秒。除非你主动把窗口拉大，否则调试器不够时间连上来。</p>
+<h2>三层防线</h2>
+<h3>第一层：启动延迟</h3>
+<p>在 <code>main()</code> 开头加一段 delay，再切 SWD 引脚。Milton 在<a href="https://www.cnblogs.com/milton/p/17277985.html">他的 PY32 博文</a>里推荐 2 秒：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_Init</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">    SystemClock_Config</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#ifdef</span><span style="color:#569CD6"> DEBUG_BUILD</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_Delay</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">2000</span><span style="color:#D4D4D4">);</span><span style="color:#6A9955">  /* 调试版本给调试器 2 秒连接窗口 */</span></span>
+<span class="line"><span style="color:#C586C0">#endif</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 下面的 GPIO 初始化会重映射 PA13/PA14 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    Remap_SWD_Pins_To_GPIO</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* ... 业务逻辑 ... */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>用 <code>#ifdef DEBUG_BUILD</code> 包住，量产时一关宏就去掉了。</p>
+<p><strong>这层防线的漏洞：</strong> 如果固件在 delay 之前就 crash 了（时钟配置写错、HardFault），窗口直接消失。这只是买时间，不是真正的恢复机制。</p>
+<h3>第二层：Connect Under Reset</h3>
+<p>这是真正的防线。原理如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>NRST = LOW  -> Core 处于复位状态 -> SWD 引脚 = AF0（默认）</span></span>
+<span class="line"><span>            -> 调试器通过 SWD 连接成功</span></span>
+<span class="line"><span>            -> 调试器在 Reset Handler 入口设硬件断点</span></span>
+<span class="line"><span>NRST = HIGH -> Core 释放复位 -> 立即停在断点 -> 用户代码还没跑</span></span></code></pre><p>调试器在芯片还处于复位状态时就接管了 SWD 总线，然后在第一条用户指令之前设下断点。<strong>用户代码连 <code>main</code> 都没进去。</strong></p>
+<p>前提是 <strong>NRST 引脚必须可用</strong>。几种调试器的操作方式：</p>
+<table>
+<thead>
+<tr>
+<th>调试器</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>J-Link</td>
+<td><code>connect</code> -&gt; 选器件 -&gt; 提示 &quot;Connect under reset?&quot; -&gt; Yes</td>
+</tr>
+<tr>
+<td>DAP-Link / PY32-Link</td>
+<td>接线时把 NRST 接上，工具自动使用</td>
+</tr>
+<tr>
+<td>OpenOCD</td>
+<td><code>reset_config srst_only srst_nogate</code></td>
+</tr>
+<tr>
+<td>pyocd</td>
+<td><code>--connect=under-reset</code></td>
+</tr>
+</tbody></table>
+<p>如果 J-Link 连不上，先检查 NRST 线接了没有。这是最常见的漏接。</p>
+<h3>第三层：Option Bytes 与 SOP8 的限制</h3>
+<p>PY32F002A 内建了一个系统内存 bootloader，通过 USART1 烧录。拉高 BOOT0（PF4）上电就能进入。</p>
+<p><strong>但 SOP8 封装没有引出 PF4/BOOT0 引脚。</strong> 这条路在 SOP8 上不存在。这也是 SOP8 的终极风险：如果 SWD 死了、NRST 也没了、BOOT0 又不存在，芯片就失去了所有外部恢复手段。</p>
+<p>20 引脚及以上的封装（TSSOP20、QFN20）有 BOOT0，可以通过 USART ISP 救砖。选 SOP8 就意味着你必须靠前两层防线保护自己。</p>
+<h2>开发用大封装，量产切 SOP8</h2>
+<p>PY32F002A、PY32F003、PY32F030 共用同一套 HAL 驱动和同一个硅片。TSSOP20 封装引出了全部 18 个 IO，SWD、NRST、BOOT0 一个不缺。开发阶段用 TSSOP20，量产阶段切 SOP8，是 PY32 系列的标准玩法。</p>
+<p>封装的切换只是表象，真正的约束是<strong>外设子集要对齐</strong>。你在 TSSOP20 上开发时，不能用 F003 多出来的 DMA、TIM3、USART2。这些在 F002A 上根本没有。只要你只使用 F002A 也有的外设子集，从 TSSOP20 切到 SOP8 就只是改 Makefile 里 <code>MCU_TYPE</code> 和 linker script 的事。</p>
+<p>引脚分配上的过渡策略：</p>
+<ol>
+<li><strong>TSSOP20 开发阶段：</strong> 把将来要挪到 PA13/PA14/PF2 的功能，先挂在 TSSOP20 多出来的空闲引脚上。比如最终要占用 PA13 做 GPIO 输出，开发阶段先用 PA8 代替，等切 SOP8 时再把代码里的 <code>PA8</code> 改成 <code>PA13</code>。</li>
+<li><strong>SOP8 移植阶段：</strong> 硬件换成 SOP8，功能引脚挪到目标位置。此时固件保留启动 delay 和安全模式，NRST 保持为复位引脚。验证所有外设功能正常。</li>
+<li><strong>量产锁死：</strong> 最后一步才烧录关闭 NRST 的 Option Bytes。这一步不可逆（SOP8 没有 BOOT0 救不了），所以排在所有验证通过之后。</li>
+</ol>
+<p>整个过程里，SWD 调试能力只在最后一步之前始终可用。开发调试用 TSSOP20 全功能 SWD，移植验证用安全模式保底，量产烧录一次性关闭 NRST。</p>
+<p>启动延迟不能带到量产固件里，但可以在切 SWD 之前加一个条件判断：某个 GPIO 被外部拉低时，跳过 SWD 重映射，保持调试通道畅通。</p>
+<p>选择检测引脚的原则：</p>
+<ul>
+<li>正常运行时空闲为高电平（或被外部上拉）</li>
+<li>外部拉低不会触发总线协议误判</li>
+<li>最好是已有引脚，不额外占用</li>
+</ul>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> should_enter_safe_mode</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#6A9955">    /*</span></span>
+<span class="line"><span style="color:#6A9955">     * 选择某个正常运行时为高电平的引脚做安全模式检测。</span></span>
+<span class="line"><span style="color:#6A9955">     * 例如 I2C SCL 空闲时为高，外部拉低不会触发 Start 信号</span></span>
+<span class="line"><span style="color:#6A9955">     * （因为 Start 条件是 SCL 高电平期间 SDA 下降沿）。</span></span>
+<span class="line"><span style="color:#6A9955">     */</span></span>
+<span class="line"><span style="color:#D4D4D4">    GPIO_InitTypeDef gpio = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#6A9955">    /* 重要：必须先使能 GPIO 端口时钟，否则 HAL_GPIO_Init 寄存器写入可能无效 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    __HAL_RCC_SAFE_MODE_PORT_CLK_ENABLE</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">    gpio</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">Pin</span><span style="color:#D4D4D4"> = SAFE_MODE_PIN;</span><span style="color:#6A9955">      /* 由项目配置决定 */</span></span>
+<span class="line"><span style="color:#9CDCFE">    gpio</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">Mode</span><span style="color:#D4D4D4"> = GPIO_MODE_INPUT;</span></span>
+<span class="line"><span style="color:#9CDCFE">    gpio</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">Pull</span><span style="color:#D4D4D4"> = GPIO_PULLUP;</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_GPIO_Init</span><span style="color:#D4D4D4">(SAFE_MODE_PORT, &#x26;gpio);</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_Delay</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">HAL_GPIO_ReadPin</span><span style="color:#D4D4D4">(SAFE_MODE_PORT, SAFE_MODE_PIN) == GPIO_PIN_RESET);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    HAL_Init</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">    SystemClock_Config</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (!</span><span style="color:#DCDCAA">should_enter_safe_mode</span><span style="color:#D4D4D4">()) {</span></span>
+<span class="line"><span style="color:#6A9955">        /* 正常启动：重映射 SWD 引脚到业务功能 */</span></span>
+<span class="line"><span style="color:#DCDCAA">        Remap_SWD_Pins_To_GPIO</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#6A9955">    /* 安全模式下 SWD 引脚保持 AF0，调试器可正常连接 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 恢复安全模式检测引脚的业务功能（如 I2C AF） */</span></span>
+<span class="line"><span style="color:#DCDCAA">    Restore_SafeModePin_AF</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* ... 业务逻辑 ... */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>需要更新固件时，把检测引脚临时短接到 GND 再上电就行。</p>
+<p><strong>为什么选 I2C SCL 类型的引脚做检测：</strong> SCL 空闲时为高电平，外部拉低不会被从机误判，因为 I2C 的 Start 条件要求 SCL 高电平期间 SDA 出现下降沿。单拉低 SCL 不会触发任何 I2C 行为。类似的，SPI 的 SCK（CPOL=0 时空闲为低，CPOL=1 时空闲为高）也可以根据实际配置选择。</p>
+<h2>NRST 什么时候可以放开</h2>
+<p>PF2-NRST 通过 Option Bytes 控制。Option Bytes 的地址是 <code>0x1FFF 0E80</code>，bit 14 控制 NRST_MODE：</p>
+<table>
+<thead>
+<tr>
+<th>NRST_MODE</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0（默认）</td>
+<td>PF2 是 NRST 复位引脚</td>
+</tr>
+<tr>
+<td>1</td>
+<td>PF2 是普通 GPIO（NRST 功能关闭）</td>
+</tr>
+</tbody></table>
+<p>把 PF2 改成 GPIO 的代码：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> APP_FlashSetOptionBytes</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#D4D4D4">    FLASH_OBProgramInitTypeDef OBInitCfg;</span></span>
+<span class="line"><span style="color:#DCDCAA">    LL_FLASH_Unlock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">    LL_FLASH_OB_Unlock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">    OBInitCfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">OptionType</span><span style="color:#D4D4D4"> = OPTIONBYTE_USER;</span></span>
+<span class="line"><span style="color:#9CDCFE">    OBInitCfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">USERType</span><span style="color:#D4D4D4"> = OB_USER_BOR_EN | OB_USER_BOR_LEV |</span></span>
+<span class="line"><span style="color:#D4D4D4">                         OB_USER_IWDG_SW | OB_USER_WWDG_SW |</span></span>
+<span class="line"><span style="color:#D4D4D4">                         OB_USER_NRST_MODE | OB_USER_nBOOT1;</span></span>
+<span class="line"><span style="color:#9CDCFE">    OBInitCfg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">USERConfig</span><span style="color:#D4D4D4"> = OB_BOR_DISABLE | OB_BOR_LEVEL_3p1_3p2 |</span></span>
+<span class="line"><span style="color:#D4D4D4">                           OB_IWDG_SW | OB_WWDG_SW |</span></span>
+<span class="line"><span style="color:#D4D4D4">                           OB_RESET_MODE_GPIO |</span><span style="color:#6A9955">   /* PF2 变 GPIO */</span></span>
+<span class="line"><span style="color:#D4D4D4">                           OB_BOOT1_SYSTEM;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    LL_FLASH_OBProgram</span><span style="color:#D4D4D4">(&#x26;OBInitCfg);</span></span>
+<span class="line"><span style="color:#DCDCAA">    LL_FLASH_Lock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">    LL_FLASH_OB_Lock</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#DCDCAA">    LL_FLASH_OB_Launch</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">  /* 触发软复位，OB 生效。此调用不返回 */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><strong>关键防护：</strong> 调用前检查 OB 是否已经被改过，避免无限复位：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">READ_BIT</span><span style="color:#D4D4D4">(FLASH-></span><span style="color:#9CDCFE">OPTR</span><span style="color:#D4D4D4">, FLASH_OPTR_NRST_MODE) == OB_RESET_MODE_RESET) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    APP_FlashSetOptionBytes</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">  /* 只执行一次 */</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><strong>NRST 改 GPIO 的时机：</strong> 放在上一节三步流程的最后一步。SOP8 硬件全部验证通过，量产烧录时才执行。在此之前 NRST 始终保持为复位引脚。</p>
+<h2>总结</h2>
+<p>SOP8 封装下占用 PA13/PA14/PF2 可以做，但要有纪律：</p>
+<ol>
+<li><strong>开发时不动 SWD 和 NRST。</strong> 用引脚更多的封装调试，引脚管够。</li>
+<li><strong>量产固件留安全模式。</strong> 一个 GPIO 拉低就让 SWD 保持打开，永远有一条路回去。</li>
+<li><strong>NRST 是最后一道防线。</strong> 没了 NRST 就等于放弃了 Connect Under Reset，最可靠的 SWD 恢复手段。把它留到最后再关。</li>
+<li><strong>SOP8 没有 BOOT0，ISP 救不了你。</strong> 防线全在前两层，软件上必须做足。</li>
+</ol>
+<blockquote>
+<p>补充说明：PA10 和 PA4 在 SOP8 的 Pin 2 上是二选一关系。如果你要用硬件 I2C1，注意 PA4 不支持 I2C SDA 复用（只有 SPI1_NSS、USART1_CK），必须选 PA10（AF6 = I2C1_SDA）。类似的，Pin 4 在 PA14 和 PB3 之间二选一，如果你的外设需要独立于 SWCLK 的引脚，选 PB3（AF1 = TIM1_CH2）。选引脚前对照数据手册的复用功能映射表，避免选了不支持的组合。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=py32-sop8-swd-remap');
+  }
+  </script>
+</body>
+</html>

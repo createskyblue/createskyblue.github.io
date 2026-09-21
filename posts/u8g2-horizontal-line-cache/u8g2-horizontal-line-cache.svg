@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">U8g2 字形线段缓存与 DMA 批量提交</title>
+  <desc id="desc">U8g2 解码字形后输出水平线段，连续线段进入缓存，边界或零长度哨兵触发 TFT 窗口设置和 DMA 批量发送。</desc>
+  <rect width="1200" height="520" fill="#f7f9fc"/>
+  <text x="60" y="54" fill="#172033" font-family="Arial, sans-serif" font-size="26" font-weight="700">U8g2 文字渲染提交路径</text>
+  <text x="60" y="84" fill="#5b667a" font-family="Arial, sans-serif" font-size="16">字形解析保持不变，显示适配层合并连续水平线段</text>
+
+  <rect x="60" y="135" width="220" height="112" rx="8" fill="#e6f0ff" stroke="#3976c9" stroke-width="2"/>
+  <text x="170" y="173" text-anchor="middle" fill="#17345e" font-family="Arial, sans-serif" font-size="20" font-weight="700">drawUTF8</text>
+  <text x="170" y="204" text-anchor="middle" fill="#36516f" font-family="Arial, sans-serif" font-size="16">UTF-8 与字形定位</text>
+  <text x="170" y="228" text-anchor="middle" fill="#36516f" font-family="Arial, sans-serif" font-size="16">u8g2_font_decode</text>
+
+  <line x1="280" y1="191" x2="345" y2="191" stroke="#53657d" stroke-width="3"/>
+  <polygon points="345,191 331,183 331,199" fill="#53657d"/>
+
+  <rect x="345" y="135" width="235" height="112" rx="8" fill="#fff2d9" stroke="#c88920" stroke-width="2"/>
+  <text x="462" y="173" text-anchor="middle" fill="#684a0b" font-family="Arial, sans-serif" font-size="20" font-weight="700">u8g2_draw_hv_line</text>
+  <text x="462" y="204" text-anchor="middle" fill="#765b27" font-family="Arial, sans-serif" font-size="16">连续像素变成水平线段</text>
+  <text x="462" y="228" text-anchor="middle" fill="#765b27" font-family="Arial, sans-serif" font-size="16">DisplayAdapter_drawFastHLine</text>
+
+  <line x1="580" y1="191" x2="645" y2="191" stroke="#53657d" stroke-width="3"/>
+  <polygon points="645,191 631,183 631,199" fill="#53657d"/>
+
+  <rect x="645" y="118" width="240" height="146" rx="8" fill="#e5f7ed" stroke="#29935b" stroke-width="2"/>
+  <text x="765" y="154" text-anchor="middle" fill="#145a36" font-family="Arial, sans-serif" font-size="20" font-weight="700">lineBuf</text>
+  <text x="765" y="185" text-anchor="middle" fill="#286645" font-family="Arial, sans-serif" font-size="16">同一行 + 首尾相接</text>
+  <text x="765" y="211" text-anchor="middle" fill="#286645" font-family="Arial, sans-serif" font-size="16">追加像素</text>
+  <text x="765" y="237" text-anchor="middle" fill="#286645" font-family="Arial, sans-serif" font-size="16">等待提交边界</text>
+
+  <line x1="885" y1="191" x2="950" y2="191" stroke="#53657d" stroke-width="3"/>
+  <polygon points="950,191 936,183 936,199" fill="#53657d"/>
+
+  <rect x="950" y="135" width="190" height="112" rx="8" fill="#f4e8f8" stroke="#8d4aa6" stroke-width="2"/>
+  <text x="1045" y="173" text-anchor="middle" fill="#542d66" font-family="Arial, sans-serif" font-size="20" font-weight="700">TFT / SPI DMA</text>
+  <text x="1045" y="204" text-anchor="middle" fill="#684579" font-family="Arial, sans-serif" font-size="16">一次窗口设置</text>
+  <text x="1045" y="228" text-anchor="middle" fill="#684579" font-family="Arial, sans-serif" font-size="16">一次批量发送</text>
+
+  <rect x="180" y="335" width="350" height="108" rx="8" fill="#fff0f0" stroke="#bd4c4c" stroke-width="2"/>
+  <text x="355" y="372" text-anchor="middle" fill="#762d2d" font-family="Arial, sans-serif" font-size="19" font-weight="700">缓存边界</text>
+  <text x="355" y="404" text-anchor="middle" fill="#7c4a4a" font-family="Arial, sans-serif" font-size="16">换行或出现横坐标间隔</text>
+  <text x="355" y="428" text-anchor="middle" fill="#7c4a4a" font-family="Arial, sans-serif" font-size="16">提交上一批数据</text>
+
+  <rect x="670" y="335" width="350" height="108" rx="8" fill="#eef1f5" stroke="#68768b" stroke-width="2"/>
+  <text x="845" y="372" text-anchor="middle" fill="#303d50" font-family="Arial, sans-serif" font-size="19" font-weight="700">零长度哨兵</text>
+  <text x="845" y="404" text-anchor="middle" fill="#526176" font-family="Arial, sans-serif" font-size="16">DisplayAdapter_drawFastHLine</text>
+  <text x="845" y="428" text-anchor="middle" fill="#526176" font-family="Arial, sans-serif" font-size="16">(888, 888, 0, color)</text>
+
+  <path d="M765 264 L765 300 L530 300 L530 335" fill="none" stroke="#bd4c4c" stroke-width="3"/>
+  <polygon points="530,335 522,321 538,321" fill="#bd4c4c"/>
+  <path d="M885 264 L885 300 L845 300 L845 335" fill="none" stroke="#68768b" stroke-width="3"/>
+  <polygon points="845,335 837,321 853,321" fill="#68768b"/>
+</svg>

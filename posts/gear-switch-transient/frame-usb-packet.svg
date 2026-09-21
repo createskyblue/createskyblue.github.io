@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 210" width="940" height="210" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif">
+  <rect width="940" height="210" fill="#f8fafc"/>
+  <text x="20" y="26" font-size="17" fill="#1e293b" font-weight="bold">小巧思：64 字节帧 = 恰好一个 USB 全速包（一包一帧，免拆包）</text>
+
+  <!-- 64-byte frame bar, 820px for 64 bytes -->
+  <g font-size="13" fill="#ffffff" text-anchor="middle">
+    <rect x="40" y="80" width="51" height="60" fill="#94a3b8"/>
+    <text x="65" y="116">帧头 4B</text>
+
+    <rect x="91" y="80" width="115" height="60" fill="#3b82f6"/>
+    <text x="148" y="116">通道头 9B</text>
+
+    <rect x="206" y="80" width="641" height="60" fill="#16a34a"/>
+    <text x="526" y="116">25 个采样 × 2B（电压 1 + 电流 24）</text>
+
+    <rect x="847" y="80" width="13" height="60" fill="#d97706"/>
+  </g>
+  <text x="853" y="74" font-size="11" fill="#b45309" text-anchor="middle">标志</text>
+
+  <text x="20" y="170" font-size="14" fill="#1e293b" font-weight="bold">载荷 60B = 9 + 50 + 1，一字节不剩</text>
+  <text x="20" y="192" font-size="13" fill="#475569">通道头 9B = 24 个电流采样 × 3 位通道号 = 72 位，位打包后恰好 9 字节</text>
+</svg>

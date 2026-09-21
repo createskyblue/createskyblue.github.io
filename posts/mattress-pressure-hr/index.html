@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>睡眠心率呼吸床垫 BLE 低功耗物联网系统 - CacheRivulet小记</title>
+  <meta name="description" content="睡眠心率呼吸床垫 BLE 低功耗物联网系统">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:tag" content="ESP32">
+  <meta property="article:published_time" content="2026-09-15">
+  <meta property="og:title" content="睡眠心率呼吸床垫 BLE 低功耗物联网系统">
+  <meta property="og:description" content="睡眠心率呼吸床垫 BLE 低功耗物联网系统">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/mattress-pressure-hr/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/mattress-pressure-hr/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "睡眠心率呼吸床垫 BLE 低功耗物联网系统",
+  "description": "睡眠心率呼吸床垫\nBLE 低功耗物联网系统",
+  "datePublished": "2026-09-15",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/mattress-pressure-hr/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/mattress-pressure-hr/"
+  },
+  "keywords": "嵌入式, 低功耗, BLE, 信号处理, 系统设计, ESP32"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">睡眠心率呼吸床垫 BLE 低功耗物联网系统</h1>
+  <article class="article-body">
+<h1>睡眠心率呼吸床垫 BLE 低功耗物联网系统</h1>
+<p><strong>项目简述</strong>：独立端到端实现睡眠生理监测 IoT 系统，包含电池供电 BLE 感知从节点、ESP32 蓝牙网关与微弱生理信号算法。攻克微弱振动信号提取、受限 MCU 算法移植、电池功耗权衡、多 BLE 设备接入、异构传感总线接入、网络异常数据容错等问题，技术可迁移至低功耗传感类产品。</p>
+<h2>核心工作</h2>
+<h3>BLE 低功耗床垫感知从节点</h3>
+<ul>
+<li><strong>采集与前端</strong>：设计压电+压力双传感协同采集策略：压力传感器做低频在位检测触发，压电传感器做高带宽生理信号采集，在位检测按需启采，兼顾续航与采集性能；完成差分模拟前端，抑制基线与环境噪声。</li>
+<li><strong>算法自研与移植</strong>：针对床垫压电微弱振动信号（低信噪比、呼吸谐波与体动干扰和目标频带重叠），自研心率 / 呼吸估计算法，设计自适应滤波与运动干扰抑制链路，以置信度输出抑制体动误报；算法流式化移植至资源受限 MCU，通过增量求和与单调队列维护滑动窗口极值，将每样本开销从 O (窗口长度) 降至常数级，1 秒窗口处理实测 230ms，较初版实现提升约 12 倍；配套自建低代码拖拽式算法仿真平台（<a href="/posts/signal-analysis-lab">signal-analysis-lab</a>），完成仿真 - 实机一致性验证。</li>
+<li><strong>功耗调度</strong>：基于差分闹钟实现功耗调度状态机（采样 / 同步 / 休眠），按最近任务截止时间动态计算唤醒间隔，采样窗口外对模拟前端独立断电，整机休眠功耗低至 7μA。</li>
+<li><strong>数据流水线</strong>：搭建 ADC 采样 FIFO→流式处理→结果 / 波形双队列（独立时间戳，波形 LTTB 降采样）采集流水线。</li>
+<li><strong>可靠性</strong>：实现低电量锁死保护与 FIFO 高水位紧急同步，防止数据积压丢失；支持 BLE 远程配置热更新。</li>
+</ul>
+<h3>ESP32 蓝牙网关</h3>
+<ul>
+<li><strong>异构传感接入架构</strong>：设计统一传感器驱动抽象层，定义统一设备接口，屏蔽 Modbus RTU、I²C、自定义 UART、GPIO 中断等多类总线差异；采用设备表注册机制，新增传感器仅需实现接口并注册，轮询框架零改动；驱动统一输出键值对契约，映射表驱动解析，新增传感器零硬编码；单线程轮询 + 队列解耦，统一读数结构供上层消费，完成温湿度、CO₂、CO、打鼾等多维环境数据汇聚。</li>
+<li><strong>数据链路</strong>：实现多 BLE 从机扫描、连接与数据交互；基于 MQTT QoS 1 实现可靠上报，设计 FlashDB TSDB 本地时序缓存（7天窗口）与断网补传机制，网络恢复后按时间序批量补传并逐批确认删除，保障数据零丢失。</li>
+<li><strong>交互层</strong>：面向用户提供 APP 完成配网与数据查看；网关提供可被 APP 嵌套的本地调试后台，用于图表浏览与设备运维。</li>
+</ul>
+<h2>技术沉淀</h2>
+<p>微弱模拟信号调理降噪、生理信号算法自研与 MCU 端移植性能调优；电池 BLE 设备差分闹钟休眠唤醒功耗框架设计；异构传感总线统一抽象层与插件式扩展设计；采集流水线与波形降采样（LTTB）；BLE 多从机管理；网络异常数据缓存补发容错方案。</p>
+<h3>心率信号处理算法</h3>
+<p><img src="/posts/mattress-pressure-hr/pressure-hr-chain.svg" alt="心率算法通用模块：信号预处理、节拍提取、多路间隔估计、稳健统计与质量择优"></p>
+<h3>传感器解耦</h3>
+<p><img src="/posts/mattress-pressure-hr/sensor-decoupling-sequence.svg" alt="传感器解耦时序图：统一接口层屏蔽总线差异，设备表注册实现零改动扩展，队列实现生产者-消费者解耦"></p>
+<h3>MQTT可靠上报与断网补传</h3>
+<p>基于 MQTT QoS 1 实现可靠数据上报，重要数据（心率/呼吸/环境）先落盘 FlashDB TSDB（7天窗口）再上报、发送成功才标记删除；波形预览仅 RAM 队列不落盘。网络恢复后按时间序批量补传并逐批确认删除，保障数据零丢失。本地完成分钟级聚合后再上报，降低上行带宽与后端存储压力。</p>
+<p><img src="/posts/mattress-pressure-hr/mqtt-offline-cache-flow.svg" alt="MQTT可靠上报与断网补传时序图：BLE主从pull模式采集，重要数据（心率/呼吸/环境）先落盘FlashDB再MQTT QoS1上报、发送成功才标记删除，波形预览仅RAM队列不落盘，断网恢复后批量补传，APP经后端中转查看（非直连网关）"></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-15 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=mattress-pressure-hr');
+  }
+  </script>
+</body>
+</html>

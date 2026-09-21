@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 AP 模式下通过 DNS 劫持实现强制门户跳转 - CacheRivulet小记</title>
+  <meta name="description" content="实现连接ESP32热点后自动弹出网页">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="ESP32">
+  <meta property="article:tag" content="DNS劫持">
+  <meta property="article:tag" content="强制门户">
+  <meta property="article:tag" content="Captive Portal">
+  <meta property="article:tag" content="FreeRTOS">
+  <meta property="article:published_time" content="2026-06-09">
+  <meta property="og:title" content="ESP32 AP 模式下通过 DNS 劫持实现强制门户跳转">
+  <meta property="og:description" content="实现连接ESP32热点后自动弹出网页">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32-dns-hijack-captive-portal/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32-dns-hijack-captive-portal/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP32 AP 模式下通过 DNS 劫持实现强制门户跳转",
+  "description": "实现连接ESP32热点后自动弹出网页",
+  "datePublished": "2026-06-09",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32-dns-hijack-captive-portal/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32-dns-hijack-captive-portal/"
+  },
+  "keywords": "ESP32, DNS劫持, 强制门户, Captive Portal, FreeRTOS"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP32 AP 模式下通过 DNS 劫持实现强制门户跳转</h1>
+  <article class="article-body">
+<h1>ESP32 AP 模式下通过 DNS 劫持实现强制门户跳转</h1>
+<p>ESP32 开启热点时，需要一个机制让连接上来的设备自动打开控制面板网页，而不是让用户手动输入 IP 地址。这个机制在酒店/机场 WiFi 中很常见——连上热点后自动弹出一个登录页面，这就是强制门户（Captive Portal）。</p>
+<p>实现强制门户需要三个环节配合：DHCP 通告 DNS、DNS 劫持、HTTP 302 跳转。</p>
+<h2>整体流程</h2>
+<ol>
+<li>设备连接 ESP32 热点，通过 DHCP 获取 IP，同时被告知 DNS 服务器地址为 <code>192.168.4.1</code></li>
+<li>操作系统在后台发送强制门户检测请求（如 <code>http://captive.apple.com/hotspot-detect.html</code>）</li>
+<li>DNS 查询被 ESP32 上的 DNS 服务拦截，全部返回 ESP32 自身 IP</li>
+<li>HTTP 请求到达 ESP32 的 Web 服务器，未知路径返回 302 重定向到 <code>/</code></li>
+<li>操作系统收到非预期响应，识别为强制门户，弹出浏览器窗口</li>
+</ol>
+<h2>DHCP 通告 DNS 服务器</h2>
+<p>首先让 DHCP 在分配 IP 时告诉客户端：DNS 服务器就是 ESP32 自己。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#4EC9B0">esp_netif_dns_info_t</span><span style="color:#D4D4D4"> dns_info = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#D4D4D4">dns_info.ip.u_addr.ip4.addr = </span><span style="color:#DCDCAA">esp_ip4addr_aton</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"192.168.4.1"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">dns_info.ip.type = ESP_IPADDR_TYPE_V4;</span></span>
+<span class="line"><span style="color:#DCDCAA">esp_netif_dhcps_option</span><span style="color:#D4D4D4">(s_wifi_ap_netif, ESP_NETIF_OP_SET,</span></span>
+<span class="line"><span style="color:#D4D4D4">                       ESP_NETIF_DOMAIN_NAME_SERVER,</span></span>
+<span class="line"><span style="color:#D4D4D4">                       &#x26;</span><span style="color:#9CDCFE">dns_info</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(dns_info));</span></span></code></pre><p><code>esp_netif_dhcps_option</code> 直接修改 ESP-IDF 内置 DHCP 服务器的配置，不需要额外引入 DHCP 库。</p>
+<h2>DNS 劫持服务</h2>
+<p>核心是一个 FreeRTOS 任务，创建 UDP socket 监听 53 端口，对所有 DNS 查询返回一个 A 记录，IP 指向 ESP32 自身的 AP 地址 <code>192.168.4.1</code>。</p>
+<p>完整代码如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DNS_PORT </span><span style="color:#B5CEA8">53</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> DNS_MAX_QUERY_LEN </span><span style="color:#B5CEA8">512</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> dns_server_task</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">arg</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#D4D4D4">    (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)arg;</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> sockaddr_in addr = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#9CDCFE">    addr</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">sin_family</span><span style="color:#D4D4D4"> = AF_INET;</span></span>
+<span class="line"><span style="color:#9CDCFE">    addr</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">sin_addr</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">s_addr</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">htonl</span><span style="color:#D4D4D4">(INADDR_ANY);</span></span>
+<span class="line"><span style="color:#9CDCFE">    addr</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">sin_port</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">htons</span><span style="color:#D4D4D4">(DNS_PORT);</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#D4D4D4"> sock = </span><span style="color:#DCDCAA">socket</span><span style="color:#D4D4D4">(AF_INET, SOCK_DGRAM, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (sock &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        ESP_LOGE</span><span style="color:#D4D4D4">(TAG, </span><span style="color:#CE9178">"dns: socket create failed"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">        vTaskDelete</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">bind</span><span style="color:#D4D4D4">(sock, (</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sockaddr *)&#x26;addr, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(addr)) &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        ESP_LOGE</span><span style="color:#D4D4D4">(TAG, </span><span style="color:#CE9178">"dns: bind failed"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(sock);</span></span>
+<span class="line"><span style="color:#DCDCAA">        vTaskDelete</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    ESP_LOGI</span><span style="color:#D4D4D4">(TAG, </span><span style="color:#CE9178">"dns hijack server started on port </span><span style="color:#9CDCFE">%u</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, DNS_PORT);</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#9CDCFE"> buf</span><span style="color:#D4D4D4">[DNS_MAX_QUERY_LEN];</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">        struct</span><span style="color:#D4D4D4"> sockaddr_in from = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#4EC9B0">        socklen_t</span><span style="color:#D4D4D4"> fromlen = </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(from);</span></span>
+<span class="line"><span style="color:#569CD6">        int</span><span style="color:#D4D4D4"> len = </span><span style="color:#DCDCAA">recvfrom</span><span style="color:#D4D4D4">(sock, buf, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(buf), </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">                           (</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sockaddr *)&#x26;from, &#x26;fromlen);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (len &#x3C; </span><span style="color:#B5CEA8">12</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">continue</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">        uint8_t</span><span style="color:#9CDCFE"> response</span><span style="color:#D4D4D4">[DNS_MAX_QUERY_LEN];</span></span>
+<span class="line"><span style="color:#DCDCAA">        memcpy</span><span style="color:#D4D4D4">(response, buf, (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)len);</span></span>
+<span class="line"><span style="color:#9CDCFE">        response</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">] |= </span><span style="color:#B5CEA8">0x80</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">        response</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">] |= </span><span style="color:#B5CEA8">0x80</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">        response</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">6</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">0x00</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">        response</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">7</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">0x01</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">        size_t</span><span style="color:#D4D4D4"> answer_off = (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)len;</span></span>
+<span class="line"><span style="color:#569CD6">        uint8_t</span><span style="color:#D4D4D4"> answer</span><span style="color:#569CD6">[]</span><span style="color:#D4D4D4"> = {</span></span>
+<span class="line"><span style="color:#B5CEA8">            0xC0</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x0C</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#B5CEA8">            0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x01</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#B5CEA8">            0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x01</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#B5CEA8">            0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">60</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#B5CEA8">            0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x04</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#B5CEA8">            0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x00</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0x00</span></span>
+<span class="line"><span style="color:#D4D4D4">        };</span></span>
+<span class="line"><span style="color:#DCDCAA">        memcpy</span><span style="color:#D4D4D4">(response + answer_off, answer, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(answer));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">        esp_netif_ip_info_t</span><span style="color:#D4D4D4"> ip_info;</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (s_wifi_ap_netif &#x26;&#x26; </span><span style="color:#DCDCAA">esp_netif_get_ip_info</span><span style="color:#D4D4D4">(s_wifi_ap_netif, &#x26;ip_info) == ESP_OK) {</span></span>
+<span class="line"><span style="color:#569CD6">            uint32_t</span><span style="color:#D4D4D4"> ip = </span><span style="color:#9CDCFE">ip_info</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">ip</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">addr</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">            memcpy</span><span style="color:#D4D4D4">(response + answer_off + </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(answer) - </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">, &#x26;ip, </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">        } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">            response</span><span style="color:#D4D4D4">[answer_off + </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(answer) - </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">192</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">            response</span><span style="color:#D4D4D4">[answer_off + </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(answer) - </span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">168</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">            response</span><span style="color:#D4D4D4">[answer_off + </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(answer) - </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">            response</span><span style="color:#D4D4D4">[answer_off + </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(answer) - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">] = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">        sendto</span><span style="color:#D4D4D4">(sock, response, answer_off + </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(answer), </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">               (</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sockaddr *)&#x26;from, fromlen);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> dns_server_start</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    xTaskCreate</span><span style="color:#D4D4D4">(dns_server_task, </span><span style="color:#CE9178">"dns_server"</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">3072</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>代码要点</h3>
+<p><strong>最小 DNS 报文验证。</strong> <code>if (len &lt; 12) continue</code> 跳过不完整的请求。DNS 头部固定 12 字节，小于这个长度一定是无效包。</p>
+<p><strong>复用查询包构造响应。</strong> <code>memcpy(response, buf, len)</code> 把原始查询报文复制到响应缓冲区。这样做的好处是自动保留了 Transaction ID（前 2 字节）和 Question 段，客户端才能匹配请求和响应。</p>
+<p><strong>修改标志位。</strong> <code>response[2] |= 0x80</code> 将 QR 位置 1，表示这是响应而非查询。<code>response[3] |= 0x80</code> 设置 RA（Recursion Available），告知客户端服务器支持递归查询。</p>
+<p><strong>设置回答计数。</strong> <code>response[6]=0x00, response[7]=0x01</code> 表示 Answer RRs = 1。后续追加一个 A 记录回答。</p>
+<p><strong>构造 DNS 回答段。</strong> 16 字节的固定回答模板：</p>
+<table>
+<thead>
+<tr>
+<th>偏移</th>
+<th>字节</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td><code>0xC0 0x0C</code></td>
+<td>域名指针，指向查询报文偏移 12 处的域名</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>0x00 0x01</code></td>
+<td>Type = A (Host Address)</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>0x00 0x01</code></td>
+<td>Class = IN (Internet)</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>0x00 0x00 0x00 60</code></td>
+<td>TTL = 60 秒</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>0x00 0x04</code></td>
+<td>RD Length = 4 字节</td>
+</tr>
+<tr>
+<td>12</td>
+<td>4 字节 IP</td>
+<td>回答的 IPv4 地址</td>
+</tr>
+</tbody></table>
+<p>使用 <code>0xC0 0x0C</code> 域名指针而不是重复拷贝域名，节省了响应报文长度。<code>0xC0</code> 表示这是一个压缩指针，<code>0x0C</code> 指向 DNS 报文偏移 12（即紧接头部之后的 Question 域名段）。</p>
+<p><strong>填充 ESP32 AP IP。</strong> 优先从 <code>s_wifi_ap_netif</code> 获取真实的 AP 地址，fallback 硬编码 <code>192.168.4.1</code>（ESP-IDF 默认 AP IP）。</p>
+<h2>HTTP 302 跳转</h2>
+<p>DNS 劫持把请求送到了 ESP32，但 Web 服务器需要对未知路径做出响应。返回 404 不会触发强制门户检测——系统可能认为这只是网络不通。返回 302 重定向到 <code>/</code> 则被系统识别为强制门户，同时浏览器自动加载首页。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">FILE *file = </span><span style="color:#DCDCAA">fopen</span><span style="color:#D4D4D4">(path, </span><span style="color:#CE9178">"r"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (file == </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    httpd_resp_set_status</span><span style="color:#D4D4D4">(req, </span><span style="color:#CE9178">"302 Found"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    httpd_resp_set_hdr</span><span style="color:#D4D4D4">(req, </span><span style="color:#CE9178">"Location"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"/"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">    httpd_resp_send</span><span style="color:#D4D4D4">(req, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> ESP_OK;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>littlefs_static_handler</code> 原本对不存在文件返回 404，改为 302 后所有未知路径（包括各操作系统的强制门户检测 URL）都会被重定向到 <code>/</code>。</p>
+<h2>各平台强制门户检测 URL</h2>
+<table>
+<thead>
+<tr>
+<th>平台</th>
+<th>检测 URL</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>iOS / macOS</td>
+<td><code>http://captive.apple.com/hotspot-detect.html</code></td>
+</tr>
+<tr>
+<td>Android</td>
+<td><code>http://connectivitycheck.gstatic.com/generate_204</code></td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>http://www.msftconnecttest.com/connecttest.txt</code></td>
+</tr>
+</tbody></table>
+<p>这些 URL 的域名经 DNS 劫持后全部解析到 ESP32，HTTP 请求被 302 重定向，触发各自系统的强制门户弹窗。</p>
+<h2>启动方式</h2>
+<p>在 <code>wifi_init()</code> 中，<code>esp_wifi_start()</code> 之后调用 <code>dns_server_start()</code> 即可。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">ESP_ERROR_CHECK</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">esp_wifi_start</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#DCDCAA">dns_server_start</span><span style="color:#D4D4D4">();</span></span></code></pre><p>不需要单独管理 DNS 任务的生命周期——WiFi 初始化后启动，随 ESP32 一直运行。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-09 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32-dns-hijack-captive-portal');
+  }
+  </script>
+</body>
+</html>

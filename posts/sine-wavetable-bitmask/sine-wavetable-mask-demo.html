@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10-bit 正弦波表 · 位屏蔽模拟</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --line:#e4e9f0; --txt:#1f2733;
+    --muted:#66707f; --orig:#dc2626; --mask:#1d6fd8;
+    --bit:#f6f8fb; --bitOff:#e3e8ef;
+    --canvas:#ffffff; --grid:#eef1f6; --codebg:#f8fafc; --ctrl:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Segoe UI",Consolas,Menlo,monospace;font-size:13px;line-height:1.5}
+  h1{font-size:16px;margin:0 0 4px;font-weight:600}
+  .wrap{max-width:1080px;margin:0 auto;padding:18px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  label.muted{color:var(--muted)}
+  select,button{background:var(--ctrl);color:var(--txt);border:1px solid var(--line);
+    border-radius:6px;padding:5px 9px;font:inherit;cursor:pointer}
+  button:hover,select:hover{border-color:#b9c3d0}
+  canvas{width:100%;height:340px;display:block;background:var(--canvas);border-radius:6px;border:1px solid var(--line)}
+  .bits{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .bit{display:flex;flex-direction:column;align-items:center;gap:3px}
+  .bit .cell{width:46px;padding:6px 0;text-align:center;border-radius:5px;
+    background:var(--bit);border:1px solid var(--line);cursor:pointer;user-select:none}
+  .bit .cell.off{background:var(--bitOff);color:var(--muted);text-decoration:line-through}
+  .bit .lab{font-size:11px;color:var(--muted)}
+  .legend{display:flex;gap:16px;margin:6px 0 0;color:var(--muted);font-size:12px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .chk{display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px}
+  .stat{background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+  .stat b{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-bottom:2px}
+  .stat span{font-size:15px;color:var(--txt)}
+  #info{font-family:Consolas,monospace;white-space:pre;font-size:12px;color:var(--txt);
+    background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px;margin-top:8px;min-height:74px}
+  .note{font-size:12.5px;color:var(--muted);line-height:1.7}
+  .note b{color:var(--txt)}
+  .note code{background:var(--codebg);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-family:Consolas,monospace}
+  .binbar span{display:inline-block;width:14px;text-align:center;margin:0 1px;padding:2px 0;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>10-bit 正弦波表 · 位屏蔽模拟</h1>
+    <div class="row" style="margin-bottom:10px">
+      <label class="muted">波表长度</label>
+      <select id="len">
+        <option value="64">64</option>
+        <option value="128">128</option>
+        <option value="256">256</option>
+        <option value="512" selected>512</option>
+        <option value="1024">1024</option>
+      </select>
+      <button id="allOn">全部保留</button>
+      <button id="allOff">全部屏蔽</button>
+      <button id="onlyTop">仅留高 4 位</button>
+      <button id="onlyD9Off">屏蔽 D9</button>
+      <button id="onlyD6On">仅留 D6</button>
+    </div>
+
+    <div class="bits" id="bits"></div>
+    <div class="row" style="margin-top:8px;gap:18px">
+      <label class="muted">显示周期数</label>
+      <select id="cycles">
+        <option value="1">1</option>
+        <option value="2" selected>2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="8">8</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="showOrig"> 显示原始 (红)</label>
+      <label class="chk"><input type="checkbox" id="showMask" checked> 显示屏蔽后 (蓝)</label>
+      <label class="chk"><input type="checkbox" id="autoY" checked> Y 轴自适应</label>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--orig)"></i>原始 10-bit 正弦</span>
+      <span><i style="background:var(--mask)"></i>屏蔽后输出（被勾掉 = 该位 stuck-at-0）</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <canvas id="cv"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="stats" id="stats"></div>
+    <div id="info">移动鼠标到波形上查看该采样点细节。</div>
+  </div>
+
+  <div class="panel">
+    <h1 style="font-size:14px">折叠拱形是什么原理</h1>
+    <div class="note">
+      波表是 10 位，满量程 0..1023，中点 512。<b>高位 Bit9 权重是 512，正好是满量程的一半。</b>
+      屏蔽它（stuck-at-0）在数学上等价于对 1024 取模：<code>y &amp; 511 = y mod 512</code>。
+      于是正弦峰值 1023 变成 511、中点 512 变成 0，<b>上半个周期被镜像翻折进下半区</b>，连成一段段上拱的弧，这就是你看到的「折叠拱形」。<br>
+      每多屏蔽一个高位，取模基数减半（<code>mod 256</code>、<code>mod 128</code>…），一个周期内拱数翻倍，表观频率 ×2、×4…，专业上叫<b>波形折叠 / foldover 失真</b>，是结构性的频谱污染，不是噪声。<br>
+      对比<b>低位屏蔽</b>：低位是细权重，屏蔽只是把小步长合并，波形形状不变、幅度不变，只是边缘出现阶梯，属于<b>量化分辨率下降</b>。一句话：丢低位 = 变糙，丢高位 = 变怪（折叠）。
+    </div>
+  </div>
+</div>
+
+<script>
+const BITS = 10, MAX = (1<<BITS)-1;       // 10 位，0..1023
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let N = 512, wave = [], masked = [], maskState = (()=>{const m=new Array(BITS).fill(true); m[9]=false; return m;})();
+let hoverIdx = -1, cycles = 2, showOrig = false, showMask = true, autoY = true;
+
+function buildWave(){
+  N = +document.getElementById('len').value;
+  wave = new Array(N);
+  const half = (N % 2 === 0) ? N/2 : (N-1)/2; // 单周期正弦，避免首尾重复
+  for(let i=0;i<N;i++){
+    const v = (Math.sin(2*Math.PI*i/N) * 0.5 + 0.5) * MAX; // 0..1023
+    wave[i] = Math.round(v);
+  }
+  applyMask();
+}
+
+function applyMask(){
+  masked = wave.map(v=>{
+    let m=v;
+    for(let b=0;b<BITS;b++) if(!maskState[b]) m &= ~(1<<b);
+    return m;
+  });
+  draw(); updateStats();
+}
+
+function bitLabel(b){ return 'Bit'+(BITS-1-b)+'\n'+(1<<(BITS-1-b)); }
+
+function buildBits(){
+  const wrap = document.getElementById('bits');
+  wrap.innerHTML='';
+  for(let b=BITS-1;b>=0;b--){
+    const cell=document.createElement('div');
+    cell.className='bit';
+    const v=1<<b;
+    const d=document.createElement('div');
+    d.className='cell'+(maskState[b]?'':' off');
+    d.textContent='D'+b;
+    const lab=document.createElement('div');
+    lab.className='lab'; lab.textContent=v;
+    d.onclick=()=>{maskState[b]=!maskState[b]; d.classList.toggle('off',!maskState[b]); applyMask();};
+    cell.appendChild(d); cell.appendChild(lab);
+    wrap.appendChild(cell);
+  }
+}
+
+function resize(){
+  const r=cv.getBoundingClientRect();
+  cv.width=r.width*devicePixelRatio; cv.height=r.height*devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+
+function draw(){
+  const W=cv.clientWidth, H=cv.clientHeight;
+  ctx.clearRect(0,0,W,H);
+  // 计算 Y 轴范围：自适应 = 取可见波形的实际 min/max；否则固定 0..MAX
+  let yMin=0, yMax=MAX;
+  if(autoY){
+    let lo=Infinity, hi=-Infinity, any=false;
+    if(showOrig){ any=true; for(const v of wave){ if(v<lo)lo=v; if(v>hi)hi=v; } }
+    if(showMask){ any=true; for(const v of masked){ if(v<lo)lo=v; if(v>hi)hi=v; } }
+    if(!any){ lo=0; hi=MAX; }
+    if(lo===hi) hi=lo+1;
+    const pad=(hi-lo)*0.08; yMin=lo-pad; yMax=hi+pad;
+  }
+  const T = N*cycles;
+  const X=k=> k/(T-1)*W;
+  const Y=v=> H - (v-yMin)/(yMax-yMin)*(H-10) - 5;
+  // 网格 + Y 轴刻度标签（显示当前数值范围）
+  ctx.strokeStyle=getCss('--grid'); ctx.lineWidth=1;
+  ctx.fillStyle=getCss('--muted'); ctx.font='10px Consolas,monospace'; ctx.textAlign='left';
+  for(let g=0;g<=4;g++){
+    const y=H*g/4;
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    const val=Math.round(yMax-(yMax-yMin)*g/4);
+    ctx.textBaseline = g===0?'top':(g===4?'bottom':'middle');
+    ctx.fillText(val, 3, g===0?y+2:(g===4?y-2:y));
+  }
+  const plot=(arr,col)=>{
+    ctx.strokeStyle=col; ctx.lineWidth=1.6; ctx.beginPath();
+    for(let k=0;k<T;k++){ const x=X(k), y=Y(arr[k%N]); k?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+    ctx.stroke();
+  };
+  if(showMask) plot(masked, getCss('--mask'));
+  if(showOrig) plot(wave, getCss('--orig'));
+  // hover 竖线 + 点
+  if(hoverIdx>=0){
+    const k=hoverIdx, x=X(k), pi=k%N;
+    ctx.strokeStyle=getCss('--muted')+'55'; ctx.lineWidth=1; ctx.beginPath();
+    ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+    if(showMask){ ctx.fillStyle=getCss('--mask'); ctx.beginPath(); ctx.arc(x,Y(masked[pi]),3.5,0,7); ctx.fill(); }
+    if(showOrig){ ctx.fillStyle=getCss('--orig'); ctx.beginPath(); ctx.arc(x,Y(wave[pi]),3.5,0,7); ctx.fill(); }
+  }
+}
+function getCss(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+function binStr(v){ return v.toString(2).padStart(BITS,'0'); }
+
+function updateStats(){
+  const s=document.getElementById('stats');
+  const active=maskState.filter(Boolean).length;
+  let maxErr=0, sumSq=0, levels=new Set();
+  for(let i=0;i<N;i++){ const e=Math.abs(wave[i]-masked[i]); maxErr=Math.max(maxErr,e); sumSq+=e*e; levels.add(masked[i]); }
+  const rms=Math.sqrt(sumSq/N);
+  const snr = rms>0 ? (20*Math.log10((MAX/2)/rms)).toFixed(1) : '∞';
+  s.innerHTML=
+    stat('有效位数 (active bits)',active+' / '+BITS)+
+    stat('输出电平档数',levels.size)+
+    stat('最大误差 (LSB)',maxErr)+
+    stat('RMS 误差 (LSB)',rms.toFixed(2))+
+    stat('等效 SNR (dB)',snr);
+}
+function stat(b,v){return '<div class="stat"><b>'+b+'</b><span>'+v+'</span></div>';}
+
+function showInfo(k){
+  if(k<0){document.getElementById('info').textContent='移动鼠标到波形上查看该采样点细节。';return;}
+  const pi=k%N;
+  const o=wave[pi], m=masked[pi];
+  const txt =
+    '采样点 全局#'+k+'  周期索引#'+pi+' / '+N+'\n'+
+    '原始 :  dec='+o+'   bin='+binStr(o)+'\n'+
+    '屏蔽 :  dec='+m+'   bin='+binStr(m)+'\n'+
+    '误差 :  '+(o-m)+' LSB  ('+(m===o?'无失真':'该位被强制为 0')+')';
+  document.getElementById('info').textContent=txt;
+}
+
+cv.addEventListener('mousemove',ev=>{
+  const r=cv.getBoundingClientRect();
+  const x=ev.clientX-r.left;
+  hoverIdx=Math.round(x/r.width*(N*cycles-1));
+  draw(); showInfo(hoverIdx);
+});
+cv.addEventListener('mouseleave',()=>{hoverIdx=-1;draw();showInfo(-1);});
+
+document.getElementById('len').onchange=()=>{buildWave();};
+document.getElementById('cycles').onchange=()=>{cycles=+document.getElementById('cycles').value;draw();};
+document.getElementById('showOrig').onchange=e=>{showOrig=e.target.checked;draw();};
+document.getElementById('showMask').onchange=e=>{showMask=e.target.checked;draw();};
+document.getElementById('autoY').onchange=e=>{autoY=e.target.checked;draw();};
+document.getElementById('allOn').onclick=()=>setAll(true);
+document.getElementById('allOff').onclick=()=>setAll(false);
+document.getElementById('onlyTop').onclick=()=>{
+  for(let b=0;b<BITS;b++) maskState[b]= b>=BITS-4; buildBits(); applyMask();
+};
+document.getElementById('onlyD9Off').onclick=()=>{
+  maskState.fill(true); maskState[9]=false; buildBits(); applyMask();
+};
+document.getElementById('onlyD6On').onclick=()=>{
+  maskState.fill(false); maskState[6]=true; buildBits(); applyMask();
+};
+function setAll(v){ maskState.fill(v); buildBits(); applyMask(); }
+
+window.addEventListener('resize',()=>{resize();draw();});
+cycles=+document.getElementById('cycles').value;
+resize(); buildBits(); buildWave();
+</script>
+</body>
+</html>

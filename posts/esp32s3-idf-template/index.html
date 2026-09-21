@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-S3 通用模板：WiFi 配网、OTA、文件管理开箱即用 - CacheRivulet小记</title>
+  <meta name="description" content="ESP32-S3 通用模板：WiFi 配网、OTA 升级、SD 卡日志、文件管理一站配齐">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="ESP-IDF">
+  <meta property="article:tag" content="物联网">
+  <meta property="article:tag" content="OTA">
+  <meta property="article:published_time" content="2026-07-08">
+  <meta property="og:title" content="ESP32-S3 通用模板：WiFi 配网、OTA、文件管理开箱即用">
+  <meta property="og:description" content="ESP32-S3 通用模板：WiFi 配网、OTA 升级、SD 卡日志、文件管理一站配齐">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32s3-idf-template/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32s3-idf-template/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP32-S3 通用模板：WiFi 配网、OTA、文件管理开箱即用",
+  "description": "ESP32-S3 通用模板：WiFi 配网、OTA 升级、SD 卡日志、文件管理一站配齐",
+  "datePublished": "2026-07-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32s3-idf-template/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32s3-idf-template/"
+  },
+  "keywords": "嵌入式, ESP32-S3, ESP-IDF, 物联网, OTA"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP32-S3 通用模板：WiFi 配网、OTA、文件管理开箱即用</h1>
+  <article class="article-body">
+<h1>ESP32-S3 通用模板：WiFi 配网、OTA、文件管理开箱即用</h1>
+<p>基于 ESP-IDF v6.0.1 的 ESP32-S3 基础设施模板，提供 WiFi 配网、LittleFS、SD 卡、OTA 升级等开箱即用的功能，适合作为新项目的起点。</p>
+<p><a href="https://github.com/createskyblue/esp32s3_idf_template" target="_blank" rel="noopener noreferrer">GitHub 仓库</a></p>
+<h2>功能一览</h2>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>WiFi AP+STA</strong></td>
+<td>同时运行 AP 热点（<code>ESP32S3-Template</code>）和 STA 客户端</td>
+</tr>
+<tr>
+<td><strong>Web 配网</strong></td>
+<td>网页端输入 SSID/密码，配置持久化到 LittleFS，自动重连</td>
+</tr>
+<tr>
+<td><strong>Captive Portal</strong></td>
+<td>DNS 劫持，手机连上 AP 后自动弹出配网页面</td>
+</tr>
+<tr>
+<td><strong>LittleFS</strong></td>
+<td>1 MB 内部闪存文件系统，存放网页和配置文件</td>
+</tr>
+<tr>
+<td><strong>SD 卡</strong></td>
+<td>SPI 模式，FAT 文件系统，支持热插拔（可选，失败不阻塞启动）</td>
+</tr>
+<tr>
+<td><strong>文件管理器</strong></td>
+<td>Web 界面浏览/上传/下载/删除/新建文件夹，支持内部 Flash 和 SD 卡双存储</td>
+</tr>
+<tr>
+<td><strong>OTA 升级</strong></td>
+<td>支持固件 + 文件系统远程升级，也支持网页直接上传刷写</td>
+</tr>
+<tr>
+<td><strong>SD 日志</strong></td>
+<td>所有 ESP_LOG 输出自动双写（串口 + SD 卡），定时滚动</td>
+</tr>
+<tr>
+<td><strong>SNTP 授时</strong></td>
+<td>STA 连接成功后自动同步北京时间</td>
+</tr>
+<tr>
+<td><strong>LED 指示</strong></td>
+<td>绿灯心跳（500ms 翻转），蓝灯 WiFi/数据活动指示</td>
+</tr>
+<tr>
+<td><strong>调试接口</strong></td>
+<td><code>/debug.json</code> 查看堆内存、PSRAM、任务列表、运行时间</td>
+</tr>
+</tbody></table>
+<h2>界面预览</h2>
+<p><img src="/posts/esp32s3-idf-template/img/%E9%A6%96%E9%A1%B5.webp" alt="首页仪表盘"></p>
+<p><img src="/posts/esp32s3-idf-template/img/%E6%96%87%E4%BB%B6%E7%AE%A1%E7%90%86%E5%99%A8.webp" alt="文件管理器"></p>
+<h2>架构</h2>
+<p>项目采用 <strong>平台 + 业务</strong> 分层架构：</p>
+<ul>
+<li><code>main/web_platform.c</code> — 基础设施胶水层，负责 WiFi / OTA / 配网 / 仪表盘编排</li>
+<li><code>main/hello_web.c</code> — 业务端点模板，从这里开始写自定义 HTTP handler</li>
+<li><code>components/</code> — 可复用组件（<code>wifi_manager</code>、<code>ota_manager</code>、<code>file_manager</code>、<code>led_task</code>、<code>sd_card</code>、<code>sd_logger</code>）</li>
+</ul>
+<p>新项目只需在 <code>hello_web.c</code> 中仿照模板添加 handler，基础设施已全部就绪。</p>
+<h2>快速开始</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955"># 克隆模板</span></span>
+<span class="line"><span style="color:#DCDCAA">git</span><span style="color:#CE9178"> clone</span><span style="color:#CE9178"> https://github.com/createskyblue/esp32s3_idf_template.git</span><span style="color:#CE9178"> my_project</span></span>
+<span class="line"><span style="color:#DCDCAA">cd</span><span style="color:#CE9178"> my_project</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955"># 编译烧录</span></span>
+<span class="line"><span style="color:#DCDCAA">idf.py</span><span style="color:#CE9178"> set-target</span><span style="color:#CE9178"> esp32s3</span></span>
+<span class="line"><span style="color:#DCDCAA">idf.py</span><span style="color:#CE9178"> build</span></span>
+<span class="line"><span style="color:#DCDCAA">idf.py</span><span style="color:#569CD6"> -p</span><span style="color:#CE9178"> COMx</span><span style="color:#CE9178"> flash</span><span style="color:#CE9178"> monitor</span></span></code></pre><p>首次上电：手机搜到热点 <code>ESP32S3-Template</code>（密码 <code>template1234</code>），连接后浏览器打开任意网址自动弹出配网页面。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32s3-idf-template');
+  }
+  </script>
+</body>
+</html>

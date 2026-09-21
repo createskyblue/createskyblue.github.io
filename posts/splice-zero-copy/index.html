@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linux splice 可以在内核态搬运文件和 socket 数据 - CacheRivulet小记</title>
+  <meta name="description" content="splice让文件到socket少一次拷贝">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Linux">
+  <meta property="article:tag" content="splice">
+  <meta property="article:tag" content="零拷贝">
+  <meta property="article:tag" content="系统编程">
+  <meta property="article:published_time" content="2026-05-05">
+  <meta property="og:title" content="Linux splice 可以在内核态搬运文件和 socket 数据">
+  <meta property="og:description" content="splice让文件到socket少一次拷贝">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/splice-zero-copy/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/splice-zero-copy/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Linux splice 可以在内核态搬运文件和 socket 数据",
+  "description": "splice让文件到socket少一次拷贝",
+  "datePublished": "2026-05-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/splice-zero-copy/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/splice-zero-copy/"
+  },
+  "keywords": "Linux, splice, 零拷贝, 系统编程"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Linux splice 可以在内核态搬运文件和 socket 数据</h1>
+  <article class="article-body">
+<h1>Linux splice 可以在内核态搬运文件和 socket 数据</h1>
+<p><code>splice</code> 是 Linux 提供的零拷贝数据搬运接口。它可以在文件描述符之间移动数据，并尽量避免把数据复制到用户态缓冲区。典型用途是文件、管道、socket 之间的数据转发。</p>
+<p>普通读写路径通常是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>kernel -> user buffer -> kernel</span></span></code></pre><p><code>splice</code> 的目标是减少中间这次用户态拷贝：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>kernel -> pipe buffer -> kernel</span></span></code></pre><h2>函数签名</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> _GNU_SOURCE</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;fcntl.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">ssize_t</span><span style="color:#DCDCAA"> splice</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">int</span><span style="color:#9CDCFE"> fd_in</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">loff_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">off_in</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">               int</span><span style="color:#9CDCFE"> fd_out</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">loff_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">off_out</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">               size_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">unsigned</span><span style="color:#569CD6"> int</span><span style="color:#9CDCFE"> flags</span><span style="color:#D4D4D4">);</span></span></code></pre><p>参数含义：</p>
+<ul>
+<li><code>fd_in</code>：输入文件描述符。</li>
+<li><code>off_in</code>：输入偏移。为 <code>NULL</code> 时使用并更新文件描述符当前偏移；非 <code>NULL</code> 时从指定偏移读取并更新该变量。</li>
+<li><code>fd_out</code>：输出文件描述符。</li>
+<li><code>off_out</code>：输出偏移，规则同 <code>off_in</code>。</li>
+<li><code>len</code>：最多移动的字节数。</li>
+<li><code>flags</code>：行为标志，可以为 <code>0</code>。</li>
+</ul>
+<p>返回值是实际移动的字节数。返回 <code>0</code> 通常表示输入已经到达 EOF。返回 <code>-1</code> 表示失败，并设置 <code>errno</code>。</p>
+<h2>pipe 是核心中转结构</h2>
+<p><code>splice</code> 的一个重要限制是：输入或输出的一端通常需要是 pipe。因此常见写法是两段式：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">int</span><span style="color:#9CDCFE"> pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#DCDCAA">pipe</span><span style="color:#D4D4D4">(pipe_fds);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">splice</span><span style="color:#D4D4D4">(file_fd, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, len, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">splice</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, socket_fd, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, len, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span></code></pre><p>第一步把数据从文件移动到 pipe，第二步把数据从 pipe 移动到 socket。用户态代码不直接接触数据内容，只负责安排数据路径。</p>
+<h2>文件到 socket 的示例</h2>
+<p>下面的示例把本地文件内容发送到已连接的 socket：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> _GNU_SOURCE</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;fcntl.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;unistd.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;sys/socket.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> send_file_by_splice</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">int</span><span style="color:#9CDCFE"> file_fd</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">int</span><span style="color:#9CDCFE"> socket_fd</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> total_len</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#9CDCFE"> pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">pipe</span><span style="color:#D4D4D4">(pipe_fds) &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    size_t</span><span style="color:#D4D4D4"> sent = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (sent &#x3C; total_len) {</span></span>
+<span class="line"><span style="color:#569CD6">        size_t</span><span style="color:#D4D4D4"> chunk = total_len - sent;</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (chunk > </span><span style="color:#B5CEA8">65536</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">            chunk = </span><span style="color:#B5CEA8">65536</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">        ssize_t</span><span style="color:#D4D4D4"> moved = </span><span style="color:#DCDCAA">splice</span><span style="color:#D4D4D4">(file_fd, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, chunk, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (moved &#x3C;= </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">            break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">        ssize_t</span><span style="color:#D4D4D4"> written = </span><span style="color:#DCDCAA">splice</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, socket_fd, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, moved, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (written &#x3C;= </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">            break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">        sent += written;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipe_fds</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这个函数适合用于代理、网关、静态文件服务等数据转发场景。它减少用户态内存拷贝，但仍然需要处理短读、短写、阻塞、错误返回等情况。</p>
+<h2>常用 flags</h2>
+<p><code>splice</code> 的 <code>flags</code> 可以组合以下选项：</p>
+<ul>
+<li><code>SPLICE_F_MOVE</code>：提示内核可以移动页而不是复制页。现代内核中更多是优化提示。</li>
+<li><code>SPLICE_F_NONBLOCK</code>：以非阻塞方式操作，但文件描述符本身也应设置非阻塞。</li>
+<li><code>SPLICE_F_MORE</code>：提示后续还有更多数据，类似 <code>MSG_MORE</code>。</li>
+<li><code>SPLICE_F_GIFT</code>：主要用于 <code>vmsplice</code>，表示用户页可以交给内核管理。</li>
+</ul>
+<p>普通阻塞式代码可以先使用 <code>0</code>，把正确性处理清楚后再考虑 flags。</p>
+<h2>注意事项</h2>
+<p><code>splice</code> 不等于所有场景都更快。它减少数据拷贝，但会引入 pipe 管理、系统调用次数、阻塞语义和内核路径差异。小数据量、需要用户态解析或修改内容的场景，普通 <code>read</code>/<code>write</code> 更直接。</p>
+<p>使用 <code>splice</code> 时应检查每一次返回值。实际移动字节数可能小于请求的 <code>len</code>，网络 socket 尤其需要循环处理。错误路径也要关闭 pipe 两端，避免文件描述符泄漏。</p>
+<h2>总结</h2>
+<p><code>splice</code> 的核心价值是让数据在内核对象之间流动，减少用户态缓冲区参与。典型模式是 <code>fd -&gt; pipe -&gt; fd</code>。它适合大块转发和代理类场景，不适合需要频繁检查或修改数据内容的业务逻辑。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=splice-zero-copy');
+  }
+  </script>
+</body>
+</html>

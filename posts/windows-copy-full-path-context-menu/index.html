@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用 PowerShell 为 Windows 文件和文件夹添加复制正斜杠完整路径菜单 - CacheRivulet小记</title>
+  <meta name="description" content="Windows右键复制完整路径，文件和文件夹统一输出正斜杠格式">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Windows">
+  <meta property="article:tag" content="系统编程">
+  <meta property="article:tag" content="开发效率">
+  <meta property="article:tag" content="测试">
+  <meta property="article:published_time" content="2026-07-28">
+  <meta property="og:title" content="用 PowerShell 为 Windows 文件和文件夹添加复制正斜杠完整路径菜单">
+  <meta property="og:description" content="Windows右键复制完整路径，文件和文件夹统一输出正斜杠格式">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/windows-copy-full-path-context-menu/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/windows-copy-full-path-context-menu/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用 PowerShell 为 Windows 文件和文件夹添加复制正斜杠完整路径菜单",
+  "description": "Windows右键复制完整路径，文件和文件夹统一输出正斜杠格式",
+  "datePublished": "2026-07-28",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/windows-copy-full-path-context-menu/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/windows-copy-full-path-context-menu/"
+  },
+  "keywords": "Windows, 系统编程, 开发效率, 测试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用 PowerShell 为 Windows 文件和文件夹添加复制正斜杠完整路径菜单</h1>
+  <article class="article-body">
+<h1>用 PowerShell 为 Windows 文件和文件夹添加复制正斜杠完整路径菜单</h1>
+<p>Windows 可以通过注册表扩展资源管理器右键菜单。本例给文件和文件夹加入“复制完整路径（带文件名）”，复制结果统一使用正斜杠：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>C:/Users/example/Desktop/demo.txt</span></span></code></pre><p>实现只修改当前用户配置，不需要管理员权限。安装脚本会创建一个本地辅助脚本，再为文件和文件夹分别注册菜单命令。</p>
+<h2>目标行为与运行条件</h2>
+<p>目标包含四项可验证行为：</p>
+<ul>
+<li>文件右键菜单显示“复制完整路径（带文件名）”。</li>
+<li>文件夹右键菜单显示同一个命令。</li>
+<li>菜单执行期间不显示 PowerShell 控制台窗口。</li>
+<li>剪贴板使用 <code>/</code> 作为路径分隔符，并保留中文、空格和 <code>&amp;</code> 等字符。</li>
+</ul>
+<p>运行环境为 Windows 10 或 Windows 11，使用系统自带的 Windows PowerShell。Windows 11 可能把自定义菜单放在“显示更多选项”中。</p>
+<h2>文件与文件夹的注册表入口</h2>
+<p>资源管理器为文件和文件夹使用不同的类注册入口。只写文件入口时，文件夹不会显示菜单。</p>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>当前用户注册表路径</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>所有文件</td>
+<td><code>HKCU\Software\Classes\*\shell\CopyFullPathWithFilename</code></td>
+</tr>
+<tr>
+<td>所有文件夹</td>
+<td><code>HKCU\Software\Classes\Directory\shell\CopyFullPathWithFilename</code></td>
+</tr>
+</tbody></table>
+<p>每个菜单键保存显示名称和图标，子键 <code>command</code> 的默认值保存执行命令。<code>%1</code> 由资源管理器替换成当前选中的完整路径。</p>
+<p>脚本使用 <code>Microsoft.Win32.Registry</code> 写入默认值。这个 API 可以直接处理空名称的注册表默认值，也避开了 PowerShell 注册表驱动对默认值的差异。</p>
+<h2><code>-Command</code> 参数解析故障</h2>
+<p>最初的命令尝试在 <code>-Command</code> 后声明参数：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>powershell.exe -Command "param([string]$p) Set-Clipboard -Value $p" "%1"</span></span></code></pre><p>从资源管理器启动时，<code>-Command</code> 后续内容可能继续进入命令文本解析。文件路径没有稳定绑定到 <code>param()</code>。路径含 <code>&amp;</code> 时，PowerShell 会把它识别成调用运算符并产生解析错误；用户只能看到短暂黑框，剪贴板没有变化。</p>
+<p>解决方法是把复制逻辑放进独立 <code>.ps1</code> 文件，再通过 <code>-File</code> 传递位置参数：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "辅助脚本路径" "%1"</span></span></code></pre><p><code>-File</code> 会把最后一个参数交给脚本的 <code>$Path</code>。路径中的空格、中文和 <code>&amp;</code> 继续保持为一个参数。<code>-WindowStyle Hidden</code> 隐藏控制台窗口，<code>-ExecutionPolicy Bypass</code> 只作用于本次辅助进程。</p>
+<h2><code>-File</code> 辅助脚本与正斜杠转换</h2>
+<p>辅助脚本安装到当前用户的本地应用数据目录：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>%LOCALAPPDATA%/CopyFullPathWithFilename/copy-full-path.ps1</span></span></code></pre><p>脚本只接收一个路径，替换分隔符后写入剪贴板：</p>
+<pre><code>param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    [string]$Path
+)
+
+Set-Clipboard -Value $Path.Replace('\', '/')</code></pre><p>替换只影响剪贴板文本，不会修改磁盘上的文件名或目录结构。Windows API 仍把原始反斜杠路径传给脚本。</p>
+<h2>一键安装与端到端验证</h2>
+<p>附件中的安装脚本是自包含版本。它创建辅助脚本，并重复写入两类菜单键。重复运行会更新同一组键，不会产生重复菜单。</p>
+<ul>
+<li><a href="/posts/windows-copy-full-path-context-menu/attachments/install-copy-full-path-menu.ps1" target="_blank" rel="noopener noreferrer">下载安装脚本</a></li>
+<li><a href="/posts/windows-copy-full-path-context-menu/attachments/verify-copy-full-path-menu.ps1" target="_blank" rel="noopener noreferrer">下载验证脚本</a></li>
+<li><a href="/posts/windows-copy-full-path-context-menu/attachments/uninstall-copy-full-path-menu.ps1" target="_blank" rel="noopener noreferrer">下载卸载脚本</a></li>
+</ul>
+<p>在附件所在目录执行安装：</p>
+<pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install-copy-full-path-menu.ps1</code></pre><p>关闭已打开的右键菜单，重新右键任意文件或文件夹。粘贴后应得到类似结果：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>C:/测试目录/path with spaces &#x26; symbols.txt</span></span></code></pre><p>验证脚本会检查两个注册表入口，调用实际辅助脚本，再比较剪贴板结果：</p>
+<pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\verify-copy-full-path-menu.ps1</code></pre><p>成功输出如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>PASS: file and directory menus are registered; clipboard uses forward slashes.</span></span></code></pre><p>验证过程会暂时写入剪贴板。剪贴板原本含文本时，脚本会在结束前恢复原文本；原本没有文本时，测试路径会保留在剪贴板中。</p>
+<h2>卸载范围与复刻检查</h2>
+<p>卸载脚本只删除本功能创建的两个菜单键，以及 <code>%LOCALAPPDATA%/CopyFullPathWithFilename</code> 辅助目录：</p>
+<pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\uninstall-copy-full-path-menu.ps1</code></pre><p>其他 Agent 复刻时需要核对以下边界：</p>
+<ol>
+<li>使用 <code>HKCU</code>，避免要求管理员权限。</li>
+<li>同时注册 <code>*</code> 和 <code>Directory</code>，覆盖文件与文件夹。</li>
+<li>使用 <code>-File</code> 传递 <code>%1</code>，避免路径进入命令文本解析。</li>
+<li>在辅助脚本内转换 <code>/</code>，不要改写资源管理器传入值。</li>
+<li>用含中文、空格和 <code>&amp;</code> 的路径执行端到端验证。</li>
+</ol>
+<p>这套结构把菜单注册、路径参数绑定和剪贴板处理分成三个清晰边界。安装器负责部署，注册表负责触发，辅助脚本负责文本格式。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-28 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=windows-copy-full-path-context-menu');
+  }
+  </script>
+</body>
+</html>

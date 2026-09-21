@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM智能体工具调用原理 - CacheRivulet小记</title>
+  <meta name="description" content="LLM智能体工具调用原理">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="LLM">
+  <meta property="article:tag" content="AGENT">
+  <meta property="article:published_time" content="2026-02-26">
+  <meta property="og:title" content="LLM智能体工具调用原理">
+  <meta property="og:description" content="LLM智能体工具调用原理">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/LLM调用原理/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/LLM调用原理/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "LLM智能体工具调用原理",
+  "description": "LLM智能体工具调用原理",
+  "datePublished": "2026-02-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/LLM调用原理/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/LLM调用原理/"
+  },
+  "keywords": "LLM, AGENT"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">LLM智能体工具调用原理</h1>
+  <article class="article-body">
+<h1>LLM智能体工具调用原理</h1>
+<p><img src="/posts/LLM调用原理/PixPin_2026-02-26_22-39-10.webp" alt="alt text"></p>
+<h2>测试环境</h2>
+<ul>
+<li>用户提示词：<code>读取 被加数.txt 和 加数.txt 把加法结果写入到 答案.txt</code></li>
+<li>测试脚本：<a href="https://github.com/createskyblue/nanocode_openai_compat">https://github.com/createskyblue/nanocode_openai_compat</a></li>
+<li>使用<code>openai</code>库</li>
+</ul>
+<p>被加数.txt文件内容</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>2</span></span></code></pre><p>加数.txt文件内容</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>1</span></span></code></pre><h2>工具列表示例（截取部分）</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">[</span></span>
+<span class="line"><span style="color:#D4D4D4">  {</span></span>
+<span class="line"><span style="color:#9CDCFE">    "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"function"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">    "function"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">      "name"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"edit"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "description"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"Replace old with new in file (old must be unique unless all=true)"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "parameters"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">        "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"object"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        "properties"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">          "path"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"string"</span></span>
+<span class="line"><span style="color:#D4D4D4">          },</span></span>
+<span class="line"><span style="color:#9CDCFE">          "old"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"string"</span></span>
+<span class="line"><span style="color:#D4D4D4">          },</span></span>
+<span class="line"><span style="color:#9CDCFE">          "new"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"string"</span></span>
+<span class="line"><span style="color:#D4D4D4">          },</span></span>
+<span class="line"><span style="color:#9CDCFE">          "all"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"boolean"</span></span>
+<span class="line"><span style="color:#D4D4D4">          }</span></span>
+<span class="line"><span style="color:#D4D4D4">        },</span></span>
+<span class="line"><span style="color:#9CDCFE">        "required"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#CE9178">          "path"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">          "old"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">          "new"</span></span>
+<span class="line"><span style="color:#D4D4D4">        ]</span></span>
+<span class="line"><span style="color:#D4D4D4">      }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  },</span></span>
+<span class="line"><span style="color:#D4D4D4">]</span></span></code></pre><h2>LLM节点调用（OpenAI兼容接口）</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955"># 调用API</span></span>
+<span class="line"><span style="color:#D4D4D4">response = </span><span style="color:#569CD6">self</span><span style="color:#D4D4D4">.client.chat.completions.create(</span></span>
+<span class="line"><span style="color:#9CDCFE">    model</span><span style="color:#D4D4D4">=</span><span style="color:#569CD6">self</span><span style="color:#D4D4D4">.model,</span></span>
+<span class="line"><span style="color:#9CDCFE">    messages</span><span style="color:#D4D4D4">=[{</span><span style="color:#CE9178">"role"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"system"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"content"</span><span style="color:#D4D4D4">: </span><span style="color:#569CD6">self</span><span style="color:#D4D4D4">.system_prompt}]</span></span>
+<span class="line"><span style="color:#D4D4D4">    + </span><span style="color:#569CD6">self</span><span style="color:#D4D4D4">.messages,</span></span>
+<span class="line"><span style="color:#9CDCFE">    tools</span><span style="color:#D4D4D4">=</span><span style="color:#569CD6">self</span><span style="color:#D4D4D4">.tools,</span></span>
+<span class="line"><span style="color:#9CDCFE">    tool_choice</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"auto"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">    stream</span><span style="color:#D4D4D4">=stream,</span></span>
+<span class="line"><span style="color:#D4D4D4">)</span></span></code></pre><h2>第一轮</h2>
+<p><img src="/posts/LLM调用原理/PixPin_2026-02-26_18-45-51.webp" alt="alt text"></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "id"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"chatcmpl-3111d54f-45eb-9bea-8a4e-1813bac62f9b"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "object"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"chat.completion"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "created"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">1772106543</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "model"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"qwen3.5-plus"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "choices"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">    {</span></span>
+<span class="line"><span style="color:#9CDCFE">      "index"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "message"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">        "role"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"assistant"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        "content"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">""</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        "tool_calls"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">          {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "id"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"call_7adf7a6935924e84b8f9726e"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"function"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "function"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">              "name"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"read"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">              "arguments"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"{</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">path</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">: </span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">被加数.txt</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">}"</span></span>
+<span class="line"><span style="color:#D4D4D4">            }</span></span>
+<span class="line"><span style="color:#D4D4D4">          },</span></span>
+<span class="line"><span style="color:#D4D4D4">          {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "id"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"call_669d0d02ad5f48c2a2073986"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"function"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "function"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">              "name"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"read"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">              "arguments"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"{</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">path</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">: </span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">加数.txt</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">}"</span></span>
+<span class="line"><span style="color:#D4D4D4">            }</span></span>
+<span class="line"><span style="color:#D4D4D4">          }</span></span>
+<span class="line"><span style="color:#D4D4D4">        ]</span></span>
+<span class="line"><span style="color:#D4D4D4">      },</span></span>
+<span class="line"><span style="color:#9CDCFE">      "finish_reason"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"tool_calls"</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  ]</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h2>第二轮</h2>
+<p><img src="/posts/LLM调用原理/PixPin_2026-02-26_18-45-58.webp" alt="alt text"></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "id"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"chatcmpl-93aedd25-7a56-9827-9837-d37142ab349b"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "object"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"chat.completion"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "created"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">1772106544</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "model"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"qwen3.5-plus"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "choices"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">    {</span></span>
+<span class="line"><span style="color:#9CDCFE">      "index"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "message"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">        "role"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"assistant"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        "content"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"被加数是 2，加数是 1，结果是 3。我将把结果写入 答案.txt。</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">&#x3C;/think></span><span style="color:#D7BA7D">\n\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        "tool_calls"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">          {</span></span>
+<span class="line"><span style="color:#9CDCFE">            "id"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"call_d97a09ce53c5441888da2331"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"function"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">            "function"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">              "name"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"write"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">              "arguments"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"{</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">path</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">: </span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">答案.txt</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">, </span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">content</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">: </span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">3</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">}"</span></span>
+<span class="line"><span style="color:#D4D4D4">            }</span></span>
+<span class="line"><span style="color:#D4D4D4">          }</span></span>
+<span class="line"><span style="color:#D4D4D4">        ]</span></span>
+<span class="line"><span style="color:#D4D4D4">      },</span></span>
+<span class="line"><span style="color:#9CDCFE">      "finish_reason"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"tool_calls"</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  ]</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>第三轮</h3>
+<p><img src="/posts/LLM调用原理/PixPin_2026-02-26_20-00-15.webp" alt="alt text"></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "id"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"chatcmpl-d3c05ff1-b30f-9d5b-a51e-fe59faf44437"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "object"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"chat.completion"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "created"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">1772106546</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "model"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"qwen3.5-plus"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "choices"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">    {</span></span>
+<span class="line"><span style="color:#9CDCFE">      "index"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "message"</span><span style="color:#D4D4D4">: {</span></span>
+<span class="line"><span style="color:#9CDCFE">        "role"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"assistant"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        "content"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"已完成。被加数 2 加上加数 1 等于 3，结果已写入 答案.txt。"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">        "tool_calls"</span><span style="color:#D4D4D4">: []</span></span>
+<span class="line"><span style="color:#D4D4D4">      },</span></span>
+<span class="line"><span style="color:#9CDCFE">      "finish_reason"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"stop"</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  ]</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre>
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-02-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=LLM%E8%B0%83%E7%94%A8%E5%8E%9F%E7%90%86');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>传感器驱动框架设计：从 Linux IIO、RT-Thread 到 ESP32-S3 的统一设备表 - CacheRivulet小记</title>
+  <meta name="description" content="传感器各封独立库，换型号要大改代码，用统一接口屏蔽差异">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="ESP-IDF">
+  <meta property="article:tag" content="传感器">
+  <meta property="article:tag" content="RT-Thread">
+  <meta property="article:tag" content="Linux">
+  <meta property="article:published_time" content="2026-07-27">
+  <meta property="og:title" content="传感器驱动框架设计：从 Linux IIO、RT-Thread 到 ESP32-S3 的统一设备表">
+  <meta property="og:description" content="传感器各封独立库，换型号要大改代码，用统一接口屏蔽差异">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32s3-sensor-driver-decoupling/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32s3-sensor-driver-decoupling/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "传感器驱动框架设计：从 Linux IIO、RT-Thread 到 ESP32-S3 的统一设备表",
+  "description": "传感器各封独立库，换型号要大改代码，用统一接口屏蔽差异",
+  "datePublished": "2026-07-27",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32s3-sensor-driver-decoupling/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32s3-sensor-driver-decoupling/"
+  },
+  "keywords": "嵌入式, ESP32-S3, ESP-IDF, 传感器, RT-Thread, Linux"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">传感器驱动框架设计：从 Linux IIO、RT-Thread 到 ESP32-S3 的统一设备表</h1>
+  <article class="article-body">
+<h1>传感器驱动框架设计：从 Linux IIO、RT-Thread 到 ESP32-S3 的统一设备表</h1>
+<p>嵌入式系统里，每个传感器厂商都会提供一套自己的库函数。两款温湿度传感器，用法可能长这样：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* AHT30 */</span></span>
+<span class="line"><span style="color:#DCDCAA">aht30_init_i2c</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">handle</span><span style="color:#D4D4D4">, I2C_NUM_0, </span><span style="color:#B5CEA8">0x38</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">aht30_get_data</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">handle</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">temp</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">humi</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 换成 SHT41 后 */</span></span>
+<span class="line"><span style="color:#DCDCAA">sht41_init</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">dev</span><span style="color:#D4D4D4">, I2C_PORT_0);</span></span>
+<span class="line"><span style="color:#DCDCAA">sht41_measure</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">dev</span><span style="color:#D4D4D4">, SHT41_PRECISION_HIGH, &#x26;</span><span style="color:#9CDCFE">result</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">float</span><span style="color:#D4D4D4"> temp = result.temperature;</span></span></code></pre><p>这两个传感器做同一件事，调用方式却完全不同。换传感器时，每一处使用了旧库的代码都要跟着改。接入的传感器越多，这个问题越严重。</p>
+<p>解决方向只有一个：找到各类传感器的共同点，定义统一的操作接口，把型号差异隔在驱动内部。</p>
+<h2>分类是统一接口的前提</h2>
+<p>不同型号的温度传感器，做的事情本质相同：初始化硬件，读回一个温度值。差别只在于寄存器地址不同、I2C 地址不同、换算公式不同。这些都是实现细节，不是接口本身。</p>
+<p>把传感器按类型分类（温度、湿度、气压、加速度……），每类定义统一的操作契约：所有这类传感器都要实现同样的 init / read 方法，返回同样形状的数据。上层代码只认类型，不认型号。</p>
+<p>这就是传感器驱动框架的核心思路。RT-Thread 和 Linux 都用这个思路，但各自的规模和侧重有所不同。</p>
+<h2>Linux：按传感器类别接入对应子系统</h2>
+<p>Linux 根据设备的数据模型和主要使用场景提供不同子系统，同一种物理传感器可能因用途不同进入不同框架：</p>
+<table>
+<thead>
+<tr>
+<th>子系统</th>
+<th>侧重</th>
+<th>典型设备</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>hwmon</td>
+<td>板级监控</td>
+<td>VRM 温度、电源轨电压、风扇转速</td>
+</tr>
+<tr>
+<td>IIO</td>
+<td>工业测量和连续采样</td>
+<td>气压、湿度、加速度计、ADC</td>
+</tr>
+<tr>
+<td>input</td>
+<td>用户交互事件</td>
+<td>触摸屏、按键、某些姿态传感器</td>
+</tr>
+</tbody></table>
+<p>驱动注册进哪个子系统，决定了它向上层暴露什么接口。以 IIO 为例，驱动只描述通道类型和读原始值的方法，子系统负责生成统一的对外入口：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 驱动侧：描述通道 + 提供 read_raw + 注册 */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> const</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> iio_chan_spec channels</span><span style="color:#569CD6">[]</span><span style="color:#D4D4D4"> = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    { .type = IIO_TEMP,</span></span>
+<span class="line"><span style="color:#D4D4D4">      .info_mask_separate = </span><span style="color:#DCDCAA">BIT</span><span style="color:#D4D4D4">(IIO_CHAN_INFO_PROCESSED) },</span></span>
+<span class="line"><span style="color:#D4D4D4">    { .type = IIO_HUMIDITYRELATIVE,</span></span>
+<span class="line"><span style="color:#D4D4D4">      .info_mask_separate = </span><span style="color:#DCDCAA">BIT</span><span style="color:#D4D4D4">(IIO_CHAN_INFO_PROCESSED) },</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> const</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> iio_info sensor_info = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    .read_raw = sensor_read_raw,</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">indio_dev->info         = &#x26;sensor_info;</span></span>
+<span class="line"><span style="color:#D4D4D4">indio_dev->channels     = channels;</span></span>
+<span class="line"><span style="color:#D4D4D4">indio_dev->num_channels = </span><span style="color:#DCDCAA">ARRAY_SIZE</span><span style="color:#D4D4D4">(channels);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">return</span><span style="color:#DCDCAA"> devm_iio_device_register</span><span style="color:#D4D4D4">(&#x26;client-></span><span style="color:#9CDCFE">dev</span><span style="color:#D4D4D4">, indio_dev);</span></span></code></pre><p>注册完成后，子系统自动开出三条消费路径，适配不同场景：</p>
+<table>
+<thead>
+<tr>
+<th>谁来读</th>
+<th>走哪条路</th>
+<th>拿到什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>状态页、shell 脚本</td>
+<td>sysfs 属性文件</td>
+<td>单次当前值</td>
+</tr>
+<tr>
+<td>波形采集、批量记录</td>
+<td><code>/dev/iio:deviceN</code> 缓冲</td>
+<td>带时间戳的连续样本流</td>
+</tr>
+<tr>
+<td>内核控制逻辑</td>
+<td>IIO consumer 接口</td>
+<td>换算后的数值</td>
+</tr>
+</tbody></table>
+<p>前两条路只读文件，第三条在内核模块里直接拿通道句柄：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 内核 consumer：只认通道类型，不认具体芯片 */</span></span>
+<span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> iio_channel *chan = </span><span style="color:#DCDCAA">devm_iio_channel_get</span><span style="color:#D4D4D4">(dev, </span><span style="color:#CE9178">"humidity"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> val;</span></span>
+<span class="line"><span style="color:#DCDCAA">iio_read_channel_processed</span><span style="color:#D4D4D4">(chan, &#x26;</span><span style="color:#9CDCFE">val</span><span style="color:#D4D4D4">);</span></span></code></pre><p>实际工程中，consumer 通常通过设备树或 ACPI 描述 channel 名称，与具体驱动解耦；以上示例只展示 consumer 如何通过统一接口获取数据，不代表字符串可以随意定义。</p>
+<p><strong>结果：驱动按类别注册一次，三类消费者各取所需，谁也不需要知道芯片挂在哪条总线上。</strong></p>
+<h2>RT-Thread：类型枚举与统一设备访问</h2>
+<p>RT-Thread 不按传感器类别拆分子系统，而是用一套统一的设备模型 + 类型枚举覆盖所有传感器。</p>
+<p>每个驱动填一张操作表并声明自己的类型，然后注册进框架：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 驱动侧：填操作表 + 声明类型 + 注册 */</span></span>
+<span class="line"><span style="color:#D4D4D4">sensor->info.type = RT_SENSOR_CLASS_HUMI;</span><span style="color:#6A9955">   /* 湿度传感器 */</span></span>
+<span class="line"><span style="color:#D4D4D4">sensor->ops       = &#x26;my_sensor_ops;</span><span style="color:#6A9955">         /* fetch_data / control */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">rt_hw_sensor_register</span><span style="color:#D4D4D4">(sensor, </span><span style="color:#CE9178">"humi"</span><span style="color:#D4D4D4">, RT_DEVICE_FLAG_RDONLY, RT_NULL);</span></span></code></pre><p><code>rt_sensor_ops</code> 提供统一的数据采集和控制入口，主要包括 <code>fetch_data</code>、<code>control</code> 等接口，不同版本的实现细节可能略有差异。无论是 I2C 传感器、SPI 传感器还是 UART 传感器，驱动都填这同一张表。</p>
+<p>应用侧的调用顺序固定为 find / open / control / read，全程不出现芯片型号：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 应用侧：统一打开、配置、读取 */</span></span>
+<span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> rt_sensor_data data;</span></span>
+<span class="line"><span style="color:#4EC9B0">rt_device_t</span><span style="color:#D4D4D4"> dev = </span><span style="color:#DCDCAA">rt_device_find</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"humi_sht41"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">rt_device_open</span><span style="color:#D4D4D4">(dev, RT_DEVICE_FLAG_RDONLY);</span></span>
+<span class="line"><span style="color:#DCDCAA">rt_device_control</span><span style="color:#D4D4D4">(dev, RT_SENSOR_CTRL_SET_ODR, (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *)</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">);</span><span style="color:#6A9955">  /* 1 Hz */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">rt_device_read</span><span style="color:#D4D4D4">(dev, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) == </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    rt_kprintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"humi: </span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178">.</span><span style="color:#9CDCFE">%d</span><span style="color:#9CDCFE"> %%</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">humi</span><span style="color:#D4D4D4"> / </span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">humi</span><span style="color:#D4D4D4"> % </span><span style="color:#B5CEA8">10</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>data.data</code> 是一个联合体，成员由 <code>sensor-&gt;info.type</code> 决定：温度传感器访问 <code>data.data.temp</code>，湿度传感器访问 <code>data.data.humi</code>，加速度传感器访问 <code>data.data.acce.x/y/z</code>。类型不同，接口形状统一。</p>
+<p><strong>在接口稳定的前提下，上层业务代码无需感知具体芯片型号的变化。</strong></p>
+<h2>两个框架共有的四层</h2>
+<p>把 RT-Thread 和 Linux 缩小，骨架是一样的：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>硬件驱动 → 统一接口 → 设备表 → 采样调度 → 统一样本 → 消费者</span></span></code></pre><p>每一层挡住一种变化：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>负责什么</th>
+<th>挡住哪种变化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>统一接口</td>
+<td>init / read / control 操作约定</td>
+<td>芯片型号和总线协议换了</td>
+</tr>
+<tr>
+<td>设备表</td>
+<td>系统当前有哪些传感器</td>
+<td>传感器数量变了</td>
+</tr>
+<tr>
+<td>采样调度</td>
+<td>何时读、按什么顺序读</td>
+<td>采样节奏变了</td>
+</tr>
+<tr>
+<td>统一样本</td>
+<td>数值、单位、有效状态、时间</td>
+<td>上层用途变了</td>
+</tr>
+</tbody></table>
+<p>前三层管的是&quot;怎么读&quot;，第四层管的是&quot;怎么传&quot;。RT-Thread 用 <code>rt_sensor_data</code>，IIO 用带 scale 的通道值，落到一个最小实现上，一条样本需要携带的信息就这几项：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4">    value;</span><span style="color:#6A9955">         /* 已换算成物理量的数值 */</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4">  valid;</span><span style="color:#6A9955">         /* 本次采样是否可信 */</span></span>
+<span class="line"><span style="color:#569CD6">    int64_t</span><span style="color:#D4D4D4">  timestamp_ms;</span><span style="color:#6A9955">  /* 采样时刻 */</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">sensor_sample_t</span><span style="color:#D4D4D4">;</span></span></code></pre><p><code>valid</code> 和 <code>timestamp_ms</code> 容易被省掉，但它们决定上层能不能正确处理数据：没有 <code>valid</code>，读失败和读到 0 无法区分；没有时间戳，曲线和超时判断都无从下手。</p>
+<p>少一层就会漏一种耦合：没有统一接口，换型号就要改上层；没有设备表，调度代码里会写死传感器名单；没有统一样本，每个消费者都要自己解析各传感器的格式。</p>
+<p><strong>结果：框架的价值来自这四层职责固定，不来自接口数量多。</strong></p>
+<h2>ESP32-S3：三种总线接入同一张驱动表</h2>
+<p>ESP32-S3 上不需要完整的 RTOS 设备体系，只需要实现这四层的最小版本。</p>
+<p>以同时接入三种总线的传感器为例：Modbus RTU、UART 私有协议、I2C。统一接口只有三个成员，<code>read</code> 直接填上一节那个 <code>sensor_sample_t</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> sensor_device {</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *name;</span></span>
+<span class="line"><span style="color:#DCDCAA">    esp_err_t</span><span style="color:#D4D4D4"> (*init)(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sensor_device *dev);</span></span>
+<span class="line"><span style="color:#DCDCAA">    esp_err_t</span><span style="color:#D4D4D4"> (*read)(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sensor_device *dev,</span></span>
+<span class="line"><span style="color:#4EC9B0">                      sensor_sample_t</span><span style="color:#D4D4D4"> *sample);</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">sensor_device_t</span><span style="color:#D4D4D4">;</span></span></code></pre><p>三个驱动各自导出一个实例，Modbus 请求帧、UART 帧解析、I2C 时序都关在各自的 <code>.c</code> 文件里。驱动表是一个数组，加传感器只加一行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>传感器A驱动  ─ Modbus RTU ─┐</span></span>
+<span class="line"><span>传感器B驱动  ─ UART ───────┼─→ 驱动表 ─→ 采样任务</span></span>
+<span class="line"><span>传感器C驱动  ─ I2C ────────┘</span></span></code></pre><pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> sensor_device_t</span><span style="color:#D4D4D4"> *g_sensors</span><span style="color:#569CD6">[]</span><span style="color:#D4D4D4"> = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    &#x26;sensor_a_device,</span></span>
+<span class="line"><span style="color:#D4D4D4">    &#x26;sensor_b_device,</span></span>
+<span class="line"><span style="color:#D4D4D4">    &#x26;sensor_c_device,</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p>采样任务只遍历这张表，不判断当前设备用哪种总线：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">/* 顺序初始化 */</span></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; SENSOR_COUNT; i++)</span></span>
+<span class="line"><span style="color:#9CDCFE">    g_sensors</span><span style="color:#D4D4D4">[i]-></span><span style="color:#DCDCAA">init</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">g_sensors</span><span style="color:#D4D4D4">[i]);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 顺序轮询 + 聚合 */</span></span>
+<span class="line"><span style="color:#4EC9B0">sensor_sample_t</span><span style="color:#9CDCFE"> samples</span><span style="color:#D4D4D4">[SENSOR_COUNT];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">while</span><span style="color:#D4D4D4"> (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; SENSOR_COUNT; i++)</span></span>
+<span class="line"><span style="color:#9CDCFE">        g_sensors</span><span style="color:#D4D4D4">[i]-></span><span style="color:#DCDCAA">read</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">g_sensors</span><span style="color:#D4D4D4">[i], &#x26;</span><span style="color:#9CDCFE">samples</span><span style="color:#D4D4D4">[i]);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    assemble_reading</span><span style="color:#D4D4D4">(samples, &#x26;reading);</span><span style="color:#6A9955">   /* 各驱动样本 → 统一环境读数 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    sensor_queue_push</span><span style="color:#D4D4D4">(&#x26;reading);</span></span>
+<span class="line"><span style="color:#DCDCAA">    vTaskDelay</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">pdMS_TO_TICKS</span><span style="color:#D4D4D4">(POLL_MS));</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><strong>结果：新增传感器写一个驱动文件并在驱动表加一行，轮询任务不改。</strong></p>
+<h2>统一数据的消费者与驱动边界</h2>
+<p>聚合层输出统一的环境读数，下游有多个消费者，都只认这一种结构：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>统一环境读数 ─┬─→ 数据队列   （取连续样本）</span></span>
+<span class="line"><span>              ├─→ 最新值缓存 （取当前状态）</span></span>
+<span class="line"><span>              └─→ 历史环形缓冲（取时间段曲线）</span></span></code></pre><p>Web 页面从这三者里选需要的那一份。它不知道哪个传感器走 Modbus，也不知道哪个挂在 I2C 上。</p>
+<p>这条边界就是框架和业务的分界：驱动负责把数据从硬件读出来，上层负责决定数据拿来做什么。</p>
+<p><strong>结果：加一个新消费者、换一种存储策略，都不会回头修改传感器驱动。</strong></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-27 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32s3-sensor-driver-decoupling');
+  }
+  </script>
+</body>
+</html>

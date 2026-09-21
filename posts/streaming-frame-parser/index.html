@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>串口、TCP 等流式传输 会出现粘包、拆包、等传输错误；需要用状态机解析字节流，输出完整消息帧 - CacheRivulet小记</title>
+  <meta name="description" content="串口、TCP 流式传输 粘包、拆包、传输错误 状态机解析字节流 状态机输出完整消息帧">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="TinyFrame">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:tag" content="缓存">
+  <meta property="article:published_time" content="2026-07-27">
+  <meta property="og:title" content="串口、TCP 等流式传输 会出现粘包、拆包、等传输错误；需要用状态机解析字节流，输出完整消息帧">
+  <meta property="og:description" content="串口、TCP 流式传输 粘包、拆包、传输错误 状态机解析字节流 状态机输出完整消息帧">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/streaming-frame-parser/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/streaming-frame-parser/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "串口、TCP 等流式传输 会出现粘包、拆包、等传输错误；需要用状态机解析字节流，输出完整消息帧",
+  "description": "串口、TCP 流式传输\n粘包、拆包、传输错误\n状态机解析字节流\n状态机输出完整消息帧",
+  "datePublished": "2026-07-27",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/streaming-frame-parser/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/streaming-frame-parser/"
+  },
+  "keywords": "嵌入式, 通信协议, TinyFrame, C语言, 缓存"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">串口、TCP 等流式传输 会出现粘包、拆包、等传输错误；需要用状态机解析字节流，输出完整消息帧</h1>
+  <article class="article-body">
+<h1>串口、TCP 等流式传输 会出现粘包、拆包、等传输错误；需要用状态机解析字节流，输出完整消息帧</h1>
+<p>串口、TCP 这类流式接口没有消息边界，读取字节和完整消息不存在一一对应：一次读取可能只拿到部分帧数据，剩余部分在下一次读取，还可能夹杂下一帧开头，也就是常见的粘包、拆包问题。</p>
+<p>解决方案采用逐字节驱动的组帧状态机：先处于等待帧头状态，匹配到帧头后读取长度字段，再按长度接收负载数据。半包时保存状态等待后续数据；数据收齐后执行帧完整性校验。</p>
+<p>容易踩坑：负载数据碰巧出现帧头字节、传输损坏长度字段，都会造成帧头误识别，状态机按错误长度接收，破坏后续报文。可在帧头 + 长度后增加头部 CRC32 校验：头部校验通过才接收负载；负载数据再独立做 CRC 校验。提前拦截头部误匹配，避免污染后续帧。</p>
+<p>校验成功向上交付完整帧；校验失败、长度越界、超时则丢弃残帧，回到搜寻帧头状态。缓存残留字节继续解析下一帧。依靠状态机持续处理字节流并容错，即可把无边界字节流可靠解析为完整消息。</p>
+<p><img src="/posts/streaming-frame-parser/streaming-frame-parser-diagram-fixed.svg" alt="图 1 组帧状态机将连续字节流解析为完整消息帧"></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-27 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=streaming-frame-parser');
+  }
+  </script>
+</body>
+</html>

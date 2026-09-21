@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用芯片 UID 做一机一密：功能激活与外部数据保护 - CacheRivulet小记</title>
+  <meta name="description" content="一机一密，每台一把密钥 附加功能激活，换机就失效 片外只存密文，拆了也读不出 防不住开盖：先做好读保护">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:tag" content="加密">
+  <meta property="article:published_time" content="2026-09-21">
+  <meta property="og:title" content="用芯片 UID 做一机一密：功能激活与外部数据保护">
+  <meta property="og:description" content="一机一密，每台一把密钥 附加功能激活，换机就失效 片外只存密文，拆了也读不出 防不住开盖：先做好读保护">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/embedded-encryption-approach.bak/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/embedded-encryption-approach.bak/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用芯片 UID 做一机一密：功能激活与外部数据保护",
+  "description": "一机一密，每台一把密钥\n附加功能激活，换机就失效\n片外只存密文，拆了也读不出\n防不住开盖：先做好读保护",
+  "datePublished": "2026-09-21",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/embedded-encryption-approach.bak/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/embedded-encryption-approach.bak/"
+  },
+  "keywords": "嵌入式, 系统设计, 加密"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用芯片 UID 做一机一密：功能激活与外部数据保护</h1>
+  <article class="article-body">
+<h1>用芯片 UID 做一机一密：功能激活与外部数据保护</h1>
+<p>做嵌入式产品，怕的通常是这几件事：板子被人照抄一份就能卖；想加个增值功能按台收费，激活码一传出去就被到处用；关键数据放在外部 Flash，芯片拆下来一读全露；再或者硬件干脆开源、只靠卖软件赚钱，那软件凭什么不被白拿。</p>
+<p>这几件事背后其实是同一个需求：<strong>让固件只认这块板子</strong>。芯片里都有一个出厂烧死、改不掉的编号（UID），拿它配合一个不随固件流出的盐，就能给每台设备算出一把独一无二的密钥，用它加密资源、绑定激活、保护外部数据。不用额外安全芯片，通用 MCU 就能做。</p>
+<h2>一机一密：密钥现场算，用户拿不到盐</h2>
+<p>密钥不写死在固件里，用 <code>key = hash(芯片 UID + Flash ID + 盐)</code> 现场算出来，每台 UID 不同，天然一机一密。主要靠芯片出厂烧死、改不掉的编号，Flash ID 只作辅助。</p>
+<p><img src="/posts/embedded-encryption-approach.bak/%E4%B8%80%E6%9C%BA%E4%B8%80%E5%AF%86%E5%AF%86%E9%92%A5%E6%B4%BE%E7%94%9F.svg" alt="一机一密密钥派生"></p>
+<p>盐放在开启读保护的芯片内，不随固件流出。用户拿到的是工厂算出的那把最终 key，盐本身拿不到：能用它加解密，但反推不出盐，也造不出第二台的 key。每次加解密再配一个临时数（nonce），同一把 key 下必须永不重复，否则两段密文一对比，明文就漏了。</p>
+<p><img src="/posts/embedded-encryption-approach.bak/%E8%AE%BE%E5%A4%87%E7%AB%AF%E5%8A%A0%E8%A7%A3%E5%AF%86.webp" alt="设备端加解密"></p>
+<p><img src="/posts/embedded-encryption-approach.bak/%E7%94%A8%E6%88%B7%E7%AB%AF%E5%8A%A0%E8%A7%A3%E5%AF%86.webp" alt="用户端加解密"></p>
+<h2>附加功能激活：一机一码，换机失效</h2>
+<p>有了每台唯一的 key，附加功能就能做成一机一码：工厂按设备 ID 生成激活凭证，只有本机 UID 算出的 key 解的开，换台机器就是废数据。</p>
+<p>资源文件同理：工厂烧录时先读设备 ID，把资源加密后打包成专属固件，抄到别的板子就解不开。</p>
+<p>所以固件被抄走时，抄的是代码。附加功能和专属资源绑在这台机器的身份上，不会跟着过去。</p>
+<p><img src="/posts/embedded-encryption-approach.bak/%E5%94%AF%E4%B8%80%E5%9B%BA%E4%BB%B6%E5%8A%A0%E5%AF%86%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6.webp" alt="唯一固件加密资源文件"></p>
+<h2>外部介质数据保护：片外只存密文</h2>
+<p>运行记录和传感器数据放在外部 Flash，芯片取下来就能直接读；逻辑分析仪挂在通信线上也能还原完整数据。一次性温度计这类产品尤其敏感，冷链记录一改，报告就是假的。</p>
+<p>外部只存密文：数据先加密再写入片外介质，读取时解密校验。拆芯片读到的是密文，抓总线抓到的也是密文，篡改后解不出有效数据。</p>
+<p><img src="/posts/embedded-encryption-approach.bak/%E6%95%B0%E6%8D%AE%E7%94%9F%E4%BA%A7%E5%8A%A0%E5%AF%86%E5%AD%98%E5%82%A8.webp" alt="数据生产加密存储"></p>
+<p>算法选型见 <a href="/posts/air001-chacha20-flashstore">ChaCha20 加密 FlashStore 存储数据</a>。ChaCha20 只管加密、不管有没有被改过，要严格防篡改还得再叠一道校验（Poly1305 或 HMAC）。</p>
+<h2>那它防不住什么</h2>
+<p>上面都站在「固件读不出来」的前提上，这个前提本身可以被打破：开盖、探针、电源故障注入能暴露调试接口，从 RAM 启动或利用漏洞执行任意代码，都能把 Flash 读出来。AI 辅助逆向让门槛越来越低。</p>
+<p>固件到手后，破解者有两条路。一条是保留解密流程，敲掉校验的 if、把动态读取 UID 改成写死固定值。写死的值必然对应某台真实设备，顺着能查到出货渠道和客户，这是身份印记。另一条更彻底：把资源完整解出来换成明文塞回去，固件直接加载明文、连解密都不走，UID 也就不用写了，一点印记都不留。</p>
+<p>还有一种翻车方式其实更常见：密钥写死在上位机软件里。PC 端程序拿 dnSpy 这类工具反编译就能翻出来，AI 辅助下几乎不用读代码也能定位到，加密了个寂寞。密钥必须放在对方够不着的地方：读不出来的芯片内，或者把关键运算搬到云端、密钥不出服务器。判断标准就一句话：<strong>凡是能拿到用户手上、跑在他自己机器上的东西，里面就不能有密钥</strong>。</p>
+<p>举个实际扒出来的例子：上位机先读设备的 UUID 传给云端，云端下发一个加密固件，到这里都挺像样。然后它在<strong>上位机里</strong>解密，再把<strong>明文固件</strong>传给设备。</p>
+<p>也就是说，固件只在云端到上位机这一段是密的，从上位机到设备这一段是裸的，整条链路的保密性全押在上位机那把写死的密钥上。反编译一下，密钥就躺在里面：云端下发的任何固件都能自己解开，明文直接到手。</p>
+<p>这套设计只防住了链路上的窃听，没防住拿到上位机的人。正确的做法是把解密放进设备：云端用这台设备对应的密钥加密，固件到了设备内部才解开；上位机全程只搬密文，手里一把钥匙都没有。</p>
+<p>但批量山寨能绕开溯源：自己先买一台正品当“种子”整套复制，追下去只追到他自己手上那台。离线设备没有外部可信输入，没有绝对安全，只有成本；真想要动态防护还得联网。</p>
+<h2>最后：最划算的还是读保护，和产品本身</h2>
+<p>兜一圈回来，成本最低、最该先做的还是开启读保护。软件级容易被绕过；硬件级（STM32 RDP2、ESP32 eFuse 熔断）熔断后配置改不回去、能封死调试口，代价几乎为零，该做。</p>
+<p>但要清楚它挡的是什么：不可逆指的是<strong>配置改不回去</strong>，不代表<strong>拆不开</strong>。Espressif 自己就公告过 CVE-2023-35818，用电磁故障注入（EMFI）绕过 Secure Boot 和 Flash 加密；STM32 的 RDP 同样有非侵入式提取的手段。有条件就上独立 SE、TrustZone 这类把密钥和运算挪出攻击面的方案，但它们也只是抬高成本，谈不上终点。</p>
+<p>既然堵不死，就别把力气都花在防别人抄上。真正拉开差距的，是那些抄不走的东西：功能做扎实，硬件细节打磨到位，校准和工艺上有自己的门道；再往外是可靠性、供应链、交付、响应、售后。它们都不在固件里，抄板抄不走，买器件也买不来，只能靠时间和积累堆出来。软件可以整个复制走，电路可以照着画一遍，长在团队身上的能力拿不走。</p>
+<p>技术很重要，只是它未必是最要紧的那一项。先做一个自己信服、客户也满意的产品：抄得走的是代码和电路，抄不走的是你把这件事做到了什么程度。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-21 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=embedded-encryption-approach.bak');
+  }
+  </script>
+</body>
+</html>

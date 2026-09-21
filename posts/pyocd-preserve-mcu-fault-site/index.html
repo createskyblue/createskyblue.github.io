@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设备挂机异常后，用 pyOCD 与 Cortex-Debug 保留 MCU 现场 - CacheRivulet小记</title>
+  <meta name="description" content="MCU程序卡死后，怎样不重启就看到它停在哪个函数">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="VSCode">
+  <meta property="article:tag" content="pyocd">
+  <meta property="article:published_time" content="2026-07-30">
+  <meta property="og:title" content="设备挂机异常后，用 pyOCD 与 Cortex-Debug 保留 MCU 现场">
+  <meta property="og:description" content="MCU程序卡死后，怎样不重启就看到它停在哪个函数">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/pyocd-preserve-mcu-fault-site/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/pyocd-preserve-mcu-fault-site/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "设备挂机异常后，用 pyOCD 与 Cortex-Debug 保留 MCU 现场",
+  "description": "MCU程序卡死后，怎样不重启就看到它停在哪个函数",
+  "datePublished": "2026-07-30",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/pyocd-preserve-mcu-fault-site/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/pyocd-preserve-mcu-fault-site/"
+  },
+  "keywords": "嵌入式, MCU, 工程调试, 故障诊断, VSCode, pyocd"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">设备挂机异常后，用 pyOCD 与 Cortex-Debug 保留 MCU 现场</h1>
+  <article class="article-body">
+<h1>设备挂机异常后，用 pyOCD 与 Cortex-Debug 保留 MCU 现场</h1>
+<p>设备已经异常时，先保持供电。不要复位、重新烧录，也不要启动平时的 Launch 下载调试。下面这份配置会把 MCU 原地暂停，让 VS Code 显示它卡住时所在的代码、调用过程和变量。</p>
+<h2>Cortex-Debug 现场连接配置</h2>
+<p>先把下面配置加入 <code>.vscode/launch.json</code>。<code>MCU 现场检查</code> 是 <code>name</code> 字段创建的自定义名称，添加后才会出现在 VS Code 的“运行和调试”列表中。</p>
+<pre><code>{
+  "name": "MCU 现场检查",
+  "type": "cortex-debug",
+  "request": "attach",
+  "servertype": "pyocd",
+  "targetId": "TARGET_ID",
+  "executable": "${workspaceFolder}/build/firmware.elf",
+  "serverArgs": [
+    "-O",
+    "connect_mode=halt"
+  ],
+  "overrideGDBServerStartedRegex": "GDB server listening on port"
+}</code></pre><p><code>targetId</code> 和 <code>executable</code> 直接沿用已经可以正常调试的工程配置。原配置中已有 <code>cmsisPack</code> 或 <code>svdFile</code>，把对应行原样复制进来。</p>
+<ul>
+<li><code>name</code> 创建稍后要选择的自定义调试入口。</li>
+<li><code>request: &quot;attach&quot;</code> 连接现有程序，不执行 Launch 下载流程。</li>
+<li><code>connect_mode=halt</code> 让 pyOCD 连接目标时暂停 MCU，减少现场继续变化。</li>
+</ul>
+<p>不要复制 Reset、Run to main、GDB <code>load</code> 或烧录任务。这些动作会改变需要检查的现场。</p>
+<p>终端已经显示 <code>GDB server listening on port</code>，VS Code 仍报启动超时时，保留配置里的 <code>overrideGDBServerStartedRegex</code>。它让 Cortex-Debug 认出 pyOCD 已经启动，增加等待时间没有用。</p>
+<h2>设备异常后的四个动作</h2>
+<ol>
+<li>保持设备当前供电，不按复位键，不重新烧录固件。</li>
+<li>连接调试器的 SWDIO、SWCLK 和 GND。SWD 是 Cortex-M 芯片常用的调试接口。</li>
+<li>打开 VS Code，在“运行和调试”中选择已经添加的 <code>MCU 现场检查</code>。</li>
+<li>启动调试，看到源码停住后立即截图或记录，暂时不要按“继续运行”。</li>
+</ol>
+<p>终端出现 <code>GDB server listening on port</code> 表示 pyOCD 已经开始监听。VS Code 随后应停在当前代码位置，不会重新运行到 <code>main</code>。</p>
+<h2>ELF 与调用栈的对应关系</h2>
+<p><code>executable</code> 必须指向设备当前固件同一次构建产生的 ELF 文件。ELF 在现场连接中只负责把地址翻译成函数、源码和变量，不负责下载固件。</p>
+<p>调试器暂停后，按这个顺序记录：</p>
+<ol>
+<li>查看当前源码行，确认 CPU 停在什么函数。</li>
+<li>展开 <code>Call Stack</code>，记录程序经过哪些函数到达当前位置。</li>
+<li>查看 <code>Variables</code> 和已有的 <code>Watch</code>，记录与异常状态直接相关的值。</li>
+</ol>
+<p>本地 ELF 与设备固件不对应时，函数名、源码行和变量都可能显示错误。先保存信息，再决定是否单步或继续运行。</p>
+<h2>现场连接的失效边界</h2>
+<p>以下情况已经无法保留原始现场：</p>
+<ul>
+<li>设备被断电、复位或重新烧录。</li>
+<li>看门狗在连接调试器前已经复位 MCU。</li>
+<li>程序继续运行并覆盖了故障时的栈和变量。</li>
+</ul>
+<p>这套方法保留的是调试器连接那一刻的状态，无法回到更早的故障瞬间。正式挂机前，先在正常设备上启动一次 <code>MCU 现场检查</code>，确认芯片会原地暂停且没有重新进入启动流程，再把这项配置留在工程中。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-30 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=pyocd-preserve-mcu-fault-site');
+  }
+  </script>
+</body>
+</html>

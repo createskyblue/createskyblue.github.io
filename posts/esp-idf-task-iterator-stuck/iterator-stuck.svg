@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="300" viewBox="0 0 680 300">
+  <rect width="680" height="300" fill="#ffffff"/>
+
+  <text x="340" y="26" font-size="15" fill="#333333" text-anchor="middle" font-family="sans-serif">负责点名的人按名单逐个核对，有人中途被划掉</text>
+  <text x="180" y="44" font-size="12" fill="#C0392B" text-anchor="middle" font-family="sans-serif">✗ 被划掉了</text>
+
+  <g font-family="sans-serif" font-size="13" text-anchor="middle">
+    <rect x="40" y="50" width="80" height="42" rx="6" fill="#E8F1FB" stroke="#4A90D9"/>
+    <text x="80" y="76" fill="#1B2A41">第1人</text>
+    <rect x="140" y="50" width="80" height="42" rx="6" fill="#FFF0E8" stroke="#C0392B"/>
+    <text x="180" y="76" fill="#1B2A41">第2人</text>
+    <rect x="240" y="50" width="80" height="42" rx="6" fill="#E8F1FB" stroke="#4A90D9"/>
+    <text x="280" y="76" fill="#1B2A41">第3人</text>
+    <rect x="340" y="50" width="80" height="42" rx="6" fill="#E8F1FB" stroke="#4A90D9"/>
+    <text x="380" y="76" fill="#1B2A41">第4人</text>
+    <rect x="440" y="50" width="90" height="42" rx="6" fill="#F5F5F5" stroke="#BBBBBB" stroke-dasharray="4 3"/>
+    <text x="485" y="76" fill="#888888">…末尾</text>
+  </g>
+
+  <line x1="180" y1="100" x2="180" y2="116" stroke="#C0392B" stroke-width="2"/>
+  <polygon points="180,126 172,112 188,112" fill="#C0392B"/>
+  <text x="198" y="122" font-size="13" fill="#C0392B" font-family="sans-serif">点名点到第2人</text>
+
+  <rect x="40" y="152" width="330" height="44" rx="8" fill="#FFF6DC" stroke="#D9A13B"/>
+  <text x="205" y="180" font-size="13" fill="#7A5B1E" text-anchor="middle" font-family="sans-serif">记录还停在“第2人”，没有往后移</text>
+
+  <line x1="205" y1="196" x2="205" y2="236" stroke="#C0392B" stroke-width="2"/>
+  <polygon points="205,246 197,232 213,232" fill="#C0392B"/>
+  <text x="205" y="280" font-size="15" fill="#C0392B" text-anchor="middle" font-family="sans-serif">↻ 每次都从第2人重走，永远点不到末尾</text>
+</svg>

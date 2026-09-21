@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCU 进入低功耗前后要防范 IO 和外设断电触发中断 - CacheRivulet小记</title>
+  <meta name="description" content="低功耗休眠时被非预期IO中断唤醒？">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="单片机">
+  <meta property="article:tag" content="中断">
+  <meta property="article:published_time" content="2026-06-26">
+  <meta property="og:title" content="MCU 进入低功耗前后要防范 IO 和外设断电触发中断">
+  <meta property="og:description" content="低功耗休眠时被非预期IO中断唤醒？">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/mcu-low-power-io-interrupt-timing/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/mcu-low-power-io-interrupt-timing/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "MCU 进入低功耗前后要防范 IO 和外设断电触发中断",
+  "description": "低功耗休眠时被非预期IO中断唤醒？",
+  "datePublished": "2026-06-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/mcu-low-power-io-interrupt-timing/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/mcu-low-power-io-interrupt-timing/"
+  },
+  "keywords": "嵌入式, 低功耗, MCU, 单片机, 中断"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">MCU 进入低功耗前后要防范 IO 和外设断电触发中断</h1>
+  <article class="article-body">
+<h1>MCU 进入低功耗前后要防范 IO 和外设断电触发中断</h1>
+<p><img src="/posts/mcu-low-power-io-interrupt-timing/img/io-low-power-timing.webp" alt="MCU 低功耗前后 IO 与中断处理时序"></p>
+<p>低功耗切换包含 IO 和中断时序，不只是一条 sleep 指令。很多 MCU 在进入休眠前会重新配置 IO：上拉、下拉、输入、推挽、开漏、高阻态都可能发生切换。这个动作会改变引脚等效电路，实际电压上可能出现 ns 级毛刺。</p>
+<p>还要特别注意一个容易忽略的坑：常见的 IO 模式切换函数通常具有非原子特征。一个 <code>gpio_init()</code> 或 <code>pinMode()</code> 风格的调用，内部可能会分多步修改方向寄存器、上下拉寄存器、输出类型寄存器、复用功能寄存器和中断配置寄存器。调用语句在 C 代码里看起来是一行，硬件实际经历的是一串寄存器读改写。</p>
+<p>如果这个引脚同时挂在中断检测链路上，毛刺就可能被比较器、边沿检测或唤醒逻辑捕获。即使应用层没有主动产生外部事件，中断标志位也可能被置位，系统进入低功耗后立即被唤醒，或者在唤醒后读到一次假的中断来源。</p>
+<p>同样的风险也会出现在外部器件断电时。比如用中断捕获编码器、霍尔、光电开关或其他脉冲传感器，低功耗前为了省电关闭传感器电源。电源下掉时，传感器输出脚可能从驱动态变成高阻、被上拉拖动、被下拉释放，或者在掉电过程中产生一段不确定电平。MCU 看到的是 IO 电平变化，中断逻辑不会自动知道这是“外设断电”，仍然可能把它当成一次有效脉冲。</p>
+<h2>风险位置</h2>
+<p>问题通常出现在两个阶段：</p>
+<ul>
+<li>进入低功耗前：固件把普通运行态 IO 改成低漏电状态，例如关闭上拉、改输入、改开漏或切到模拟态。</li>
+<li>从低功耗唤醒后：固件把休眠态 IO 恢复成业务运行态，期间也可能再次产生毛刺。</li>
+<li>IO 切换函数执行中：驱动库分步写寄存器，中间态可能短暂经过一个会触发中断检测的电气组合。</li>
+<li>外部传感器断电或上电时：编码器等脉冲源输出脚失去驱动或重新驱动，输入电平变化可能被计成一次脉冲。</li>
+</ul>
+<p>这类毛刺时间很短，示波器不一定容易在常规采样下稳定复现。但中断检测链路本来就用于捕获边沿，它可能比应用日志更早看见这个瞬态变化。</p>
+<p>所以低功耗前后的 IO 处理要同时考虑两件事：</p>
+<ul>
+<li>IO 电气状态是否已经稳定。</li>
+<li>中断使能和中断标志位是否处在可控状态。</li>
+</ul>
+<h2>IO 切换函数具有非原子特征</h2>
+<p>不少驱动库把 IO 配置封装成一个函数，但这个封装只保证软件接口简单，不保证硬件状态一次性完成切换。一次模式切换可能包含这些中间步骤：</p>
+<ul>
+<li>先关输出再改输入方向。</li>
+<li>先改上下拉再改复用功能。</li>
+<li>先改输出类型再写默认输出电平。</li>
+<li>先清某个寄存器位，再写入新的组合值。</li>
+</ul>
+<p>这些中间状态持续时间很短，通常只在几个总线周期或寄存器访问周期内存在。对普通业务逻辑来说，这段时间几乎不可见；对边沿中断、比较器输入、低功耗唤醒电路来说，它可能已经足够形成一次有效事件。</p>
+<p>因此不能默认“调用 IO 配置函数期间不会触发中断”。如果某个引脚处于中断检测路径上，IO 配置函数本身就应该被看成一个可能产生毛刺和中间态的危险区间。</p>
+<h2>外部脉冲源断电也会改变量测 IO</h2>
+<p>低功耗设计里经常会关闭外部器件电源，例如编码器、霍尔传感器、红外对管、光电开关、模拟前端或小板上的辅助芯片。只要这些器件的输出接到 MCU 的中断脚，断电动作就会变成输入状态变化。</p>
+<p>以编码器为例，运行时 MCU 用边沿中断计数。进入低功耗前如果直接关闭编码器供电，可能出现几类误触发：</p>
+<ul>
+<li>编码器输出从推挽驱动变成高阻，MCU 侧上拉或下拉把电平拉到另一个状态。</li>
+<li>编码器电源下降过程中，输出级短暂进入不确定区间。</li>
+<li>外部 RC、ESD 结构或漏电路径让输入脚缓慢跨过中断阈值。</li>
+<li>MCU 仍然保持边沿中断使能，掉电过程中的一次变化被计入位置或速度。</li>
+</ul>
+<p>处理原则和 IO 模式切换一致：先关闭捕获中断，清掉历史标志，再关闭外部器件电源。等待电源和输入脚稳定后，如果这个输入不作为唤醒源，就保持中断关闭进入休眠；如果它必须作为唤醒源，就要确认外设断电后的默认电平不会正好处在触发条件上。</p>
+<p>唤醒恢复也要按顺序来：先给外部器件上电，等待输出稳定，再清一次中断标志，最后开启编码器或脉冲捕获中断。不要在外设电源刚打开、输出还没稳定时就开始计数。</p>
+<h2>进入低功耗前</h2>
+<p>进入休眠前建议按固定顺序处理：</p>
+<ol>
+<li>关闭不需要作为唤醒源的引脚中断。</li>
+<li>清空相关中断标志位。</li>
+<li>关闭不需要工作的外部传感器或编码器电源。</li>
+<li>设置 IO 模式，让引脚进入低功耗安全状态。</li>
+<li>等待 IO、电源和外部 RC 网络稳定，至少跨过驱动库分步写寄存器、器件内部同步和外部器件掉电可能产生的瞬态时间。</li>
+<li>进入低功耗或休眠。</li>
+</ol>
+<p>这个顺序的核心是先切断误触发进入中断控制流的路径，再修改 IO 电气状态。清标志位放在 IO 切换前，是为了把历史残留状态和这次低功耗切换区分开。IO 切换后的短暂等待，则给引脚、电平检测和外部电路一个收敛时间。</p>
+<p>如果某个引脚必须作为唤醒源，仍然要先明确它的唤醒极性和有效电平，再决定是否在切换前后重新清标志。不能把“保持唤醒能力”和“允许切换毛刺触发”混在一起。</p>
+<h2>唤醒后</h2>
+<p>系统从低功耗恢复后，处理顺序应反过来保持谨慎：</p>
+<ol>
+<li>先完成系统唤醒和时钟恢复。</li>
+<li>恢复外部器件电源，并等待输出稳定。</li>
+<li>恢复或重新设置业务运行态 IO。</li>
+<li>如果需要，清空 IO 切换和外设上电期间产生的中断标志位。</li>
+<li>最后重新开启普通业务中断。</li>
+</ol>
+<p>唤醒后的第一件事不应是直接打开全部中断。此时 IO 可能还停在休眠态，时钟、外设和软件状态也未必完全恢复。先把硬件状态放回业务预期，再清掉恢复过程中产生的标志位，最后开放中断处理，能减少假事件进入业务逻辑。</p>
+<h2>标志位要重新看待</h2>
+<p>很多低功耗异常看起来像“莫名其妙被唤醒”，实际是标志位管理不清晰。中断标志位只说明检测链路看到了满足条件的电平或边沿，不一定说明外部世界真的发生了业务事件。</p>
+<p>在低功耗时序里，标志位至少有三种来源：</p>
+<ul>
+<li>进入低功耗前遗留的历史事件。</li>
+<li>IO 模式切换产生的瞬态毛刺。</li>
+<li>真正来自外部输入的唤醒事件。</li>
+</ul>
+<p>固件需要通过关中断、清标志、切 IO、等待稳定、再进入休眠，把这三类来源拆开。唤醒后也要先恢复 IO，再处理标志位和中断使能，避免把恢复过程中的电气扰动当成业务输入。</p>
+<h2>工程检查点</h2>
+<p>实际项目里可以按下面几项检查：</p>
+<ul>
+<li>每个低功耗前会被重配的 IO，都列出运行态、休眠态和唤醒后的恢复态。</li>
+<li>对关键 IO，检查驱动库切换函数内部是否会分步改方向、上下拉、输出类型和复用功能。</li>
+<li>对编码器、霍尔、光电开关等外部脉冲源，检查断电和上电过程是否会改变 MCU 输入脚电平。</li>
+<li>每个可中断 IO，都明确中断使能位和标志位在哪一步处理。</li>
+<li>对不作为唤醒源的 IO，进入休眠前关闭中断并清标志。</li>
+<li>对作为唤醒源的 IO，确认切换过程不会经过有效触发电平；如果无法保证，切换后重新清标志并留出稳定时间。</li>
+<li>唤醒后先恢复 IO 和外设，再开放普通业务中断。</li>
+</ul>
+<p>单个 API 调用通常不能保证低功耗稳定性。IO 模式、中断检测、标志位和休眠状态共同组成一条时序链路。只要其中一步顺序不清楚，ns 级毛刺就可能被放大成一次系统级异常唤醒。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=mcu-low-power-io-interrupt-timing');
+  }
+  </script>
+</body>
+</html>
