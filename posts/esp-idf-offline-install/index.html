@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP-IDF 离线安装：绕过在线安装工具的正确方式 - CacheRivulet小记</title>
+  <meta name="description" content="ESP-IDF离线安装">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="ESP-IDF">
+  <meta property="article:tag" content="ESP32">
+  <meta property="article:tag" content="离线安装">
+  <meta property="article:tag" content="嵌入式开发">
+  <meta property="article:published_time" content="2026-05-26">
+  <meta property="og:title" content="ESP-IDF 离线安装：绕过在线安装工具的正确方式">
+  <meta property="og:description" content="ESP-IDF离线安装">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp-idf-offline-install/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp-idf-offline-install/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP-IDF 离线安装：绕过在线安装工具的正确方式",
+  "description": "ESP-IDF离线安装",
+  "datePublished": "2026-05-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp-idf-offline-install/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp-idf-offline-install/"
+  },
+  "keywords": "ESP-IDF, ESP32, 离线安装, 嵌入式开发"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP-IDF 离线安装：绕过在线安装工具的正确方式</h1>
+  <article class="article-body">
+<h1>ESP-IDF 离线安装：绕过在线安装工具的正确方式</h1>
+<p>ESP-IDF 的在线安装工具（ESP-IDF Windows Installer）体验很差：下载速度慢、经常卡在某个步骤不动、网络超时后需要从头再来。对于国内网络环境，这个问题更加严重。</p>
+<p>离线安装是更可靠的选择。提前下载好完整的安装包，用 GUI 安装器完成安装，全程不依赖网络。</p>
+<h2>在线安装工具的问题</h2>
+<p>在线安装工具需要下载多个组件：Python 环境、工具链、ESP-IDF 框架本体、Git 仓库。这些内容加起来好几个 GB，全程在线下载。常见问题：</p>
+<ul>
+<li>下载速度极慢，经常只有几十 KB/s</li>
+<li>中途断网或超时，需要重新开始</li>
+<li>安装过程中卡在 &quot;Downloading tools&quot; 或 &quot;Installing Python environment&quot; 步骤</li>
+<li>报网络相关错误但无法定位原因</li>
+</ul>
+<p>这些问题在国内网络环境下几乎是常态。</p>
+<h2>离线安装的优势</h2>
+<p>离线安装将完整环境打包为一个归档文件，安装过程不需要网络：</p>
+<ul>
+<li>安装包可以提前用下载工具（IDM、aria2 等）下载，支持断点续传</li>
+<li>安装过程纯本地操作，不受网络影响</li>
+<li>可以在多台电脑上复用同一个安装包</li>
+<li>安装速度快，几分钟内完成</li>
+</ul>
+<h2>下载离线安装包</h2>
+<p>访问乐鑫官方下载页面：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>https://dl.espressif.com/dl/eim/?utm_source=chatgpt.com&#x26;tab=offline</span></span></code></pre><p>在页面中选择 <strong>离线安装程序（Offline Installer）</strong>。</p>
+<p>点击&quot;下载&quot;按钮后，浏览器会弹窗提示&quot;是否允许下载多个文件&quot;——<strong>点击&quot;允许&quot;</strong>。浏览器会分别下载以下三个文件：</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>说明</th>
+<th>大小</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>eim-windows-x64.exe</code></td>
+<td>离线安装器（GUI）</td>
+<td>几十 MB</td>
+</tr>
+<tr>
+<td><code>eim-cli-windows-x64.exe</code></td>
+<td>命令行安装工具</td>
+<td>几十 MB</td>
+</tr>
+<tr>
+<td><code>archive_v6.0.1_windows-x64.zst</code></td>
+<td>离线安装包（核心）</td>
+<td><strong>几个 GB</strong></td>
+</tr>
+</tbody></table>
+<p>三个文件都下载完成后，把三个文件放在同一个目录下。</p>
+<blockquote>
+<p>注意：离线安装包的版本号（如 v6.0.1）会随时间更新，下载时以页面实际提供的版本为准。</p>
+</blockquote>
+<h2>执行安装</h2>
+<p><strong>强烈建议使用 GUI 安装器（<code>eim-windows-x64.exe</code>）进行安装。</strong></p>
+<p>双击运行 <code>eim-windows-x64.exe</code>，在安装界面中选择本地离线归档文件（<code>.zst</code>）。安装界面中会出现一个 <strong>MCP（Model Context Protocol）</strong> 勾选框——<strong>务必勾选它</strong>（原因见下方专章）。</p>
+<p>安装过程会自动完成以下操作：</p>
+<ol>
+<li>解压离线归档文件</li>
+<li>配置 Python 虚拟环境</li>
+<li>安装工具链（xtensa-esp-elf 等交叉编译器）</li>
+<li>安装 ESP-IDF 框架到默认路径</li>
+<li>安装 esp-eim-mcp 服务器（勾选 MCP 后）</li>
+</ol>
+<p>如果坚持使用命令行方式，运行：</p>
+<pre><code>.\eim-cli-windows-x64.exe install --use-local-archive .\archive_v6.0.1_windows-x64.zst</code></pre><p>命令行方式没有 MCP 勾选选项，不推荐。</p>
+<h2>⚠️ 首次安装必须勾选 MCP，否则只能删目录重装</h2>
+<p>ESP-IDF v6.0.0 及以上版本自带 <code>esp-eim-mcp</code>，这是一个 MCP（Model Context Protocol）服务器，可以让 AI 编程工具（如 Claude Code、Cursor 等）直接操作 ESP-IDF 项目。</p>
+<p>这个功能<strong>只能在首次安装时勾选</strong>，安装完成后无法单独补装。坑点在于：</p>
+<ul>
+<li><strong>离线安装器重装</strong>：再次运行离线安装器时，它检测到已有安装，直接跳过配置步骤，没有机会重新勾选 MCP</li>
+<li><strong>在线安装器重装</strong>：在线安装器检测到已安装的 ESP-IDF 后拒绝运行，你必须手动删除整个 <code>C:\Espressif</code> 目录，才能重新走一遍安装流程</li>
+</ul>
+<p>也就是说，首次安装忘勾 MCP → 删掉整个 ESP 目录 → 重新安装几个 GB → 才能补上这个勾选。非常睿智。</p>
+<p><strong>建议：首次安装时仔细检查 MCP 勾选框，确认已勾选再点安装。</strong></p>
+<h2>MCP 在 Claude Code 中的使用问题</h2>
+<p>ESP-IDF v6.0+ 自带的 <code>esp-eim-mcp</code> 在终端中可以正常使用，但在 Claude Code 中会出现执行超时的问题，具体原因待排查。替代方案将在另一篇博客中详细说明。</p>
+<h2>验证安装</h2>
+<p>安装完成后，运行 ESP-IDF 提供的初始化脚本来验证：</p>
+<pre><code># 进入 ESP-IDF 安装目录，执行 export 脚本
+cd C:\Espressif\frameworks\esp-idf-v6.0.1
+.\export.ps1</code></pre><p>然后尝试查看版本：</p>
+<pre><code>idf.py --version</code></pre><p>如果正确输出版本号，说明安装成功。</p>
+<h2>常见问题</h2>
+<h3>浏览器没有弹窗提示下载多个文件</h3>
+<p>部分浏览器默认阻止多文件下载。检查浏览器地址栏是否有被拦截的提示，手动允许即可。Chrome 通常在地址栏右侧显示拦截图标。</p>
+<h3>下载速度慢</h3>
+<p>离线安装包有几个 GB，建议使用下载工具。直接用浏览器下载也可以，但不要用浏览器自带的&quot;另存为&quot;中断后重下——用支持断点续传的工具更稳妥。</p>
+<h3>安装命令报错找不到归档文件</h3>
+<p>确认 <code>eim-cli-windows-x64.exe</code> 和 <code>.zst</code> 归档文件在同一个目录下。或者使用绝对路径指定归档文件位置：</p>
+<pre><code>.\eim-cli-windows-x64.exe install --use-local-archive "D:\downloads\archive_v6.0.1_windows-x64.zst"</code></pre><h3>安装完成后找不到 idf.py</h3>
+<p>ESP-IDF 的工具链需要通过 <code>export.ps1</code> 脚本激活环境变量。每次打开新的终端窗口都需要先执行一次 <code>export.ps1</code>，或者在 PowerShell profile 中添加自动执行。</p>
+<h3>忘记勾选 MCP 想补装</h3>
+<p>没有补装途径。必须删除 <code>C:\Espressif</code> 整个目录，然后重新运行安装器，在安装界面中勾选 MCP。重新安装需要再次解压几个 GB 的离线包。</p>
+<h3>命令行安装和 GUI 安装的区别</h3>
+<p>GUI 安装器（<code>eim-windows-x64.exe</code>）有 MCP 勾选框，推荐优先使用。命令行安装器（<code>eim-cli-windows-x64.exe</code>）没有 MCP 选项，安装后无法补装。</p>
+<h2>总结</h2>
+<p>ESP-IDF 在线安装工具在国内网络环境下问题多，离线安装是更可靠的方式。整个流程：下载三个文件 → 放到同一目录 → 用 GUI 安装器安装 → 记得勾选 MCP。</p>
+<p>几个关键提醒：</p>
+<ul>
+<li>用 GUI 安装器，不要用命令行安装器</li>
+<li>首次安装时勾选 MCP，否则只能删目录重装</li>
+<li><code>esp-eim-mcp</code> 在 Claude Code 中存在超时问题，替代方案见后续博客</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp-idf-offline-install');
+  }
+  </script>
+</body>
+</html>

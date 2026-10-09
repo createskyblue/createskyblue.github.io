@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-S3 Web 上传 SD 卡慢：1KB 小块写入瓶颈与 PSRAM 大块缓冲解决 - CacheRivulet小记</title>
+  <meta name="description" content="PSRAM优化ESP32在线SD卡文件管理器速度慢">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="PSRAM">
+  <meta property="article:tag" content="文件上传">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:tag" content="SD 卡">
+  <meta property="article:published_time" content="2026-05-26">
+  <meta property="og:title" content="ESP32-S3 Web 上传 SD 卡慢：1KB 小块写入瓶颈与 PSRAM 大块缓冲解决">
+  <meta property="og:description" content="PSRAM优化ESP32在线SD卡文件管理器速度慢">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/esp32s3-web-upload-sd-psram-buffer/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/esp32s3-web-upload-sd-psram-buffer/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP32-S3 Web 上传 SD 卡慢：1KB 小块写入瓶颈与 PSRAM 大块缓冲解决",
+  "description": "PSRAM优化ESP32在线SD卡文件管理器速度慢",
+  "datePublished": "2026-05-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/esp32s3-web-upload-sd-psram-buffer/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/esp32s3-web-upload-sd-psram-buffer/"
+  },
+  "keywords": "ESP32-S3, PSRAM, 文件上传, 性能优化, SD 卡"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP32-S3 Web 上传 SD 卡慢：1KB 小块写入瓶颈与 PSRAM 大块缓冲解决</h1>
+  <article class="article-body">
+<h1>ESP32-S3 Web 文件上传 SD 卡慢：1KB 小块的命令开销与 64KB PSRAM 缓冲解决</h1>
+<h2>背景</h2>
+<p>项目是一个心率数据记录器，使用 ESP32-S3 通过 SDMMC 接口将 ADC 采集数据写入 SD 卡。设备需要脱离电脑独立运行，因此在固件里实现了一个 Web 文件管理器，用于在浏览器中临时收发文件：浏览目录、下载记录数据、上传配置、删除旧数据。</p>
+<p><img src="/posts/esp32s3-web-upload-sd-psram-buffer/PixPin_2026-05-26_22-30-21.webp" alt="ESP32-S3 Web 文件浏览器界面"></p>
+<p>文件管理器通过统一 API <code>POST /api/fs</code> 分发所有操作。上传走流式协议：浏览器发 <code>application/octet-stream</code> 请求，第一行是 JSON 元数据（包含 <code>action</code>、<code>fs</code>、<code>path</code>、<code>size</code>），以 <code>\n</code> 分隔，后续是原始文件字节。服务端从 HTTP socket 逐块接收数据，<code>fwrite</code> 到临时文件，完成后 <code>rename</code> 到目标路径。</p>
+<p>浏览器端用 XHR 的 <code>upload.onprogress</code> 报告上传进度。</p>
+<h2>问题</h2>
+<p>上传 64KB 文件到 SD 卡，耗时约 1 秒。等效速度 ~64 KB/s。</p>
+<p>SD 卡标称速率 20 Mbps（2.5 MB/s）。利用率只有 2.5%。上传到内部 LittleFS 存储明显更快。</p>
+<h2>瓶颈定位</h2>
+<h3>原始代码</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FILE_MGR_CHUNK_SIZE  </span><span style="color:#B5CEA8">1024u</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> esp_err_t</span><span style="color:#DCDCAA"> stream_upload_body</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">httpd_req_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">req</span><span style="color:#D4D4D4">, FILE *</span><span style="color:#9CDCFE">file</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                    size_t</span><span style="color:#9CDCFE"> bytes_remaining</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    char</span><span style="color:#9CDCFE"> buffer</span><span style="color:#D4D4D4">[FILE_MGR_CHUNK_SIZE];</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (bytes_remaining > </span><span style="color:#B5CEA8">0u</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">        size_t</span><span style="color:#D4D4D4"> requested = bytes_remaining &#x3C; </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(buffer)</span></span>
+<span class="line"><span style="color:#D4D4D4">            ? bytes_remaining : </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(buffer);</span></span>
+<span class="line"><span style="color:#569CD6">        int</span><span style="color:#D4D4D4"> received = </span><span style="color:#DCDCAA">recv_retry_timeout</span><span style="color:#D4D4D4">(req, buffer, requested);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (received &#x3C;= </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4"> ||</span></span>
+<span class="line"><span style="color:#DCDCAA">            fwrite</span><span style="color:#D4D4D4">(buffer, </span><span style="color:#B5CEA8">1u</span><span style="color:#D4D4D4">, (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)received, file) != (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)received) {</span></span>
+<span class="line"><span style="color:#C586C0">            return</span><span style="color:#D4D4D4"> ESP_FAIL;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">        bytes_remaining -= (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)received;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> ESP_OK;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>栈上 1KB 缓冲区，每次循环：<code>recv(1KB)</code> + <code>fwrite(1KB→SD)</code>。</p>
+<p>64KB 文件循环 64 次。</p>
+<h3>单次 SD 写入的开销</h3>
+<p>SD 卡每次写入都包含固定的命令开销：SDIO 命令握手、FAT 表读取和更新、NAND 块写入。这些开销与写入数据量无关，1 字节和 512 字节的命令往返时间差距不大。1KB 小块写入将这些固定开销放大了数十倍。</p>
+<h3>排除 WiFi</h3>
+<p>ESP32-S3 WiFi 的实际吞吐远高于 64 KB/s。瓶颈不在网络层。</p>
+<h3>为什么内部存储更快</h3>
+<p>内部 LittleFS 走 SPI Flash，单次写入延迟远低于 SD 卡的 SDIO 命令往返。同样的 1KB 循环，LittleFS 每次写入的固定开销小得多，所以总耗时明显更短。</p>
+<h3>对比 OTA 上传</h3>
+<p>同一项目中的 OTA 固件上传使用 4KB 缓冲区：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> OTA_UPLOAD_BUF_SIZE  </span><span style="color:#B5CEA8">4096u</span></span></code></pre><p>写入次数减少到 1/4，速度明显更快。</p>
+<h2>解决：64KB PSRAM 大块缓冲</h2>
+<p>ESP32-S3-WROOM-1-N8R8 模块带 8MB 八线 PSRAM。项目中的 SD 数据记录模块已使用 128KB PSRAM 作为数据缓冲队列，剩余可用空间约 7.9MB。</p>
+<p>将上传缓冲区从栈上 1KB 改为 PSRAM 上的 64KB 动态分配：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "esp_heap_caps.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> FILE_MGR_UPLOAD_BUF_SIZE </span><span style="color:#B5CEA8">65536u</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#4EC9B0"> esp_err_t</span><span style="color:#DCDCAA"> stream_upload_body</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">httpd_req_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">req</span><span style="color:#D4D4D4">, FILE *</span><span style="color:#9CDCFE">file</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                                    size_t</span><span style="color:#9CDCFE"> bytes_remaining</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    char</span><span style="color:#D4D4D4"> *buffer = </span><span style="color:#DCDCAA">heap_caps_malloc</span><span style="color:#D4D4D4">(FILE_MGR_UPLOAD_BUF_SIZE,</span></span>
+<span class="line"><span style="color:#D4D4D4">                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (buffer == </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        buffer = </span><span style="color:#DCDCAA">heap_caps_malloc</span><span style="color:#D4D4D4">(FILE_MGR_UPLOAD_BUF_SIZE,</span></span>
+<span class="line"><span style="color:#D4D4D4">                                  MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (buffer == </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> ESP_ERR_NO_MEM;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">    esp_err_t</span><span style="color:#D4D4D4"> err = ESP_OK;</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (bytes_remaining > </span><span style="color:#B5CEA8">0u</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">        size_t</span><span style="color:#D4D4D4"> requested = bytes_remaining &#x3C; FILE_MGR_UPLOAD_BUF_SIZE</span></span>
+<span class="line"><span style="color:#D4D4D4">            ? bytes_remaining : FILE_MGR_UPLOAD_BUF_SIZE;</span></span>
+<span class="line"><span style="color:#569CD6">        int</span><span style="color:#D4D4D4"> received = </span><span style="color:#DCDCAA">recv_retry_timeout</span><span style="color:#D4D4D4">(req, buffer, requested);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (received &#x3C;= </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4"> ||</span></span>
+<span class="line"><span style="color:#DCDCAA">            fwrite</span><span style="color:#D4D4D4">(buffer, </span><span style="color:#B5CEA8">1u</span><span style="color:#D4D4D4">, (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)received, file) != (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)received) {</span></span>
+<span class="line"><span style="color:#D4D4D4">            err = ESP_FAIL;</span></span>
+<span class="line"><span style="color:#C586C0">            break</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">        bytes_remaining -= (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)received;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    free</span><span style="color:#D4D4D4">(buffer);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> err;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT</code> 指定从 PSRAM 分配。如果 PSRAM 不可用，回退到内部 RAM。上传完成后立即 <code>free</code>，不长期占用。</p>
+<h3>改动前后对比</h3>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>1KB 栈缓冲</th>
+<th>64KB PSRAM 缓冲</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SD 写入次数 / 64KB</td>
+<td>64 次</td>
+<td>1 次</td>
+</tr>
+<tr>
+<td>内部 RAM 占用</td>
+<td>1KB（栈）</td>
+<td>0</td>
+</tr>
+<tr>
+<td>PSRAM 占用</td>
+<td>0</td>
+<td>64KB（临时）</td>
+</tr>
+</tbody></table>
+<p>瓶颈从 SD 卡的小块写入开销转移到 WiFi 吞吐本身。</p>
+<h2>结论</h2>
+<p>嵌入式 I/O 性能的关键指标不是设备标称速率，而是每次操作的固定开销。SD 卡的每次写入都有不可省略的命令往返，1KB 小块写入将这些开销放大到不可接受的程度。</p>
+<p>PSRAM 是 ESP32-S3 上容量充裕但容易被忽略的资源。8MB 外部 RAM 适合存放上传缓冲、采集数据帧等大块临时数据，避免占用紧张的内部 RAM。</p>
+<p>性能分析的核心步骤：量化每个环节的耗时，排除非瓶颈层（WiFi），对比同类操作（OTA 上传）确认差距，最后用最小改动验证假设。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=esp32s3-web-upload-sd-psram-buffer');
+  }
+  </script>
+</body>
+</html>

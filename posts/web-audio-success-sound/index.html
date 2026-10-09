@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使用 Web Audio API 实现浏览器插件的成功提示音效 - CacheRivulet小记</title>
+  <meta name="description" content="Web Audio合成清脆的电子提示音">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Web Audio API">
+  <meta property="article:tag" content="浏览器插件">
+  <meta property="article:tag" content="音效">
+  <meta property="article:tag" content="前端">
+  <meta property="article:published_time" content="2026-05-21">
+  <meta property="og:title" content="使用 Web Audio API 实现浏览器插件的成功提示音效">
+  <meta property="og:description" content="Web Audio合成清脆的电子提示音">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/web-audio-success-sound/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/web-audio-success-sound/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "使用 Web Audio API 实现浏览器插件的成功提示音效",
+  "description": "Web Audio合成清脆的电子提示音",
+  "datePublished": "2026-05-21",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/web-audio-success-sound/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/web-audio-success-sound/"
+  },
+  "keywords": "Web Audio API, 浏览器插件, 音效, 前端"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">使用 Web Audio API 实现浏览器插件的成功提示音效</h1>
+  <article class="article-body">
+<h1>使用 Web Audio API 实现浏览器插件的成功提示音效</h1>
+<p>NousSave 是一款 AI 对话管理浏览器插件，支持 ChatGPT、Claude、DeepSeek、Gemini 等平台的对话导出和快捷操作。插件在完成导出、复制等操作后会播放一段简短的成功提示音，实现方式是 Web Audio API 实时合成，无外部音频文件依赖。</p>
+<h2>核心实现</h2>
+<p>音效通过 <code>AudioContext</code> + <code>OscillatorNode</code> + <code>GainNode</code> 三件套实现：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">function</span><span style="color:#DCDCAA"> playSuccessSoundEffect</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">options</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">options</span><span style="color:#D4D4D4">?.</span><span style="color:#9CDCFE">muted</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> AudioCtx</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">AudioContext</span><span style="color:#D4D4D4"> || </span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">webkitAudioContext</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (!</span><span style="color:#9CDCFE">AudioCtx</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> ctx</span><span style="color:#D4D4D4"> = </span><span style="color:#569CD6">new</span><span style="color:#DCDCAA"> AudioCtx</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">state</span><span style="color:#D4D4D4"> === </span><span style="color:#CE9178">'suspended'</span><span style="color:#D4D4D4">) </span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">resume</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> frequency</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">Number</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">options</span><span style="color:#D4D4D4">?.</span><span style="color:#9CDCFE">frequency</span><span style="color:#D4D4D4">) || </span><span style="color:#B5CEA8">1200</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> volume</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">Number</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">options</span><span style="color:#D4D4D4">?.</span><span style="color:#9CDCFE">volume</span><span style="color:#D4D4D4">) || </span><span style="color:#B5CEA8">0.08</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> durationSec</span><span style="color:#D4D4D4"> = (</span><span style="color:#DCDCAA">Number</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">options</span><span style="color:#D4D4D4">?.</span><span style="color:#9CDCFE">durationMs</span><span style="color:#D4D4D4">) || </span><span style="color:#B5CEA8">300</span><span style="color:#D4D4D4">) / </span><span style="color:#B5CEA8">1000</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> type</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">options</span><span style="color:#D4D4D4">?.</span><span style="color:#9CDCFE">type</span><span style="color:#D4D4D4"> || </span><span style="color:#CE9178">'square'</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> oscillator</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">createOscillator</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> gainNode</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">createGain</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">  oscillator</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">connect</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">gainNode</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">  gainNode</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">connect</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">destination</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">  oscillator</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">frequency</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">value</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">frequency</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">  oscillator</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">type</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">type</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">  gainNode</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">gain</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">setValueAtTime</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">volume</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">currentTime</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">  gainNode</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">gain</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">exponentialRampToValueAtTime</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#9CDCFE">    Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">max</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0.001</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">volume</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">0.125</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#9CDCFE">    ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">currentTime</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">durationSec</span></span>
+<span class="line"><span style="color:#D4D4D4">  );</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">  oscillator</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">onended</span><span style="color:#D4D4D4"> = () </span><span style="color:#569CD6">=></span><span style="color:#9CDCFE"> ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">close</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#9CDCFE">  oscillator</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">start</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">currentTime</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">  oscillator</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">stop</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">currentTime</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">durationSec</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>调用方式：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">playSuccessSoundEffect</span><span style="color:#D4D4D4">({</span></span>
+<span class="line"><span style="color:#9CDCFE">  frequency:</span><span style="color:#B5CEA8"> 1200</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  volume:</span><span style="color:#B5CEA8"> 0.08</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  durationMs:</span><span style="color:#B5CEA8"> 300</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  type:</span><span style="color:#CE9178"> 'square'</span></span>
+<span class="line"><span style="color:#D4D4D4">});</span></span></code></pre><h2>参数解析</h2>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>默认值</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>frequency</code></td>
+<td>1200 Hz</td>
+<td>音调频率</td>
+</tr>
+<tr>
+<td><code>volume</code></td>
+<td>0.08</td>
+<td>响度（0~1）</td>
+</tr>
+<tr>
+<td><code>durationMs</code></td>
+<td>300 ms</td>
+<td>持续时长</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>square</code></td>
+<td>波形类型</td>
+</tr>
+</tbody></table>
+<h3>frequency = 1200 Hz</h3>
+<p>人耳对 1 kHz ~ 4 kHz 频段最敏感（等响曲线的谷底区域）。1200 Hz 踩在这个区间的起点，听感清脆但不刺耳。低于 800 Hz 会发闷，高于 2000 Hz 容易变成噪音。</p>
+<h3>type = &#39;square&#39;</h3>
+<p>方波由基频和无穷多个奇次谐波（3f、5f、7f...）叠加而成。相比正弦波的&quot;纯净&quot;，方波带有天然的泛音结构，听感上是经典的 8-bit 电子音色。Web Audio API 提供四种波形：</p>
+<ul>
+<li><code>sine</code> — 纯音，无谐波，像医用检测音</li>
+<li><code>square</code> — 奇次谐波丰富，复古电子感</li>
+<li><code>sawtooth</code> — 所有谐波都有，偏尖锐</li>
+<li><code>triangle</code> — 奇次谐波但衰减快，比方波柔和</li>
+</ul>
+<p>方波在这个场景下的优势：辨识度高、存在感强、但不吵。</p>
+<h3>volume = 0.08</h3>
+<p>提示音的职责是&quot;告知状态&quot;，不是&quot;引起注意&quot;。0.08 的音量配合 300ms 的时长，刚好在潜意识层面完成信息传递，不会打断用户当前操作。</p>
+<h3>durationMs = 300 ms</h3>
+<p>人类对短促声音的感知阈值约 50ms，300ms 足够形成完整的&quot;音节感&quot;。超过 500ms 就从&quot;提示&quot;变成了&quot;通知&quot;，性质不同。</p>
+<h3>指数衰减</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#9CDCFE">gainNode</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">gain</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">exponentialRampToValueAtTime</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#9CDCFE">  Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">max</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0.001</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">volume</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">0.125</span><span style="color:#D4D4D4">),</span></span>
+<span class="line"><span style="color:#9CDCFE">  ctx</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">currentTime</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">durationSec</span></span>
+<span class="line"><span style="color:#D4D4D4">);</span></span></code></pre><p>音量从 0.08 线性起始，在 300ms 内指数衰减到 0.01（0.08 × 0.125）。<code>exponentialRampToValueAtTime</code> 模拟自然界声音的衰减曲线——声波能量按指数规律消散，所以听感自然，没有硬切的突兀感。</p>
+<p><code>Math.max(0.001, ...)</code> 是因为 <code>exponentialRampToValueAtTime</code> 的目标值不能为 0，否则会抛异常。</p>
+<h2>信号链路</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>OscillatorNode (1200Hz square)</span></span>
+<span class="line"><span>       │</span></span>
+<span class="line"><span>       ▼</span></span>
+<span class="line"><span>  GainNode (0.08 → 0.01 exponential)</span></span>
+<span class="line"><span>       │</span></span>
+<span class="line"><span>       ▼</span></span>
+<span class="line"><span>  AudioContext.destination (扬声器)</span></span></code></pre><p>OscillatorNode 产生原始波形，GainNode 控制音量包络，destination 是最终输出。整条链路在 <code>oscillator.stop()</code> 后通过 <code>onended</code> 回调关闭 AudioContext，释放系统资源。</p>
+<h2>复用</h2>
+<p>将上面的 <code>playSuccessSoundEffect</code> 函数复制到项目中即可使用。可选参数全部有默认值，零配置调用：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">playSuccessSoundEffect</span><span style="color:#D4D4D4">(); </span><span style="color:#6A9955">// 使用全部默认参数</span></span></code></pre><p>需要不同音效时传入参数覆盖：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// 低沉的提示音</span></span>
+<span class="line"><span style="color:#DCDCAA">playSuccessSoundEffect</span><span style="color:#D4D4D4">({ </span><span style="color:#9CDCFE">frequency:</span><span style="color:#B5CEA8"> 600</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">type:</span><span style="color:#CE9178"> 'triangle'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">durationMs:</span><span style="color:#B5CEA8"> 200</span><span style="color:#D4D4D4"> });</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// 清脆的确认音</span></span>
+<span class="line"><span style="color:#DCDCAA">playSuccessSoundEffect</span><span style="color:#D4D4D4">({ </span><span style="color:#9CDCFE">frequency:</span><span style="color:#B5CEA8"> 1800</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">type:</span><span style="color:#CE9178"> 'sine'</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">durationMs:</span><span style="color:#B5CEA8"> 150</span><span style="color:#D4D4D4"> });</span></span></code></pre><h2>注意事项</h2>
+<ul>
+<li>浏览器要求用户交互后才能创建 AudioContext（autoplay policy），首次调用需在点击事件中触发</li>
+<li><code>ctx.close()</code> 释放资源，避免长时间运行的页面累积 AudioContext 实例</li>
+<li>Safari 使用 <code>webkitAudioContext</code>，已做兼容处理</li>
+<li><code>exponentialRampToValueAtTime</code> 的目标值必须大于 0</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-21 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=web-audio-success-sound');
+  }
+  </script>
+</body>
+</html>

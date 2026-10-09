@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="580" viewBox="0 0 2100 580">
+  <style>
+    .title   { font: 600 20px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #212121; }
+    .name    { font: 600 15px "Microsoft YaHei", "PingFang SC", sans-serif; }
+    .sub     { font: 11px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #424242; }
+    .layer   { font: 600 13px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #212121; }
+    .note    { font: 12px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #616161; }
+    .brmark  { font: 12px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #212121; }
+    .arrow   { stroke: #616161; stroke-width: 2.5; fill: none; }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#616161"/>
+    </marker>
+  </defs>
+
+  <text x="1050" y="28" text-anchor="middle" class="title">按键 GPIO → EXTI → NVIC / CPU（IDR 旁路 + 中断/事件双路径）</text>
+
+  <!-- ================= 上排：GPIO 输入 / IDR 旁路 ================= -->
+  <rect x="20"   y="56" width="180" height="80" rx="8" fill="#E3F2FD" stroke="#1976D2" stroke-width="2"/>
+  <text x="110"  y="84"  text-anchor="middle" class="name">按键 A</text>
+  <text x="110"  y="108" text-anchor="middle" class="sub">低电平按下 = 0</text>
+
+  <rect x="280"  y="56" width="180" height="80" rx="8" fill="#E3F2FD" stroke="#1976D2" stroke-width="2"/>
+  <text x="370"  y="84"  text-anchor="middle" class="name">GPIO 输入缓冲</text>
+  <text x="370"  y="108" text-anchor="middle" class="sub">含施密特触发器</text>
+
+  <rect x="540"  y="56" width="180" height="80" rx="8" fill="#E3F2FD" stroke="#1976D2" stroke-width="2"/>
+  <text x="630"  y="84"  text-anchor="middle" class="name">GPIOx_IDR</text>
+  <text x="630"  y="108" text-anchor="middle" class="sub">实时电平（随时可读）</text>
+
+  <!-- 上排箭头 -->
+  <line x1="200" y1="96" x2="278" y2="96" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="460" y1="96" x2="538" y2="96" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="500"  y="86"  text-anchor="middle" class="brmark">电平</text>
+
+  <!-- 分叉①：GPIO 输入缓冲 → 先下后右(90°)→ 长距离右拐到 EXTI 边沿检测 左侧，与主流程方向一致 -->
+  <polyline points="370,136 370,216 798,216" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="584"  y="206" text-anchor="middle" class="brmark">边沿变化 → EXTI</text>
+
+  <!-- ================= 中排：EXTI 中断路径（整体右移 260，与 GPIOx_IDR 错开 80px） ================= -->
+  <rect x="800"  y="176" width="180" height="80" rx="8" fill="#E8F5E9" stroke="#388E3C" stroke-width="2"/>
+  <text x="890"  y="204" text-anchor="middle" class="name">EXTI 边沿检测</text>
+  <text x="890"  y="228" text-anchor="middle" class="sub">下降沿→脉冲</text>
+
+  <rect x="1060" y="176" width="180" height="80" rx="8" fill="#E8F5E9" stroke="#388E3C" stroke-width="2"/>
+  <text x="1150" y="202" text-anchor="middle" class="name">屏蔽寄存器</text>
+  <text x="1150" y="224" text-anchor="middle" class="sub">EXTI_IMR1</text>
+  <text x="1150" y="245" text-anchor="middle" class="sub">0=丢弃边沿 1=放行</text>
+
+  <rect x="1320" y="176" width="180" height="80" rx="8" fill="#E8F5E9" stroke="#388E3C" stroke-width="2"/>
+  <text x="1410" y="202" text-anchor="middle" class="name">挂起寄存器</text>
+  <text x="1410" y="224" text-anchor="middle" class="sub">EXTI_PR1</text>
+  <text x="1410" y="245" text-anchor="middle" class="sub">边沿到达后置 1</text>
+
+  <rect x="1580" y="176" width="180" height="80" rx="8" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="2"/>
+  <text x="1670" y="202" text-anchor="middle" class="name">NVIC 使能</text>
+  <text x="1670" y="224" text-anchor="middle" class="sub">NVIC_ISER</text>
+  <text x="1670" y="245" text-anchor="middle" class="sub">置 1 允许进 ISR</text>
+
+  <rect x="1840" y="176" width="180" height="80" rx="8" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="2"/>
+  <text x="1930" y="204" text-anchor="middle" class="name" style="font-size:13px">EXTI0_IRQHandler</text>
+  <text x="1930" y="228" text-anchor="middle" class="sub">进入中断服务</text>
+
+  <!-- 中排箭头 -->
+  <line x1="980"  y1="216" x2="1058" y2="216" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="1240" y1="216" x2="1318" y2="216" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="1500" y1="216" x2="1578" y2="216" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="1760" y1="216" x2="1838" y2="216" class="arrow" marker-end="url(#arrowhead)"/>
+
+  <!-- 中断路径说明（居中对齐 IMR→PR→ISER 区间） -->
+  <text x="1410" y="274" text-anchor="middle" class="note">中断路径：屏蔽寄存器(IMR1) → 挂起寄存器(PR1) → NVIC 使能(ISER) 串联，三者都置位才具备进 ISR 的条件</text>
+
+  <!-- 分叉②：EXTI 边沿检测 → 直线下 → 从顶部进入 事件允许（EMR），与 事件允许 同列 -->
+  <line x1="890" y1="256" x2="890" y2="316" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="920" y="290" text-anchor="middle" class="brmark">事件脉冲</text>
+
+  <!-- ================= 下排：EXTI 事件路径（保持原位，与新中排自然对列） ================= -->
+  <rect x="800"  y="316" width="180" height="80" rx="8" fill="#E8F5E9" fill-opacity="0.45" stroke="#388E3C" stroke-width="2"/>
+  <text x="890"  y="352" text-anchor="middle" class="name">事件允许</text>
+  <text x="890"  y="374" text-anchor="middle" class="sub">EXTI_EMR1</text>
+
+  <rect x="1060" y="316" width="180" height="80" rx="8" fill="#E8F5E9" fill-opacity="0.45" stroke="#388E3C" stroke-width="2"/>
+  <text x="1150" y="344" text-anchor="middle" class="name">事件输出</text>
+  <text x="1150" y="368" text-anchor="middle" class="sub">EXTI 产事件脉冲</text>
+  <text x="1150" y="390" text-anchor="middle" class="sub">输出到事件总线</text>
+
+
+  <!-- 下排箭头 -->
+  <line x1="980"  y1="356" x2="1058" y2="356" class="arrow" marker-end="url(#arrowhead)"/>
+
+  <!-- ================= 分层标注 ================= -->
+  <rect x="20"   y="420" width="700" height="8" rx="4" fill="#1976D2"/>
+  <text x="370"  y="442" text-anchor="middle" class="layer">GPIO 域（电平读取 / IDR 旁路）</text>
+
+  <!-- EXTI 域扩宽到 720-1520，覆盖 EXTI边沿检测 + 屏蔽 + 挂起 + 事件三块 -->
+  <rect x="720"  y="420" width="800" height="8" rx="4" fill="#388E3C"/>
+  <text x="1120" y="442" text-anchor="middle" class="layer">EXTI 外设域（IMR / EMR 两路并行）</text>
+
+  <!-- NVIC 域右移，覆盖 NVIC使能 + EXTI0_IRQHandler -->
+  <rect x="1580" y="420" width="440" height="8" rx="4" fill="#7B1FA2"/>
+  <text x="1800" y="442" text-anchor="middle" class="layer">NVIC / CPU 域（ISER → ISR / 事件输入）</text>
+
+  <!-- 底部说明 -->
+  <text x="1050" y="476" text-anchor="middle" class="note">IDR 与 EXTI 是并行的旁路：IDR 实时反映引脚电平、随时可读，不受任何门的影响；EXTI 检测边沿变化。</text>
+  <text x="1050" y="498" text-anchor="middle" class="note">中断路径：IMR 在 PR 之前（决定事件能否被锁存记录），ISER 在 PR 之后（允许中断被送到 CPU）。实测：IMR=0 → PR1 保持 0；ISER=0 → PR1 照常置 1。</text>
+  <text x="1050" y="520" text-anchor="middle" class="note">事件路径：EMR 与 IMR 并行，同为边沿脉冲的两条出口——EMR 放行后，EXTI 直接由事件输出把事件脉冲送到事件总线；事件总线再去唤醒 CPU（WFE）或触发其他外设同步，不设 PR、不走 NVIC。</text>
+  <text x="1050" y="542" text-anchor="middle" class="note">注：IMR 与 PR 的前后顺序，是根据本实验对 STM32L4 行为的测试推测的（与 RM0351 EXTI 框图 14.3.1 一致）——实测 IMR=0 时 PR1 不置位，故把 IMR 画在 PR 之前。其他系列/型号可能不同，请以对应参考手册为准。</text>
+</svg>

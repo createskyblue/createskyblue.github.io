@@ -1,0 +1,77 @@
+<svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <rect width="680" height="300" fill="#ffffff"/>
+
+  <text x="20" y="26" font-size="15" font-weight="bold" fill="#0f172a">十进制尾号扫描树：序列号最右位逐位展开</text>
+
+  <rect x="220" y="40" width="240" height="42" rx="6" fill="#1e3a8a"/>
+  <text x="340" y="60" font-size="12" fill="#ffffff" text-anchor="middle">广播 XID：掩码锁尾部 0 位（全通配）</text>
+  <text x="340" y="76" font-size="10.5" fill="#bfdbfe" text-anchor="middle">开机不知任何地址，先问整条总线</text>
+
+  <text x="20" y="108" font-size="12" fill="#334155">每层 10 分支（尾号 0–9），自右向左逐位推进：</text>
+
+  <defs>
+    <marker id="arw" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <line x1="340" y1="82" x2="43" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="109" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="175" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="241" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="307" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="373" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="439" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="505" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="571" y2="116" stroke="#94a3b8" stroke-width="1"/>
+  <line x1="340" y1="82" x2="637" y2="116" stroke="#94a3b8" stroke-width="1"/>
+
+  <rect x="15" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="81" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="147" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="213" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="279" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="345" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="411" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="477" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="543" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+  <rect x="609" y="116" width="56" height="34" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+
+  <text x="43" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">0</text>
+  <text x="109" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">1</text>
+  <text x="175" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">2</text>
+  <text x="241" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">3</text>
+  <text x="307" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">4</text>
+  <text x="373" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">5</text>
+  <text x="439" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">6</text>
+  <text x="505" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">7</text>
+  <text x="571" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">8</text>
+  <text x="637" y="138" font-size="15" font-weight="bold" fill="#1e3a8a" text-anchor="middle">9</text>
+
+  <line x1="125" y1="150" x2="125" y2="210" stroke="#475569" stroke-width="1.5" marker-end="url(#arw)"/>
+  <line x1="340" y1="150" x2="340" y2="210" stroke="#475569" stroke-width="1.5" marker-end="url(#arw)"/>
+  <line x1="555" y1="150" x2="555" y2="210" stroke="#475569" stroke-width="1.5" marker-end="url(#arw)"/>
+
+  <rect x="15" y="212" width="210" height="64" rx="6" fill="#dcfce7" stroke="#86efac"/>
+  <rect x="15" y="212" width="210" height="20" rx="6" fill="#16a34a"/>
+  <text x="120" y="226" font-size="11" fill="#ffffff" text-anchor="middle">① 单台命中 → 短地址</text>
+  <text x="24" y="246" font-size="10.5" fill="#334155">分配 1 字节短地址</text>
+  <text x="24" y="260" font-size="10.5" fill="#334155">（1–254），后续命令用</text>
+  <text x="24" y="274" font-size="10.5" fill="#334155">短地址，不再带完整 UID</text>
+
+  <rect x="235" y="212" width="210" height="64" rx="6" fill="#fef9c3" stroke="#fde047"/>
+  <rect x="235" y="212" width="210" height="20" rx="6" fill="#ca8a04"/>
+  <text x="340" y="226" font-size="11" fill="#ffffff" text-anchor="middle">② 碰撞 → 掩码推进</text>
+  <text x="244" y="246" font-size="10.5" fill="#334155">CRC 错误 / 未知响应 /</text>
+  <text x="244" y="260" font-size="10.5" fill="#334155">赋地址失败：多台共用</text>
+  <text x="244" y="274" font-size="10.5" fill="#334155">该前缀，掩码 N+1 细分</text>
+
+  <rect x="455" y="212" width="210" height="64" rx="6" fill="#fee2e2" stroke="#fca5a5"/>
+  <rect x="455" y="212" width="210" height="20" rx="6" fill="#dc2626"/>
+  <text x="560" y="226" font-size="11" fill="#ffffff" text-anchor="middle">③ 无响应 → 剪枝</text>
+  <text x="464" y="246" font-size="10.5" fill="#334155">没有设备以该前缀开头，</text>
+  <text x="464" y="260" font-size="10.5" fill="#334155">剪掉整条子树，</text>
+  <text x="464" y="274" font-size="10.5" fill="#334155">不再下探</text>
+
+  <text x="20" y="296" font-size="11" fill="#475569">命中后同一前缀重新入栈再扫；已赋地址设备不再响应，逐台剥离。深度上限 3 位。</text>
+</svg>

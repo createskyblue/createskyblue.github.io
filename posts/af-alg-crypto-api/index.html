@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户态程序可以通过 AF_ALG 调用 Linux 内核加密 - CacheRivulet小记</title>
+  <meta name="description" content="AF_ALG通过socket调用内核加密">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Linux">
+  <meta property="article:tag" content="AF_ALG">
+  <meta property="article:tag" content="Crypto API">
+  <meta property="article:tag" content="系统编程">
+  <meta property="article:published_time" content="2026-05-05">
+  <meta property="og:title" content="用户态程序可以通过 AF_ALG 调用 Linux 内核加密">
+  <meta property="og:description" content="AF_ALG通过socket调用内核加密">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/af-alg-crypto-api/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/af-alg-crypto-api/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用户态程序可以通过 AF_ALG 调用 Linux 内核加密",
+  "description": "AF_ALG通过socket调用内核加密",
+  "datePublished": "2026-05-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/af-alg-crypto-api/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/af-alg-crypto-api/"
+  },
+  "keywords": "Linux, AF_ALG, Crypto API, 系统编程"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用户态程序可以通过 AF_ALG 调用 Linux 内核加密</h1>
+  <article class="article-body">
+<h1>用户态程序可以通过 AF_ALG 调用 Linux 内核加密</h1>
+<p><code>AF_ALG</code> 是 Linux 暴露给用户态的内核加密接口。应用程序可以通过 socket 调用内核 crypto API，使用哈希、对称加密、AEAD 等算法。</p>
+<p>它不是 OpenSSL 这类用户态密码库的替代品。它更适合需要复用内核算法实现、硬件加速驱动或统一内核 crypto 框架的场景。</p>
+<h2>基本模型</h2>
+<p><code>AF_ALG</code> 通常分为两层 socket：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>父 socket：选择算法，设置 key 等公共参数</span></span>
+<span class="line"><span>子 socket：执行一次具体的加密、解密或哈希操作</span></span></code></pre><p>常见流程：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> alg_socket = </span><span style="color:#DCDCAA">socket</span><span style="color:#D4D4D4">(AF_ALG, SOCK_SEQPACKET, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">bind</span><span style="color:#D4D4D4">(alg_socket, ...);</span></span>
+<span class="line"><span style="color:#DCDCAA">setsockopt</span><span style="color:#D4D4D4">(alg_socket, SOL_ALG, ALG_SET_KEY, key, key_len);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> op_socket = </span><span style="color:#DCDCAA">accept</span><span style="color:#D4D4D4">(alg_socket, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">send</span><span style="color:#D4D4D4">(op_socket, input, input_len, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">read</span><span style="color:#D4D4D4">(op_socket, output, output_len);</span></span></code></pre><p>父 socket 定义算法上下文，<code>accept</code> 创建具体操作实例。多个操作可以从同一个父 socket 创建多个子 socket。</p>
+<h2>选择算法</h2>
+<p>算法通过 <code>struct sockaddr_alg</code> 指定：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;linux/if_alg.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sockaddr_alg alg_addr = {</span></span>
+<span class="line"><span style="color:#D4D4D4">    .salg_family = AF_ALG,</span></span>
+<span class="line"><span style="color:#D4D4D4">    .salg_type = </span><span style="color:#CE9178">"skcipher"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    .salg_name = </span><span style="color:#CE9178">"cbc(aes)"</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p>字段含义：</p>
+<ul>
+<li><code>salg_family</code>：固定为 <code>AF_ALG</code>。</li>
+<li><code>salg_type</code>：算法类型，例如 <code>hash</code>、<code>skcipher</code>、<code>aead</code>、<code>rng</code>。</li>
+<li><code>salg_name</code>：内核已经注册的算法名称，例如 <code>sha256</code>、<code>cbc(aes)</code>。</li>
+</ul>
+<p>算法名不能随意自定义。可以通过 <code>/proc/crypto</code> 查看当前内核支持的算法：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">cat</span><span style="color:#CE9178"> /proc/crypto</span></span></code></pre><p>如果算法名不存在，<code>bind</code> 会失败。</p>
+<h2>AES-CBC 加密示例</h2>
+<p>下面示例演示 <code>skcipher</code> 类型的 AES-CBC 用法。代码只展示核心路径，生产代码需要补充完整错误处理和 padding 处理。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> _GNU_SOURCE</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;errno.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;fcntl.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;linux/if_alg.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdio.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;sys/socket.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;unistd.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> encrypt_aes_cbc</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> unsigned</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">key</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> key_len</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                    const</span><span style="color:#569CD6"> unsigned</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">iv_data</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                    const</span><span style="color:#569CD6"> unsigned</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> input_len</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                    unsigned</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">output</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">size_t</span><span style="color:#9CDCFE"> output_len</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#D4D4D4"> alg_socket = -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#D4D4D4"> op_socket = -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> sockaddr_alg alg_addr = {</span></span>
+<span class="line"><span style="color:#D4D4D4">        .salg_family = AF_ALG,</span></span>
+<span class="line"><span style="color:#D4D4D4">        .salg_type = </span><span style="color:#CE9178">"skcipher"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">        .salg_name = </span><span style="color:#CE9178">"cbc(aes)"</span></span>
+<span class="line"><span style="color:#D4D4D4">    };</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    alg_socket = </span><span style="color:#DCDCAA">socket</span><span style="color:#D4D4D4">(AF_ALG, SOCK_SEQPACKET, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (alg_socket &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">bind</span><span style="color:#D4D4D4">(alg_socket, (</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> sockaddr *)&#x26;alg_addr, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(alg_addr)) &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(alg_socket);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">setsockopt</span><span style="color:#D4D4D4">(alg_socket, SOL_ALG, ALG_SET_KEY, key, key_len) &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(alg_socket);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    op_socket = </span><span style="color:#DCDCAA">accept</span><span style="color:#D4D4D4">(alg_socket, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (op_socket &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(alg_socket);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    unsigned</span><span style="color:#569CD6"> char</span><span style="color:#9CDCFE"> control_buf</span><span style="color:#D4D4D4">[</span><span style="color:#DCDCAA">CMSG_SPACE</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">) + </span><span style="color:#DCDCAA">CMSG_SPACE</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> af_alg_iv) + </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">)];</span></span>
+<span class="line"><span style="color:#DCDCAA">    memset</span><span style="color:#D4D4D4">(control_buf, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(control_buf));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> msghdr msg = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#9CDCFE">    msg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">msg_control</span><span style="color:#D4D4D4"> = control_buf;</span></span>
+<span class="line"><span style="color:#9CDCFE">    msg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">msg_controllen</span><span style="color:#D4D4D4"> = </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(control_buf);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> cmsghdr *cmsg = </span><span style="color:#DCDCAA">CMSG_FIRSTHDR</span><span style="color:#D4D4D4">(&#x26;msg);</span></span>
+<span class="line"><span style="color:#9CDCFE">    cmsg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">cmsg_level</span><span style="color:#D4D4D4"> = SOL_ALG;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cmsg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">cmsg_type</span><span style="color:#D4D4D4"> = ALG_SET_OP;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cmsg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">cmsg_len</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">CMSG_LEN</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">    *((</span><span style="color:#569CD6">unsigned</span><span style="color:#569CD6"> int</span><span style="color:#D4D4D4"> *)</span><span style="color:#DCDCAA">CMSG_DATA</span><span style="color:#D4D4D4">(cmsg)) = ALG_OP_ENCRYPT;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    cmsg = </span><span style="color:#DCDCAA">CMSG_NXTHDR</span><span style="color:#D4D4D4">(&#x26;msg, cmsg);</span></span>
+<span class="line"><span style="color:#9CDCFE">    cmsg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">cmsg_level</span><span style="color:#D4D4D4"> = SOL_ALG;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cmsg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">cmsg_type</span><span style="color:#D4D4D4"> = ALG_SET_IV;</span></span>
+<span class="line"><span style="color:#9CDCFE">    cmsg</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">cmsg_len</span><span style="color:#D4D4D4"> = </span><span style="color:#DCDCAA">CMSG_LEN</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> af_alg_iv) + </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> af_alg_iv *iv = (</span><span style="color:#569CD6">struct</span><span style="color:#D4D4D4"> af_alg_iv *)</span><span style="color:#DCDCAA">CMSG_DATA</span><span style="color:#D4D4D4">(cmsg);</span></span>
+<span class="line"><span style="color:#9CDCFE">    iv</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">ivlen</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">    memcpy</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">iv</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">iv</span><span style="color:#D4D4D4">, iv_data, </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> iovec iov = {</span></span>
+<span class="line"><span style="color:#D4D4D4">        .iov_base = (</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *)input,</span></span>
+<span class="line"><span style="color:#D4D4D4">        .iov_len = input_len</span></span>
+<span class="line"><span style="color:#D4D4D4">    };</span></span>
+<span class="line"><span style="color:#9CDCFE">    msg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">msg_iov</span><span style="color:#D4D4D4"> = &#x26;iov;</span></span>
+<span class="line"><span style="color:#9CDCFE">    msg</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">msg_iovlen</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">sendmsg</span><span style="color:#D4D4D4">(op_socket, &#x26;msg, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(op_socket);</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(alg_socket);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    ssize_t</span><span style="color:#D4D4D4"> nread = </span><span style="color:#DCDCAA">read</span><span style="color:#D4D4D4">(op_socket, output, output_len);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(op_socket);</span></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(alg_socket);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> nread &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4"> ? -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4"> : </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>CBC 模式要求输入长度是块大小的整数倍。AES 块大小是 16 字节。实际业务中需要明确 padding 方案，例如 PKCS#7，并在加密前补齐数据。</p>
+<h2>setsockopt 与控制消息</h2>
+<p><code>AF_ALG</code> 有两类常见参数传递方式。</p>
+<p>第一类是父 socket 上的 <code>setsockopt</code>，例如设置 key：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">setsockopt</span><span style="color:#D4D4D4">(alg_socket, SOL_ALG, ALG_SET_KEY, key, key_len);</span></span></code></pre><p>第二类是发送数据时通过 <code>sendmsg</code> 附带控制消息，例如设置操作方向和 IV：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">ALG_SET_OP</span></span>
+<span class="line"><span style="color:#D4D4D4">ALG_SET_IV</span></span></code></pre><p>这种设计使父 socket 可以保存公共配置，而每次操作可以使用不同 IV 或不同操作方向。</p>
+<h2>适用场景</h2>
+<p><code>AF_ALG</code> 适合以下场景：</p>
+<ul>
+<li>需要使用内核 crypto framework 中的算法实现。</li>
+<li>需要复用内核支持的硬件加速驱动。</li>
+<li>数据已经在文件描述符或内核缓冲路径中，适合和 <code>sendmsg</code>、<code>splice</code> 等接口组合。</li>
+<li>系统组件希望减少用户态密码库依赖。</li>
+</ul>
+<p>普通应用层协议开发通常优先使用成熟用户态库，例如 OpenSSL、BoringSSL、libsodium。它们的文档、错误处理、协议封装和跨平台能力更完整。</p>
+<h2>注意事项</h2>
+<p><code>AF_ALG</code> 是 Linux 专有接口，不具备跨平台能力。不同内核版本、配置和模块加载状态会影响可用算法列表。</p>
+<p>密码算法本身只是一部分。实际系统还需要正确处理随机数、IV 唯一性、认证标签、padding、密钥生命周期和错误路径。错误的参数组合会让加密结果不可用，严重时会破坏安全属性。</p>
+<h2>总结</h2>
+<p><code>AF_ALG</code> 通过 socket 把用户态程序连接到 Linux 内核 crypto API。正常用法是先用父 socket 选择算法和 key，再用 <code>accept</code> 得到操作 socket，通过 <code>sendmsg</code>、<code>read</code> 或 <code>recv</code> 完成一次具体运算。它适合 Linux 系统编程和内核加密能力复用，不适合追求跨平台的通用业务代码。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=af-alg-crypto-api');
+  }
+  </script>
+</body>
+</html>

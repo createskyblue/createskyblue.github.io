@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430" font-family="system-ui, 'Microsoft YaHei', 'PingFang SC', sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowDash" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="430" fill="#ffffff"/>
+
+  <!-- ===== 第一行：调用链 ===== -->
+  <g>
+    <rect x="24" y="36" width="150" height="70" rx="8" fill="#eef2ff" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="99" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#1e293b">应用代码</text>
+    <text x="99" y="84" text-anchor="middle" font-size="12" fill="#334155">malloc / free / realloc</text>
+
+    <line x1="178" y1="71" x2="216" y2="71" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <rect x="220" y="36" width="160" height="70" rx="8" fill="#f0f9ff" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="300" y="62" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">宏替换</text>
+    <text x="300" y="84" text-anchor="middle" font-size="11" fill="#334155">带 __FILE__ / __LINE__</text>
+
+    <line x1="384" y1="71" x2="422" y2="71" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <rect x="426" y="36" width="170" height="70" rx="8" fill="#f0fdf4" stroke="#4ade80" stroke-width="1.5"/>
+    <text x="511" y="62" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">mt_malloc</text>
+    <text x="511" y="84" text-anchor="middle" font-size="11" fill="#334155">调用真实分配器，同时记账</text>
+
+    <line x1="600" y1="71" x2="638" y2="71" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <rect x="642" y="36" width="150" height="70" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="717" y="62" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">真实 malloc</text>
+    <text x="717" y="84" text-anchor="middle" font-size="11" fill="#334155">标准库，可替换</text>
+
+    <line x1="796" y1="71" x2="834" y2="71" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <rect x="838" y="36" width="118" height="70" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="897" y="62" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">堆内存</text>
+    <text x="897" y="84" text-anchor="middle" font-size="11" fill="#334155">分配结果</text>
+  </g>
+
+  <!-- ===== 第二行：记账表 ===== -->
+  <g>
+    <rect x="426" y="160" width="340" height="140" rx="8" fill="#fffbeb" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="596" y="184" text-anchor="middle" font-size="14" font-weight="700" fill="#1e293b">记账表（静态哈希表，O(1)）</text>
+
+    <text x="446" y="206" font-size="11" font-weight="700" fill="#475569">指针</text>
+    <text x="566" y="206" font-size="11" font-weight="700" fill="#475569">大小</text>
+    <text x="628" y="206" font-size="11" font-weight="700" fill="#475569">file:line</text>
+    <text x="738" y="206" font-size="11" font-weight="700" fill="#475569">序号</text>
+
+    <text x="446" y="228" font-size="11" font-family="Consolas, monospace" fill="#0f172a">0x20001000</text>
+    <text x="566" y="228" font-size="11" font-family="Consolas, monospace" fill="#0f172a">128</text>
+    <text x="628" y="228" font-size="11" font-family="Consolas, monospace" fill="#0f172a">drv.c:42</text>
+    <text x="738" y="228" font-size="11" font-family="Consolas, monospace" fill="#0f172a">2</text>
+
+    <text x="446" y="250" font-size="11" font-family="Consolas, monospace" fill="#0f172a">0x20001100</text>
+    <text x="566" y="250" font-size="11" font-family="Consolas, monospace" fill="#0f172a">512</text>
+    <text x="628" y="250" font-size="11" font-family="Consolas, monospace" fill="#0f172a">drv.c:43</text>
+    <text x="738" y="250" font-size="11" font-family="Consolas, monospace" fill="#0f172a">4</text>
+
+    <text x="446" y="272" font-size="11" font-family="Consolas, monospace" fill="#94a3b8">0x20001180</text>
+    <text x="566" y="272" font-size="11" font-family="Consolas, monospace" fill="#94a3b8">512</text>
+    <text x="628" y="272" font-size="11" font-family="Consolas, monospace" fill="#94a3b8">已释放·墓碑</text>
+    <text x="738" y="272" font-size="11" font-family="Consolas, monospace" fill="#94a3b8">6</text>
+
+    <line x1="596" y1="300" x2="536" y2="336" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrowDash)"/>
+  </g>
+
+  <!-- ===== 第三行：快照到 PC ===== -->
+  <g>
+    <rect x="426" y="340" width="200" height="64" rx="8" fill="#fdf2f8" stroke="#f472b6" stroke-width="1.5"/>
+    <text x="526" y="366" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">快照 MTS1 二进制</text>
+    <text x="526" y="388" text-anchor="middle" font-size="11" fill="#334155">按 ptr 排序 + CRC32 校验</text>
+
+    <line x1="630" y1="372" x2="668" y2="372" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <rect x="672" y="340" width="190" height="64" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="767" y="366" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">PC 解码器</text>
+    <text x="767" y="388" text-anchor="middle" font-size="11" fill="#334155">泄漏清单 / 分配热点</text>
+  </g>
+</svg>

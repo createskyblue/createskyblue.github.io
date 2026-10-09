@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用 Chroma 跑通文本向量检索的最小流程 - CacheRivulet小记</title>
+  <meta name="description" content="Chroma向量数据库做相似文本检索">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Chroma">
+  <meta property="article:tag" content="向量数据库">
+  <meta property="article:tag" content="Python">
+  <meta property="article:tag" content="AI">
+  <meta property="article:tag" content="RAG">
+  <meta property="article:published_time" content="2026-05-02">
+  <meta property="og:title" content="用 Chroma 跑通文本向量检索的最小流程">
+  <meta property="og:description" content="Chroma向量数据库做相似文本检索">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/chroma-vector-database-demo/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/chroma-vector-database-demo/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用 Chroma 跑通文本向量检索的最小流程",
+  "description": "Chroma向量数据库做相似文本检索",
+  "datePublished": "2026-05-02",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/chroma-vector-database-demo/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/chroma-vector-database-demo/"
+  },
+  "keywords": "Chroma, 向量数据库, Python, AI, RAG"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用 Chroma 跑通文本向量检索的最小流程</h1>
+  <article class="article-body">
+<h1>用 Chroma 跑通文本向量检索的最小流程</h1>
+<p>向量数据库用于存储向量并执行相似度检索。文本、图片、音频等数据可以先通过 embedding 模型转换成向量，再写入向量数据库。</p>
+<p>Chroma 是一个开源向量数据库。本文只演示最小使用流程：</p>
+<ol>
+<li>创建 Chroma client</li>
+<li>创建 collection</li>
+<li>写入文档</li>
+<li>使用自然语言查询相似文档</li>
+<li>查看返回结果</li>
+</ol>
+<h2>Chroma 是什么</h2>
+<p>Chroma 可以保存以下数据：</p>
+<ul>
+<li><code>ids</code>：文档唯一编号</li>
+<li><code>documents</code>：原始文本</li>
+<li><code>metadatas</code>：附加信息</li>
+<li><code>embeddings</code>：文本对应的向量</li>
+</ul>
+<p>在最小 Demo 中，可以不手动传入 <code>embeddings</code>。Chroma 会使用默认 embedding 模型，把 <code>documents</code> 和 <code>query_texts</code> 自动转换成向量。</p>
+<p>例如查询：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>Chroma 怎么把数据保存到本地？</span></span></code></pre><p>可以匹配到：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>PersistentClient 可以把 Chroma 数据保存到本地目录。</span></span></code></pre><p>这类查询不是精确字符串匹配，而是相似度检索。</p>
+<h2>环境</h2>
+<p>使用 <code>uv</code> 创建虚拟环境：</p>
+<pre><code>uv venv
+.\.venv\Scripts\Activate.ps1
+uv pip install -r requirements.txt</code></pre><p><code>requirements.txt</code> 里只需要：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>chromadb>=1.0.0</span></span></code></pre><p>运行 Demo：</p>
+<pre><code>uv run python demo.py</code></pre><p>第一次运行时，Chroma 会下载默认 embedding 模型。下载完成后会使用本地缓存。</p>
+<h2>最小 Demo</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">import</span><span style="color:#D4D4D4"> chromadb</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">def</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">() -> </span><span style="color:#569CD6">None</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#6A9955">    # 1. 创建 Chroma 客户端。</span></span>
+<span class="line"><span style="color:#6A9955">    # Client() 是内存模式：适合 demo 和快速测试，程序结束后数据会消失。</span></span>
+<span class="line"><span style="color:#6A9955">    # 如果你想保存到本地磁盘，可以改成：</span></span>
+<span class="line"><span style="color:#6A9955">    # client = chromadb.PersistentClient(path="chroma_data")</span></span>
+<span class="line"><span style="color:#D4D4D4">    client = chromadb.Client()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    # 2. 创建或获取一个 collection。</span></span>
+<span class="line"><span style="color:#6A9955">    # collection 可以理解成一组文档的集合，类似数据库里的“表”。</span></span>
+<span class="line"><span style="color:#D4D4D4">    collection = client.get_or_create_collection(</span><span style="color:#9CDCFE">name</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"simple_chroma_demo"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    # 3. 准备几条示例文档。</span></span>
+<span class="line"><span style="color:#D4D4D4">    ids = [</span><span style="color:#CE9178">"doc1"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"doc2"</span><span style="color:#D4D4D4">, </span><span style="color:#CE9178">"doc3"</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">    documents = [</span></span>
+<span class="line"><span style="color:#CE9178">        "Chroma 是一个向量数据库，可以用来做相似度搜索。"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">        "PersistentClient 可以把 Chroma 数据保存到本地目录。"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">        "RAG 会先从知识库检索相关内容，再交给大语言模型回答。"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    ]</span></span>
+<span class="line"><span style="color:#D4D4D4">    metadatas = [</span></span>
+<span class="line"><span style="color:#D4D4D4">        {</span><span style="color:#CE9178">"topic"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"chroma"</span><span style="color:#D4D4D4">},</span></span>
+<span class="line"><span style="color:#D4D4D4">        {</span><span style="color:#CE9178">"topic"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"persistence"</span><span style="color:#D4D4D4">},</span></span>
+<span class="line"><span style="color:#D4D4D4">        {</span><span style="color:#CE9178">"topic"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"rag"</span><span style="color:#D4D4D4">},</span></span>
+<span class="line"><span style="color:#D4D4D4">    ]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    # 4. 写入文档。</span></span>
+<span class="line"><span style="color:#6A9955">    # 这里没有手动传 embeddings，所以 Chroma 会使用默认 embedding 模型</span></span>
+<span class="line"><span style="color:#6A9955">    # 自动把 documents 转成向量，然后保存起来。</span></span>
+<span class="line"><span style="color:#D4D4D4">    collection.upsert(</span></span>
+<span class="line"><span style="color:#9CDCFE">        ids</span><span style="color:#D4D4D4">=ids,</span></span>
+<span class="line"><span style="color:#9CDCFE">        documents</span><span style="color:#D4D4D4">=documents,</span></span>
+<span class="line"><span style="color:#9CDCFE">        metadatas</span><span style="color:#D4D4D4">=metadatas,</span></span>
+<span class="line"><span style="color:#D4D4D4">    )</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    # 5. 用自然语言查询。</span></span>
+<span class="line"><span style="color:#D4D4D4">    query = </span><span style="color:#CE9178">"Chroma 怎么把数据保存到本地？"</span></span>
+<span class="line"><span style="color:#D4D4D4">    results = collection.query(</span></span>
+<span class="line"><span style="color:#9CDCFE">        query_texts</span><span style="color:#D4D4D4">=[query],</span></span>
+<span class="line"><span style="color:#9CDCFE">        n_results</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    )</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"问题：</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">query</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#DCDCAA">    print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"当前 collection 文档数量：</span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">collection.count()</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> index, document </span><span style="color:#C586C0">in</span><span style="color:#DCDCAA"> enumerate</span><span style="color:#D4D4D4">(results[</span><span style="color:#CE9178">"documents"</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], </span><span style="color:#9CDCFE">start</span><span style="color:#D4D4D4">=</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">):</span></span>
+<span class="line"><span style="color:#D4D4D4">        doc_id = results[</span><span style="color:#CE9178">"ids"</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][index - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">        metadata = results[</span><span style="color:#CE9178">"metadatas"</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][index - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"><span style="color:#D4D4D4">        distance = results[</span><span style="color:#CE9178">"distances"</span><span style="color:#D4D4D4">][</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">][index - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">        print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">结果 </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">index</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#DCDCAA">        print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"id: </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">doc_id</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#DCDCAA">        print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"metadata: </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">metadata</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#DCDCAA">        print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"distance: </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">distance</span><span style="color:#569CD6">:.4f}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#DCDCAA">        print</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">f</span><span style="color:#CE9178">"document: </span><span style="color:#569CD6">{</span><span style="color:#D4D4D4">document</span><span style="color:#569CD6">}</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#9CDCFE"> __name__</span><span style="color:#D4D4D4"> == </span><span style="color:#CE9178">"__main__"</span><span style="color:#D4D4D4">:</span></span>
+<span class="line"><span style="color:#D4D4D4">    main()</span></span></code></pre><h2>运行结果</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>问题：Chroma 怎么把数据保存到本地？</span></span>
+<span class="line"><span>当前 collection 文档数量：3</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>结果 1</span></span>
+<span class="line"><span>id: doc2</span></span>
+<span class="line"><span>metadata: {'topic': 'persistence'}</span></span>
+<span class="line"><span>distance: 0.3286</span></span>
+<span class="line"><span>document: PersistentClient 可以把 Chroma 数据保存到本地目录。</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>结果 2</span></span>
+<span class="line"><span>id: doc1</span></span>
+<span class="line"><span>metadata: {'topic': 'chroma'}</span></span>
+<span class="line"><span>distance: 0.4719</span></span>
+<span class="line"><span>document: Chroma 是一个向量数据库，可以用来做相似度搜索。</span></span></code></pre><p>第一个结果匹配到 <code>PersistentClient</code> 相关文档，说明查询文本和目标文档在向量空间中距离更近。</p>
+<h2>API 说明</h2>
+<p><code>chromadb.Client()</code>：创建一个内存模式的 Chroma 客户端，适合快速测试。</p>
+<p><code>get_or_create_collection()</code>：创建或获取一个 collection。collection 可以理解成一组文档集合。</p>
+<p><code>upsert()</code>：写入或更新文档。这里传入了 <code>ids</code>、<code>documents</code> 和 <code>metadatas</code>。</p>
+<p><code>query()</code>：查询相似内容。这里使用 <code>query_texts</code>，Chroma 会自动把查询文本转换成向量。</p>
+<p><code>distance</code>：距离越小，通常表示越相似。不同距离算法下数值含义会有差异，但在这个 Demo 里可以先理解为“越小越接近”。</p>
+<h2>内存模式</h2>
+<p>Demo 里使用的是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">client = chromadb.Client()</span></span></code></pre><p>这是内存模式，适合临时测试。程序结束后，数据不会长期保存。</p>
+<h2>持久化模式</h2>
+<p>需要把数据保存到本地目录时，改用 <code>PersistentClient</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">client = chromadb.PersistentClient(</span><span style="color:#9CDCFE">path</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">"chroma_data"</span><span style="color:#D4D4D4">)</span></span></code></pre><p>数据会写入 <code>chroma_data</code> 目录。下次程序启动后可以继续读取。</p>
+<h2>总结</h2>
+<ul>
+<li>文档可以直接写入 Chroma</li>
+<li>Chroma 可以自动使用默认 embedding 模型生成向量</li>
+<li>查询时也可以直接传自然语言</li>
+<li>返回结果是按相似度排序的</li>
+<li>如果要长期保存数据，需要使用 <code>PersistentClient</code></li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-02 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=chroma-vector-database-demo');
+  }
+  </script>
+</body>
+</html>

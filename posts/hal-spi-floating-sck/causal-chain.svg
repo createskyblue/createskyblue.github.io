@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 700" font-family="'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif">
+  <rect x="0" y="0" width="760" height="700" fill="#ffffff"/>
+
+  <text x="380" y="34" font-size="20" font-weight="bold" fill="#1a1a1a" text-anchor="middle">多出的脉冲是怎么来的</text>
+
+  <!-- 步骤框：宽 560，x=100 -->
+  <g>
+    <rect x="100" y="56" width="560" height="64" rx="8" fill="#fafafa" stroke="#90a4ae" stroke-width="1.5"/>
+    <text x="380" y="84" font-size="16" fill="#263238" text-anchor="middle">HAL_SPI_Transmit 入口先关 SPI，SPE=0</text>
+    <text x="380" y="106" font-size="13" fill="#78909c" text-anchor="middle">每次传输都会执行一次 disable</text>
+  </g>
+  <line x1="380" y1="122" x2="380" y2="142" stroke="#90a4ae" stroke-width="2" marker-end="url(#arr)"/>
+
+  <g>
+    <rect x="100" y="146" width="560" height="64" rx="8" fill="#fafafa" stroke="#90a4ae" stroke-width="1.5"/>
+    <text x="380" y="174" font-size="16" fill="#263238" text-anchor="middle">AF 引脚进入高阻三态，SCK 悬空</text>
+    <text x="380" y="196" font-size="13" fill="#78909c" text-anchor="middle">电平完全由外部电路决定</text>
+  </g>
+  <line x1="380" y1="212" x2="380" y2="232" stroke="#90a4ae" stroke-width="2" marker-end="url(#arr)"/>
+
+  <g>
+    <rect x="100" y="236" width="560" height="64" rx="8" fill="#fff3e0" stroke="#fb8c00" stroke-width="1.5"/>
+    <text x="380" y="264" font-size="16" fill="#e65100" text-anchor="middle">SCK 悬空期间被外部未知干扰扰动</text>
+    <text x="380" y="286" font-size="13" fill="#a05a00" text-anchor="middle">产生一个假上升沿</text>
+  </g>
+  <line x1="380" y1="302" x2="380" y2="322" stroke="#fb8c00" stroke-width="2" marker-end="url(#arr)"/>
+
+  <g>
+    <rect x="100" y="326" width="560" height="64" rx="8" fill="#fafafa" stroke="#90a4ae" stroke-width="1.5"/>
+    <text x="380" y="354" font-size="16" fill="#263238" text-anchor="middle">逻辑分析仪多计 1 个脉冲（8bit 变 9 个）</text>
+    <text x="380" y="376" font-size="13" fill="#78909c" text-anchor="middle">从设备按假沿对齐，整体错位 1 bit</text>
+  </g>
+  <line x1="380" y1="392" x2="380" y2="412" stroke="#90a4ae" stroke-width="2" marker-end="url(#arr)"/>
+
+  <g>
+    <rect x="100" y="416" width="560" height="64" rx="8" fill="#fafafa" stroke="#90a4ae" stroke-width="1.5"/>
+    <text x="380" y="444" font-size="16" fill="#263238" text-anchor="middle">从设备无响应，读什么都是错</text>
+  </g>
+
+  <!-- 修复 -->
+  <rect x="100" y="512" width="560" height="80" rx="8" fill="#e8f5e9" stroke="#43a047" stroke-width="2"/>
+  <text x="380" y="540" font-size="16" font-weight="bold" fill="#1b5e20" text-anchor="middle">修复：保持 SPE 常开，不再每次传输前关 SPI</text>
+  <text x="380" y="566" font-size="14" fill="#2e7d32" text-anchor="middle">SCK 始终由 MCU 强驱动，外部干扰进不来</text>
+
+  <line x1="380" y1="482" x2="380" y2="508" stroke="#43a047" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrg)"/>
+
+  <text x="380" y="632" font-size="13" fill="#90a4ae" text-anchor="middle">软件下拉缓解效果有限</text>
+  <text x="380" y="654" font-size="13" fill="#90a4ae" text-anchor="middle">新芯片（H7/H5/U5）有 AFCNTR 位可直接根治</text>
+
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#90a4ae"/>
+    </marker>
+    <marker id="arrg" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#43a047"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+  <rect x="0" y="0" width="800" height="380" fill="#ffffff"/>
+
+  <!-- user declaration -->
+  <rect x="30" y="30" width="350" height="80" rx="8" fill="#eff6ff" stroke="#3b82f6"/>
+  <text x="205" y="54" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">lwevt_types.h（用户只写声明）</text>
+  <text x="205" y="78" font-size="12" fill="#0f172a">LWEVT_TYPE_BASIC(LWEVT_TYPE_BTN_PRESSED)</text>
+  <text x="205" y="98" font-size="12" fill="#0f172a">LWEVT_TYPE_EXT(LWEVT_TYPE_TEMP_READY,</text>
+  <text x="205" y="114" font-size="12" fill="#0f172a">  struct { int16_t temp_x10; } temp)</text>
+
+  <!-- X-macro expansion -->
+  <rect x="430" y="30" width="340" height="160" rx="8" fill="#f8fafc" stroke="#64748b"/>
+  <text x="600" y="54" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">lwevt_type.h：X-macro 展开点</text>
+  <text x="445" y="80" font-size="12" fill="#0f172a">第一次 include：生成枚举成员</text>
+  <text x="460" y="102" font-size="12" fill="#0f172a">#define LWEVT_TYPE_BASIC(name) name,</text>
+  <text x="460" y="122" font-size="12" fill="#0f172a">#define LWEVT_TYPE_EXT(name,data) name,</text>
+  <text x="445" y="146" font-size="12" fill="#0f172a">第二次 include：生成 union 成员</text>
+  <text x="460" y="168" font-size="12" fill="#0f172a">#define LWEVT_TYPE_EXT(name,data) data;</text>
+
+  <!-- result -->
+  <rect x="30" y="150" width="350" height="200" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="205" y="174" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">编译后得到 lwevt_t</text>
+  <text x="205" y="200" font-size="12" fill="#0f172a">typedef enum {</text>
+  <text x="220" y="222" font-size="12" fill="#0f172a">LWEVT_TYPE_BTN_PRESSED,</text>
+  <text x="220" y="242" font-size="12" fill="#0f172a">LWEVT_TYPE_TEMP_READY,</text>
+  <text x="220" y="262" font-size="12" fill="#0f172a">LWEVT_TYPE_LAST</text>
+  <text x="205" y="282" font-size="12" fill="#0f172a">} lwevt_type_t;</text>
+  <text x="205" y="306" font-size="12" fill="#0f172a">union msg {</text>
+  <text x="220" y="326" font-size="12" fill="#0f172a">struct { int16_t temp_x10; } temp;</text>
+  <text x="205" y="346" font-size="12" fill="#0f172a">};</text>
+
+  <line x1="380" y1="70" x2="430" y2="80" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="600" y1="190" x2="380" y2="250" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <text x="205" y="370" font-size="11" fill="#475569" text-anchor="middle">声明一次，枚举成员和 union 成员同时生成，类型与数据绑定</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用栈水位线与结构体哨兵检测内存损坏 - CacheRivulet小记</title>
+  <meta name="description" content="栈水位线+结构体哨兵检测内存损坏">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:published_time" content="2026-05-17">
+  <meta property="og:title" content="用栈水位线与结构体哨兵检测内存损坏">
+  <meta property="og:description" content="栈水位线+结构体哨兵检测内存损坏">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stack-watermark-and-struct-guards/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stack-watermark-and-struct-guards/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "用栈水位线与结构体哨兵检测内存损坏",
+  "description": "栈水位线+结构体哨兵检测内存损坏",
+  "datePublished": "2026-05-17",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stack-watermark-and-struct-guards/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stack-watermark-and-struct-guards/"
+  },
+  "keywords": "嵌入式"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">用栈水位线与结构体哨兵检测内存损坏</h1>
+  <article class="article-body">
+<h1>用栈水位线与结构体哨兵检测内存损坏</h1>
+<h2>问题</h2>
+<p>偶发复位、看门狗、跑飞、字段值莫名变化，调试器接上现场已经丢。背后的根因通常是：</p>
+<ul>
+<li>栈溢出</li>
+<li>数组越界写</li>
+<li><code>memcpy</code> / <code>memset</code> 长度算错</li>
+<li>野指针 / 错误偏移</li>
+<li>协议解析相信对端长度字段</li>
+</ul>
+<p>在主机和现代芯片上，ASan、MPU、编译器栈保护、KASLR 都能定位这类问题。换到下列环境就用不上：</p>
+<ul>
+<li>裸机 / 轻量 RTOS</li>
+<li>低端单片机（8 位 / 16 位）</li>
+<li>内核早期启动、自实现分配器</li>
+<li>任何 sanitizer、stack-protector 都开不起来的工程</li>
+</ul>
+<p>下文给两种低成本检测方法，运行时开销可控，编译器无要求。共同思路：往内存里写一个业务代码不会自然写入的标记字节，事后回来看它有没有被改过。下文统一用 <code>0xA5</code> 与 <code>0x5A</code>，挑值理由见文末。</p>
+<h2>一、栈水位线</h2>
+<p><img src="/posts/stack-watermark-and-struct-guards/stack-watermark.webp" alt="栈水位线两种实现对比"></p>
+<p>要回答的问题是：线上跑这么久，栈历史最深用到过哪。</p>
+<h3>反例：周期采样 SP</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> timer_tick_isr</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    uintptr_t</span><span style="color:#D4D4D4"> sp_now = </span><span style="color:#DCDCAA">read_sp</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (sp_now &#x3C; sp_min) sp_min = sp_now;</span><span style="color:#6A9955">  // 栈向低地址增长</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>采样式测量。两次 tick 之间的瞬时栈峰值采不到。线上偶发复位排查无效。</p>
+<h3>正解：上电填 <code>0xA5</code>，按需反扫</h3>
+<p>启动早期把栈区全部填为 <code>0xA5</code>。栈字节被压过又弹出后，值不再是 <code>0xA5</code>。任意时刻扫描栈区，第一个非 <code>0xA5</code> 字节的位置就是历史最大栈深度。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// 以栈向低地址增长为例（Cortex-M、x86 等）</span></span>
+<span class="line"><span style="color:#569CD6">extern</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> __stack_base;</span><span style="color:#6A9955">   // 栈区低地址端</span></span>
+<span class="line"><span style="color:#569CD6">extern</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> __stack_top;</span><span style="color:#6A9955">    // 栈区高地址端，SP 初值</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> STACK_MAGIC </span><span style="color:#B5CEA8">0xA5</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> stack_paint</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *p = &#x26;__stack_base; p &#x3C; &#x26;__stack_top; ++p)</span></span>
+<span class="line"><span style="color:#D4D4D4">        *p = STACK_MAGIC;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">size_t</span><span style="color:#DCDCAA"> stack_used_bytes</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4"> *p = &#x26;__stack_base;</span></span>
+<span class="line"><span style="color:#C586C0">    while</span><span style="color:#D4D4D4"> (p &#x3C; &#x26;__stack_top &#x26;&#x26; *p == STACK_MAGIC) ++p;</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4">)(&#x26;__stack_top - p);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>stack_paint</code> 必须在任何业务函数压栈之前调用，常见放法是 <code>main</code> 入口第一行，或链接脚本指定的启动钩子。栈向高地址增长（8051 等）只需把 <code>stack_used_bytes</code> 的扫描方向反过来。</p>
+<h3>局限</h3>
+<ul>
+<li><code>stack_paint</code> 自身用到的栈在调用结束后无法回填，存在数字节误差</li>
+<li>真实业务恰好写入 <code>0xA5</code> 会让水位线被低估对应字节数，对 KB 级判定无影响</li>
+<li>要求栈方向已知、栈区物理边界明确（多数 RTOS 任务栈和裸机栈都提供）</li>
+<li>属于诊断手段；不阻止溢出，只在溢出后留下痕迹</li>
+</ul>
+<h2>二、结构体 / 缓冲区哨兵</h2>
+<p><img src="/posts/stack-watermark-and-struct-guards/struct-guards.webp" alt="结构体哨兵布局"></p>
+<p>要回答的问题是：这块缓冲区 / 这个结构体有没有被别人踩过。</p>
+<p>做法是给关键对象前后各加一段哨兵字节，定期检查：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#9CDCFE">      guard_head</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">];</span><span style="color:#6A9955">   // A5 A5 A5 A5</span></span>
+<span class="line"><span style="color:#4EC9B0">    sensor_pkt_t</span><span style="color:#D4D4D4"> obj;</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#9CDCFE">      guard_tail</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">];</span><span style="color:#6A9955">   // 5A 5A 5A 5A</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">safe_sensor_pkt_t</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> guard_init</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">safe_sensor_pkt_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">p</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">; ++i) {</span></span>
+<span class="line"><span style="color:#9CDCFE">        p</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">guard_head</span><span style="color:#D4D4D4">[i] = </span><span style="color:#B5CEA8">0xA5</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">        p</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">guard_tail</span><span style="color:#D4D4D4">[i] = </span><span style="color:#B5CEA8">0x5A</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">bool</span><span style="color:#DCDCAA"> guard_check</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#4EC9B0"> safe_sensor_pkt_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">p</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#B5CEA8">4</span><span style="color:#D4D4D4">; ++i) {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">p</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">guard_head</span><span style="color:#D4D4D4">[i] != </span><span style="color:#B5CEA8">0xA5</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">return</span><span style="color:#569CD6"> false</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">p</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">guard_tail</span><span style="color:#D4D4D4">[i] != </span><span style="color:#B5CEA8">0x5A</span><span style="color:#D4D4D4">) </span><span style="color:#C586C0">return</span><span style="color:#569CD6"> false</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#569CD6"> true</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>head 用 <code>0xA5</code>、tail 用 <code>0x5A</code>，破坏发生时立即区分前向越界与后向溢出。</p>
+<h3>检查时机</h3>
+<ul>
+<li>协议帧处理完成后</li>
+<li>涉及 <code>memcpy</code> / <code>memset</code> 的关键路径之后</li>
+<li>低频任务（100 ms / 1 s）</li>
+<li>避免放进高频 ISR</li>
+</ul>
+<h3>检测覆盖</h3>
+<ul>
+<li>命中：4 字节内的越界、长度算错、错误偏移、野指针落入哨兵区</li>
+<li>漏检：跨越哨兵区的远距离写入；<code>obj</code> 内部字段的合法逻辑错误</li>
+<li>哨兵宽度 4 字节是底线，关键对象用 8 字节更稳</li>
+</ul>
+<h2>三、组合套餐</h2>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>手段</th>
+<th>检查时机</th>
+<th>RAM 成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>栈</td>
+<td>上电 paint，按需反扫</td>
+<td>故障时 / 低频任务</td>
+<td>占用栈区，无额外 RAM</td>
+</tr>
+<tr>
+<td>关键对象</td>
+<td>head / tail 哨兵</td>
+<td>协议入口、低频任务</td>
+<td>每对象 8 B</td>
+</tr>
+<tr>
+<td>Flash 配置</td>
+<td>CRC + 魔术头</td>
+<td>上电、写入后</td>
+<td>数字节</td>
+</tr>
+<tr>
+<td>复位原因</td>
+<td>保留 1 字节 + WDT</td>
+<td>上电早期读取</td>
+<td>1 B</td>
+</tr>
+</tbody></table>
+<p>复位原因码做法：保留 1 字节非初始化 RAM，检测到哨兵破坏时写入原因码并触发软件复位，上电早期通过串口或 LED 输出。代价 1 字节 RAM，能把&quot;看门狗复位&quot;区分成&quot;哨兵 A 被踩&quot;、&quot;栈撞顶&quot;等可定位信号。</p>
+<h2>四、注意</h2>
+<ul>
+<li><code>0xA5 / 0x5A</code> 用作诊断标记，不能当安全机制；保护逻辑仍要靠代码层的长度检查、指针校验、边界判断</li>
+<li>哨兵字节自身也可能被覆盖；再对哨兵加 CRC 校验并不提供额外保护</li>
+<li>多任务 RTOS 下每个任务栈独立 paint，结果按任务汇报</li>
+<li><code>stack_paint</code> 与 <code>guard_init</code> 必须在对应对象生命周期开始时执行；调用顺序错乱会让首次检查直接判定为已被破坏</li>
+</ul>
+<h2>附：魔法数字选值</h2>
+<p><img src="/posts/stack-watermark-and-struct-guards/magic-numbers.webp" alt="魔法数字选值依据"></p>
+<p>挑值的三个硬性条件：</p>
+<ul>
+<li>比特分布均匀，1 与 0 各占 4 位；单 bit 卡死立即改变比例</li>
+<li>业务代码极少自然写入，远离 <code>0x00</code> 和 <code>0xFF</code></li>
+<li>在 hex dump 中一眼可识别</li>
+</ul>
+<p>满足条件的常用值：</p>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>二进制</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>0xA5</code></td>
+<td><code>1010 0101</code></td>
+<td>高低交错</td>
+</tr>
+<tr>
+<td><code>0x5A</code></td>
+<td><code>0101 1010</code></td>
+<td>与 <code>0xA5</code> 互补</td>
+</tr>
+<tr>
+<td><code>0xAA</code></td>
+<td><code>1010 1010</code></td>
+<td>严格交替</td>
+</tr>
+</tbody></table>
+<p><code>0xA5</code> 与 <code>0x5A</code> 互为镜像，用作 head / tail 哨兵能区分越界方向。<code>0x00</code> 与 <code>0xFF</code> 不可用：前者与未初始化 RAM 难以区分，后者与擦除态 Flash 和上电默认值难以区分。<code>0x55</code> 与 <code>0xA5</code> 等价，可作备用。</p>
+<h2>总结</h2>
+<ul>
+<li>栈水位线靠&quot;启动填 <code>0xA5</code> + 反扫&quot;，绕过 ISR 采样盲区</li>
+<li>结构体哨兵用 head=<code>0xA5</code>、tail=<code>0x5A</code> 区分越界方向</li>
+<li>全部依赖魔法数字在内存里留下痕迹，事后取证</li>
+<li>适用于任何缺少 sanitizer / MPU / 栈保护的工程；零编译器依赖，RAM 成本可控</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-17 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stack-watermark-and-struct-guards');
+  }
+  </script>
+</body>
+</html>

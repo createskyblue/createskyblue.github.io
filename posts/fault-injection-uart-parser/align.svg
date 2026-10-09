@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+  <!-- light background -->
+  <rect width="860" height="470" fill="#fafafa"/>
+
+  <!-- Row A: aligned -->
+  <text x="24" y="34" font-size="14" font-weight="bold" fill="#222">正常：解析窗口从帧头 magic=0x33 开始</text>
+
+  <!-- Row A 12 byte cells (one 64-byte window, simplified to 12 cells) -->
+  <g id="rowA">
+    <rect x="24"  y="52" width="20" height="34" fill="#2e7d32"/>
+    <text x="28" y="73" font-size="10" fill="#fff">33</text>
+    <rect x="44"  y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="64"  y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="84"  y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="104" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="124" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="144" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="164" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="184" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="204" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="224" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="244" y="52" width="20" height="34" fill="#e3e3e3"/>
+    <text x="102" y="73" font-size="10" fill="#666">帧0 剩余 63 字节（示意）</text>
+  </g>
+
+  <!-- Row A window bracket -->
+  <path d="M24 96 L24 110 L264 110 L264 96" stroke="#2e7d32" stroke-width="2" fill="none"/>
+  <text x="104" y="126" font-size="12" fill="#2e7d32">读 64 字节，首字节 0x33 → 对齐 OK</text>
+
+  <!-- arrow: 丢 1 字节 -->
+  <path d="M420 140 L420 176" stroke="#c62828" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="432" y="162" font-size="12" fill="#c62828">串口丢 1 字节（读走第 1 字节）</text>
+
+  <!-- Row B: misaligned -->
+  <text x="24" y="206" font-size="14" font-weight="bold" fill="#222">丢 1 字节后：窗口仍固定 64 字节，起点整体后移 1 字节</text>
+
+  <!-- Row B 12 cells, stream shifted left by 1 (0x33 slipped to last cell) -->
+  <g id="rowB">
+    <rect x="24"  y="224" width="20" height="34" fill="#c62828"/>
+    <text x="27"  y="245" font-size="9" fill="#fff">≠33</text>
+    <rect x="44"  y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="64"  y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="84"  y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="104" y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="124" y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="144" y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="164" y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="184" y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="204" y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="224" y="224" width="20" height="34" fill="#e3e3e3"/>
+    <rect x="244" y="224" width="20" height="34" fill="#2e7d32"/>
+    <text x="248" y="245" font-size="9" fill="#fff">33</text>
+  </g>
+
+  <!-- Row B window bracket (same position as Row A) -->
+  <path d="M24 268 L24 282 L264 282 L264 268" stroke="#c62828" stroke-width="2" fill="none"/>
+  <text x="104" y="298" font-size="12" fill="#c62828">同一窗口：首字节已是帧内数据 ≠0x33 → 帧失步</text>
+
+  <!-- explanation of persistence -->
+  <text x="24" y="332" font-size="12" fill="#555">第 0x33 帧头被挤进窗口内部，解析器不找帧头、不重同步 → 每帧错位，且永久持续。</text>
+  <text x="24" y="352" font-size="12" fill="#555">错位后的 cmd 匹配不到 switch 的任何 case → 被静默吞掉，界面无报错。</text>
+
+  <!-- legend -->
+  <rect x="24" y="380" width="14" height="14" fill="#2e7d32"/>
+  <text x="44" y="392" font-size="11" fill="#333">0x33 命中（对齐）</text>
+  <rect x="200" y="380" width="14" height="14" fill="#c62828"/>
+  <text x="220" y="392" font-size="11" fill="#333">非 0x33（失步）</text>
+  <text x="340" y="392" font-size="11" fill="#666">绿色块为 magic 0x33</text>
+
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6 Z" fill="#c62828"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 860" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12">
+  <defs>
+    <marker id="sc-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1a73e8"/>
+    </marker>
+    <marker id="sc-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34a853"/>
+    </marker>
+    <marker id="sc-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#e8710a"/>
+    </marker>
+    <marker id="sc-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#d93025"/>
+    </marker>
+    <marker id="sc-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+    </marker>
+    <marker id="sc-self" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34a853"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="860" fill="#ffffff"/>
+
+  <!-- 参与者标题框 -->
+  <rect x="20" y="20" width="100" height="42" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+  <text x="70" y="40" text-anchor="middle" fill="#1a73e8" font-weight="600">BLE 从机</text>
+  <text x="70" y="55" text-anchor="middle" fill="#5f6368" font-size="10">睡眠垫 · 定时唤醒</text>
+
+  <rect x="180" y="20" width="100" height="42" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+  <text x="230" y="40" text-anchor="middle" fill="#1a73e8" font-weight="600">网关</text>
+  <text x="230" y="55" text-anchor="middle" fill="#5f6368" font-size="10">ESP32 · BLE主机</text>
+
+  <rect x="340" y="20" width="100" height="42" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+  <text x="390" y="40" text-anchor="middle" fill="#d93025" font-weight="600">FlashDB TSDB</text>
+  <text x="390" y="55" text-anchor="middle" fill="#5f6368" font-size="10">本地时序库 · 落盘</text>
+
+  <rect x="500" y="20" width="100" height="42" rx="6" fill="#f3e8fd" stroke="#7b1fa2" stroke-width="1.5"/>
+  <text x="550" y="40" text-anchor="middle" fill="#7b1fa2" font-weight="600">MQTT Broker</text>
+  <text x="550" y="55" text-anchor="middle" fill="#5f6368" font-size="10">消息路由</text>
+
+  <rect x="660" y="20" width="100" height="42" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="710" y="40" text-anchor="middle" fill="#34a853" font-weight="600">后端</text>
+  <text x="710" y="55" text-anchor="middle" fill="#5f6368" font-size="10">远程服务器</text>
+
+  <rect x="820" y="20" width="100" height="42" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="870" y="40" text-anchor="middle" fill="#34a853" font-weight="600">手机 APP</text>
+  <text x="870" y="55" text-anchor="middle" fill="#5f6368" font-size="10">经后端中转</text>
+
+  <!-- 生命线 -->
+  <line x1="70" y1="62" x2="70" y2="820" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="230" y1="62" x2="230" y2="820" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="390" y1="62" x2="390" y2="820" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="550" y1="62" x2="550" y2="820" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="710" y1="62" x2="710" y2="820" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="870" y1="62" x2="870" y2="820" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- 场景1：BLE主从采集 pull模式 -->
+  <rect x="30" y="72" width="170" height="20" rx="3" fill="#e8f0fe"/>
+  <text x="115" y="86" text-anchor="middle" fill="#1a73e8" font-size="11" font-weight="600">BLE 主从采集 · pull 模式</text>
+
+  <path d="M 70 108 L 125 108 L 125 126 L 70 126" fill="none" stroke="#34a853" stroke-width="1.5" marker-end="url(#sc-self)"/>
+  <text x="130" y="120" fill="#34a853">① 定时唤醒采样，存入本地缓冲区</text>
+
+  <line x1="230" y1="148" x2="75" y2="148" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#sc-blue)"/>
+  <text x="152" y="141" text-anchor="middle" fill="#1a73e8">② 扫描并连接，发送读取指令（循环直到缓冲清空）</text>
+
+  <line x1="70" y1="178" x2="225" y2="178" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#sc-blue)"/>
+  <text x="147" y="171" text-anchor="middle" fill="#1a73e8">③ 返回缓冲区数据</text>
+
+  <line x1="230" y1="208" x2="75" y2="208" stroke="#666" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#sc-gray)"/>
+  <text x="152" y="201" text-anchor="middle" fill="#666">④ 确认收到（类 MQTT QoS 1）</text>
+
+  <path d="M 70 238 L 125 238 L 125 256 L 70 256" fill="none" stroke="#34a853" stroke-width="1.5" marker-end="url(#sc-self)"/>
+  <text x="130" y="250" fill="#34a853">⑤ 从机清空缓冲区，网关断开连接</text>
+
+  <!-- 场景2：重要数据先落盘再上报 -->
+  <rect x="30" y="278" width="210" height="20" rx="3" fill="#fce8e6"/>
+  <text x="135" y="292" text-anchor="middle" fill="#d93025" font-size="11" font-weight="600">重要数据 · 先落盘再上报（心率/呼吸/环境）</text>
+
+  <path d="M 230 314 L 285 314 L 285 332 L 230 332" fill="none" stroke="#34a853" stroke-width="1.5" marker-end="url(#sc-self)"/>
+  <text x="290" y="326" fill="#34a853">⑥ 组装统一读数</text>
+
+  <line x1="230" y1="354" x2="385" y2="354" stroke="#d93025" stroke-width="1.5" marker-end="url(#sc-red)"/>
+  <text x="307" y="347" text-anchor="middle" fill="#d93025">⑦ 写入 FlashDB TSDB（先落盘，无论网络是否正常）</text>
+
+  <line x1="230" y1="384" x2="545" y2="384" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#sc-blue)"/>
+  <text x="387" y="377" text-anchor="middle" fill="#1a73e8">⑧ PUBLISH (QoS 1)</text>
+
+  <line x1="550" y1="414" x2="705" y2="414" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#sc-blue)"/>
+  <text x="627" y="407" text-anchor="middle" fill="#1a73e8">⑨ 转发至后端</text>
+
+  <line x1="710" y1="444" x2="235" y2="444" stroke="#666" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#sc-gray)"/>
+  <text x="472" y="437" text-anchor="middle" fill="#666">⑩ PUBACK 确认（经 Broker）</text>
+
+  <line x1="230" y1="474" x2="385" y2="474" stroke="#d93025" stroke-width="1.5" marker-end="url(#sc-red)"/>
+  <text x="307" y="467" text-anchor="middle" fill="#d93025">⑪ 标记删除已确认数据（发送成功才删）</text>
+
+  <!-- 场景3：断网恢复补传 -->
+  <rect x="30" y="496" width="180" height="20" rx="3" fill="#fef7e0"/>
+  <text x="120" y="510" text-anchor="middle" fill="#e8710a" font-size="11" font-weight="600">断网恢复 · 批量补传（数据已在 FlashDB）</text>
+
+  <path d="M 230 532 L 285 532 L 285 550 L 230 550" fill="none" stroke="#34a853" stroke-width="1.5" marker-end="url(#sc-self)"/>
+  <text x="290" y="544" fill="#34a853">⑫ 检测网络恢复</text>
+
+  <line x1="230" y1="572" x2="385" y2="572" stroke="#e8710a" stroke-width="1.5" marker-end="url(#sc-orange)"/>
+  <text x="307" y="565" text-anchor="middle" fill="#e8710a">⑬ 批量读取未确认数据</text>
+
+  <line x1="230" y1="602" x2="545" y2="602" stroke="#e8710a" stroke-width="1.5" marker-end="url(#sc-orange)"/>
+  <text x="387" y="595" text-anchor="middle" fill="#e8710a">⑭ 批量补传 PUBLISH</text>
+
+  <line x1="710" y1="632" x2="235" y2="632" stroke="#666" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#sc-gray)"/>
+  <text x="472" y="625" text-anchor="middle" fill="#666">⑮ PUBACK 确认（经 Broker + 后端）</text>
+
+  <line x1="230" y1="662" x2="385" y2="662" stroke="#d93025" stroke-width="1.5" marker-end="url(#sc-red)"/>
+  <text x="307" y="655" text-anchor="middle" fill="#d93025">⑯ 标记删除已补传数据</text>
+
+  <!-- 场景4：波形预览仅RAM队列 -->
+  <rect x="30" y="684" width="220" height="20" rx="3" fill="#e8f0fe"/>
+  <text x="140" y="698" text-anchor="middle" fill="#1a73e8" font-size="11" font-weight="600">心率波形预览 · 仅 RAM 队列（不落盘 Flash）</text>
+
+  <path d="M 230 720 L 285 720 L 285 738 L 230 738" fill="none" stroke="#34a853" stroke-width="1.5" marker-end="url(#sc-self)"/>
+  <text x="290" y="732" fill="#34a853">⑰ 波形入 RAM 队列（QoS 1，临时存储不落盘）</text>
+
+  <line x1="230" y1="758" x2="545" y2="758" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#sc-blue)"/>
+  <text x="387" y="751" text-anchor="middle" fill="#1a73e8">⑱ PUBLISH (QoS 1)，ACK 后从 RAM 移除</text>
+
+  <!-- 场景5：APP经后端中转查看 -->
+  <rect x="30" y="782" width="190" height="20" rx="3" fill="#e6f4ea"/>
+  <text x="125" y="796" text-anchor="middle" fill="#34a853" font-size="11" font-weight="600">APP 查看 · 经后端中转（非直连网关）</text>
+
+  <line x1="870" y1="820" x2="715" y2="820" stroke="#34a853" stroke-width="1.5" marker-end="url(#sc-green)"/>
+  <text x="792" y="813" text-anchor="middle" fill="#34a853">⑲ 请求心率 / 环境数据</text>
+
+  <line x1="710" y1="848" x2="865" y2="848" stroke="#666" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#sc-gray)"/>
+  <text x="787" y="841" text-anchor="middle" fill="#666">⑳ 返回数据（经后端中转，不直连网关）</text>
+</svg>

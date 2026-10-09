@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 680" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1a73e8"/>
+    </marker>
+    <marker id="arrow-dash" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#e8710a"/>
+    </marker>
+    <marker id="arrow-return" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+    </marker>
+    <marker id="arrow-self" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34a853"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="680" fill="#ffffff"/>
+
+  <!-- 参与者标题框 -->
+  <rect x="30" y="25" width="140" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+  <text x="100" y="50" text-anchor="middle" fill="#1a73e8" font-weight="600">轮询线程</text>
+  <text x="100" y="63" text-anchor="middle" fill="#5f6368" font-size="11">sensor_task</text>
+
+  <rect x="230" y="25" width="140" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+  <text x="300" y="50" text-anchor="middle" fill="#1a73e8" font-weight="600">统一接口层</text>
+  <text x="300" y="63" text-anchor="middle" fill="#5f6368" font-size="11">sensor_device_t + 设备表</text>
+
+  <rect x="430" y="25" width="140" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+  <text x="500" y="50" text-anchor="middle" fill="#1a73e8" font-weight="600">传感器驱动</text>
+  <text x="500" y="63" text-anchor="middle" fill="#5f6368" font-size="11">CO / CO₂ / 温湿度 / 打鼾</text>
+
+  <rect x="630" y="25" width="140" height="40" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+  <text x="700" y="50" text-anchor="middle" fill="#d93025" font-weight="600">数据队列</text>
+  <text x="700" y="63" text-anchor="middle" fill="#5f6368" font-size="11">sensor_queue (FreeRTOS)</text>
+
+  <rect x="810" y="25" width="120" height="40" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="870" y="50" text-anchor="middle" fill="#34a853" font-weight="600">上层消费</text>
+  <text x="870" y="63" text-anchor="middle" fill="#5f6368" font-size="11">HTTP / WebSocket</text>
+
+  <!-- 生命线 -->
+  <line x1="100" y1="65" x2="100" y2="545" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="300" y1="65" x2="300" y2="545" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="500" y1="65" x2="500" y2="545" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="700" y1="65" x2="700" y2="545" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="870" y1="65" x2="870" y2="545" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- ① 遍历设备表 -->
+  <line x1="100" y1="100" x2="295" y2="100" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="197" y="93" text-anchor="middle" fill="#1a73e8" font-size="12">① 遍历设备表 g_sensors[]</text>
+
+  <!-- ② 多态调用 -->
+  <line x1="300" y1="140" x2="495" y2="140" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="397" y="133" text-anchor="middle" fill="#1a73e8" font-size="12">② dev-&gt;read() 多态调用</text>
+
+  <!-- ③ 各自总线读取（自调用） -->
+  <path d="M 500 175 L 565 175 L 565 197 L 500 197" fill="none" stroke="#34a853" stroke-width="1.5" marker-end="url(#arrow-self)"/>
+  <text x="570" y="184" fill="#34a853" font-size="12">③ 各自总线读取</text>
+  <text x="570" y="199" fill="#5f6368" font-size="11">Modbus RTU / I²C / UART / GPIO</text>
+
+  <!-- ④ 返回统一键值对 -->
+  <line x1="495" y1="235" x2="305" y2="235" stroke="#666" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow-return)"/>
+  <text x="400" y="228" text-anchor="middle" fill="#666" font-size="12">④ 返回统一键值对契约</text>
+  <rect x="330" y="242" width="340" height="28" rx="4" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+  <text x="500" y="260" text-anchor="middle" fill="#b06000" font-size="11" font-family="monospace">T=27.5;H=69.7   |   CO2=409;PULSES=123</text>
+
+  <!-- ⑤ 返回 poll_result -->
+  <line x1="295" y1="305" x2="105" y2="305" stroke="#666" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow-return)"/>
+  <text x="200" y="298" text-anchor="middle" fill="#666" font-size="12">⑤ 返回 poll_result</text>
+
+  <!-- ⑥ 映射表驱动解析（自调用，三行说明，无覆盖） -->
+  <path d="M 100 340 L 165 340 L 165 362 L 100 362" fill="none" stroke="#34a853" stroke-width="1.5" marker-end="url(#arrow-self)"/>
+  <text x="170" y="349" fill="#34a853" font-size="12">⑥ 映射表驱动解析</text>
+  <text x="170" y="364" fill="#5f6368" font-size="11">field_map[]：offsetof + 类型 + 缩放系数</text>
+  <text x="170" y="379" fill="#1a73e8" font-size="11">key → 结构体偏移 / 数值类型 / 单位换算，零分支硬编码</text>
+
+  <!-- ⑦ 入队 -->
+  <line x1="100" y1="410" x2="695" y2="410" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="397" y="403" text-anchor="middle" fill="#1a73e8" font-size="12">⑦ sensor_queue_push() 入队</text>
+
+  <!-- 异步分隔 -->
+  <line x1="40" y1="445" x2="920" y2="445" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="480" y="440" text-anchor="middle" fill="#999" font-size="11">异步消费 · 生产者-消费者解耦</text>
+
+  <!-- ⑧ 出队 -->
+  <line x1="870" y1="480" x2="705" y2="480" stroke="#e8710a" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#arrow-dash)"/>
+  <text x="787" y="473" text-anchor="middle" fill="#e8710a" font-size="12">⑧ sensor_queue_pop() 出队</text>
+
+  <!-- ⑨ 返回读数 -->
+  <line x1="700" y1="515" x2="865" y2="515" stroke="#666" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow-return)"/>
+  <text x="782" y="508" text-anchor="middle" fill="#666" font-size="12">⑨ 返回 sensor_reading_t</text>
+
+  <!-- 解耦标注 -->
+  <rect x="125" y="575" width="200" height="70" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.2"/>
+  <text x="225" y="597" text-anchor="middle" fill="#e8710a" font-weight="600" font-size="12">解耦点 1 · 接口抽象</text>
+  <text x="225" y="615" text-anchor="middle" fill="#5f6368" font-size="11">统一接口屏蔽总线差异</text>
+  <text x="225" y="630" text-anchor="middle" fill="#5f6368" font-size="11">上层只认接口不认设备</text>
+
+  <rect x="380" y="575" width="200" height="70" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.2"/>
+  <text x="480" y="597" text-anchor="middle" fill="#e8710a" font-weight="600" font-size="12">解耦点 2 · 注册 + 契约</text>
+  <text x="480" y="615" text-anchor="middle" fill="#5f6368" font-size="11">设备表注册 + 键值对契约</text>
+  <text x="480" y="630" text-anchor="middle" fill="#5f6368" font-size="11">新增传感器仅加一行映射</text>
+
+  <rect x="635" y="575" width="200" height="70" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.2"/>
+  <text x="735" y="597" text-anchor="middle" fill="#e8710a" font-weight="600" font-size="12">解耦点 3 · 队列缓冲</text>
+  <text x="735" y="615" text-anchor="middle" fill="#5f6368" font-size="11">生产者-消费者解耦</text>
+  <text x="735" y="630" text-anchor="middle" fill="#5f6368" font-size="11">轮询与消费异步独立</text>
+</svg>

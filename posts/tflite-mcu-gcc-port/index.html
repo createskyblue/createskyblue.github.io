@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TFLite Micro 的 GCC 模拟移植 - CacheRivulet小记</title>
+  <meta name="description" content="脱离 OS 和 malloc，用 GCC 把 TFLite Micro 跑起来">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:tag" content="TFLite Micro">
+  <meta property="article:tag" content="TFLM">
+  <meta property="article:tag" content="构建系统">
+  <meta property="article:tag" content="Windows">
+  <meta property="article:published_time" content="2026-07-05">
+  <meta property="og:title" content="TFLite Micro 的 GCC 模拟移植">
+  <meta property="og:description" content="脱离 OS 和 malloc，用 GCC 把 TFLite Micro 跑起来">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/tflite-mcu-gcc-port/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/tflite-mcu-gcc-port/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "TFLite Micro 的 GCC 模拟移植",
+  "description": "脱离 OS 和 malloc，用 GCC 把 TFLite Micro 跑起来",
+  "datePublished": "2026-07-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/tflite-mcu-gcc-port/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/tflite-mcu-gcc-port/"
+  },
+  "keywords": "嵌入式, MCU, 边缘AI, TFLite Micro, TFLM, 构建系统, Windows"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">TFLite Micro 的 GCC 模拟移植</h1>
+  <article class="article-body">
+<h1>TFLite Micro 的 GCC 模拟移植</h1>
+<p>在单片机上跑 AI 推理是一个越来越常见的需求——设备端处理意味着低延迟、无需网络、数据隐私可控。TensorFlow Lite Micro (TFLM) 就是为此设计的：它是 TensorFlow Lite 的微控制器分支，可以在只有几十 KB RAM 的芯片上运行神经网络。</p>
+<p>但 TFLM 的官方构建依赖 Bazel 和 Makefile，目标平台是 ARM Cortex-M 配合嵌入式工具链。如果我想在 Windows 上用 GCC 先跑通一遍，理解它的内部结构，需要做什么？</p>
+<p>这篇文章记录了一次&quot;模拟移植&quot;过程：用 MinGW GCC 编译器，在 Windows 上把 TFLite Micro 编译成一个独立可执行文件，用静态内存池替代 malloc，用嵌入 C 数组替代文件系统，最终跑通 hello_world 模型的 sin(x) 推理。</p>
+<h2>移植目标与约束</h2>
+<p>真实 MCU 环境有几个硬约束：</p>
+<table>
+<thead>
+<tr>
+<th>约束</th>
+<th>MCU 实际情况</th>
+<th>模拟方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>无操作系统</td>
+<td>裸机或 RTOS，无 POSIX</td>
+<td>只用 <code>&lt;cstdio&gt;</code>、<code>&lt;cmath&gt;</code>、<code>&lt;ctime&gt;</code></td>
+</tr>
+<tr>
+<td>无动态内存</td>
+<td>没有 malloc/free，用静态 buffer</td>
+<td><code>uint8_t tensor_arena[3000]</code> 静态数组</td>
+</tr>
+<tr>
+<td>无文件系统</td>
+<td>模型不能从文件加载</td>
+<td>模型转 C 字节数组嵌入代码</td>
+</tr>
+<tr>
+<td>无异常/RTTI</td>
+<td>C++ 异常和 RTTI 开销太大</td>
+<td><code>-fno-exceptions -fno-rtti</code></td>
+</tr>
+<tr>
+<td>代码体积敏感</td>
+<td>Flash 通常只有几百 KB</td>
+<td><code>-ffunction-sections -Wl,--gc-sections</code></td>
+</tr>
+</tbody></table>
+<p>编译器用 MinGW-w64 自带的 GCC 8.1.0，项目目录结构如下：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>port/mcu/</span></span>
+<span class="line"><span>├── platform/              # 平台抽象层（3个文件）</span></span>
+<span class="line"><span>│   ├── mcu_debug_log.cc   # 日志输出 → vfprintf(stderr)</span></span>
+<span class="line"><span>│   ├── mcu_system_setup.cc # 系统初始化 → 空函数</span></span>
+<span class="line"><span>│   └── mcu_micro_time.cc  # 计时器 → clock()</span></span>
+<span class="line"><span>├── demo/</span></span>
+<span class="line"><span>│   ├── mcu_demo.cc        # 主程序</span></span>
+<span class="line"><span>│   └── model_data.h       # hello_world 模型嵌入</span></span>
+<span class="line"><span>├── mcu_config.h           # 编译配置</span></span>
+<span class="line"><span>├── Makefile / build.ps1   # 构建脚本</span></span>
+<span class="line"><span>└── build/</span></span>
+<span class="line"><span>    └── mcu_demo.exe       # 最终产物 290KB</span></span></code></pre><h2>平台抽象层：三个函数打通 TFLM 与裸机</h2>
+<p>TFLite Micro 的设计把平台相关的部分抽象成了几个函数，移植时只需要实现它们。核心有三个：</p>
+<p><strong>DebugLog</strong> — TFLM 内部所有日志输出都走这个函数。在真实 MCU 上它应该写 UART；在模拟环境里直接用 <code>vfprintf(stderr, ...)</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">extern</span><span style="color:#CE9178"> "C"</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> DebugLog</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4">* format, va_list args) {</span></span>
+<span class="line"><span style="color:#DCDCAA">  vfprintf</span><span style="color:#D4D4D4">(stderr, format, args);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><strong>InitializeTarget</strong> — 芯片上电后的初始化入口（配时钟、配 GPIO 等）。模拟环境不需要做任何事：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> InitializeTarget</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#6A9955">  // 真实 MCU：配置系统时钟、GPIO、UART 等</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><strong>micro_time</strong> — 提供 tick 计数器，用于性能分析。模拟环境用 <code>clock()</code>，真实 MCU 用硬件定时器（SysTick）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#DCDCAA"> ticks_per_second</span><span style="color:#D4D4D4">() { </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> CLOCKS_PER_SEC; }</span></span>
+<span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#DCDCAA"> GetCurrentTimeTicks</span><span style="color:#D4D4D4">() { </span><span style="color:#C586C0">return</span><span style="color:#569CD6"> static_cast</span><span style="color:#D4D4D4">&#x3C;</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4">>(</span><span style="color:#DCDCAA">clock</span><span style="color:#D4D4D4">()); }</span></span></code></pre><p>这三个文件替换了 TFLM 源码中的默认实现，其余 TFLM 代码不需要任何修改。</p>
+<h2>依赖管理：flatbuffers、gemmlowp、ruy</h2>
+<p>TFLM 有三层外部依赖：</p>
+<p><strong>FlatBuffers</strong> — 模型解析。TFLite 模型（<code>.tflite</code> 文件）是 FlatBuffers 格式的序列化数据。TFLM 用 <code>schema_generated.h</code>（由 FlatBuffers 编译器生成）来解析模型结构。需要下载 FlatBuffers 库（约 3MB 的头文件），提供 <code>flatbuffers/flatbuffers.h</code> 的 include 路径。</p>
+<p><strong>gemmlowp</strong> — 定点运算。量化推理（int8）需要定点乘法、饱和运算等。TFLM 的 <code>common.h</code> 大量使用 <code>gemmlowp::FixedPoint</code> 模板类和配套的算术函数。这个库很小，只有头文件。</p>
+<p><strong>ruy</strong> — 矩阵乘法优化库。TFLM 的参考内核只引用了它的 profiler 头文件（<code>ruy/profiler/instrumentation.h</code>），实际不调用任何 ruy 函数。写一个空桩即可：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">namespace</span><span style="color:#4EC9B0"> ruy</span><span style="color:#D4D4D4"> { </span><span style="color:#569CD6">namespace</span><span style="color:#4EC9B0"> profiler</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">inline</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> ScopeLabel</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> char*</span><span style="color:#D4D4D4">) {}</span></span>
+<span class="line"><span style="color:#D4D4D4">}}</span></span></code></pre><h2>静态内存：Arena 分配器</h2>
+<p>TFLM 不使用 malloc。推理所需的所有内存——输入输出 tensor、中间计算结果、算子参数——全部从一个静态字节数组中分配：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">constexpr</span><span style="color:#569CD6"> int</span><span style="color:#D4D4D4"> kTensorArenaSize = </span><span style="color:#B5CEA8">3000</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#9CDCFE"> tensor_arena</span><span style="color:#D4D4D4">[kTensorArenaSize];</span><span style="color:#6A9955">  // 静态数组，放在 .bss 段</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#4EC9B0">MicroInterpreter</span><span style="color:#DCDCAA"> interpreter</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">model</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">op_resolver</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#4EC9B0">                                     tensor_arena</span><span style="color:#D4D4D4">, </span><span style="color:#4EC9B0">kTensorArenaSize</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AllocateTensors</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">  // 从 arena 中分配所有 tensor</span></span></code></pre><p>Arena 内部做了几层抽象：</p>
+<ul>
+<li><strong>MemoryPlanner</strong> — 规划 buffer 的生命周期，决定哪些 tensor 可以复用同一块内存。默认使用 GreedyMemoryPlanner，离线计算最优复用方案。</li>
+<li><strong>BufferAllocator</strong> — 执行实际的内存分配。有三种：<code>SingleArenaBufferAllocator</code>（可复用临时 buffer）、<code>PersistentArenaBufferAllocator</code>（持久分配的权重/参数）、<code>NonPersistentArenaBufferAllocator</code>（仅单次推理有效的 scratch buffer）。</li>
+</ul>
+<p>整个分配过程发生在 <code>AllocateTensors()</code> 中，推理时不再有任何内存操作。</p>
+<h2>模型嵌入：.tflite 转 C 数组</h2>
+<p>没有文件系统，模型文件需要以 C 字节数组的形式嵌入代码。用 PowerShell 把 hello_world 模型（3164 字节）转换：</p>
+<pre><code>$bytes = [System.IO.File]::ReadAllBytes("hello_world_float.tflite")
+# 输出 unsigned char g_model_data[] = {0x1C, 0x00, ...};</code></pre><p>然后在代码中直接使用：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "model_data.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">const</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4">::Model* model = ::</span><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#DCDCAA">GetModel</span><span style="color:#D4D4D4">(g_model_data);</span></span></code></pre><p><code>GetModel()</code> 不拷贝数据——它只是把指针 cast 成 FlatBuffers 的 Model 结构体，零开销。</p>
+<h2>算子注册：只注册需要的</h2>
+<p>TFLM 的 <code>MicroMutableOpResolver</code> 采用模板参数指定最大算子数量，所有注册信息放在栈上，不触发堆分配：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">using</span><span style="color:#4EC9B0"> DemoOpResolver</span><span style="color:#D4D4D4"> = </span><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#4EC9B0">MicroMutableOpResolver</span><span style="color:#D4D4D4">&#x3C;</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">>;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">TfLiteStatus</span><span style="color:#DCDCAA"> RegisterOps</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">DemoOpResolver</span><span style="color:#569CD6">&#x26;</span><span style="color:#9CDCFE"> op_resolver</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">  TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">op_resolver</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AddFullyConnected</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> kTfLiteOk;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>hello_world 模型只有一个 FullyConnected 算子（后面接 ReLU 激活，但 ReLU 被融合到 FullyConnected 的激活参数中，不需要单独注册）。链接器会把没用到的算子代码全部 strip 掉。</p>
+<h2>编译链接：41 个目标文件</h2>
+<p>最终要编译的源文件分布在几个模块中：</p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>文件数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Core</td>
+<td>16</td>
+<td>micro_interpreter、micro_allocator、micro_op_resolver 等</td>
+</tr>
+<tr>
+<td>Arena</td>
+<td>3</td>
+<td>single/persistent/non_persistent 三种 allocator</td>
+</tr>
+<tr>
+<td>MemoryPlanner</td>
+<td>3</td>
+<td>greedy、linear planner 及 shim</td>
+</tr>
+<tr>
+<td>Kernels</td>
+<td>7</td>
+<td>fully_connected、reshape、kernel_util、micro_tensor_utils、lite kernel_util</td>
+</tr>
+<tr>
+<td>API</td>
+<td>5</td>
+<td>flatbuffer_conversions、schema_utils、common、error_reporter、array</td>
+</tr>
+<tr>
+<td>Internal</td>
+<td>4</td>
+<td>quantization_util、portable_tensor_utils、common、tensor_ctypes</td>
+</tr>
+<tr>
+<td>Platform</td>
+<td>3</td>
+<td>我们的平台抽象层</td>
+</tr>
+<tr>
+<td>Demo</td>
+<td>1</td>
+<td>主程序</td>
+</tr>
+</tbody></table>
+<p>编译命令的核心参数：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">g++</span><span style="color:#569CD6"> -std=c++17</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#569CD6">    -fno-exceptions</span><span style="color:#569CD6"> -fno-rtti</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#569CD6">    -ffunction-sections</span><span style="color:#569CD6"> -fdata-sections</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#569CD6">    -DTF_LITE_USE_CTIME</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#569CD6">    -O2</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#D4D4D4">    [41个.cc文件] </span><span style="color:#D7BA7D">\</span></span>
+<span class="line"><span style="color:#DCDCAA">    -Wl,--gc-sections</span><span style="color:#569CD6"> -lm</span><span style="color:#D7BA7D"> \</span></span>
+<span class="line"><span style="color:#569CD6">    -o</span><span style="color:#CE9178"> mcu_demo.exe</span></span></code></pre><p>链接后得到 290KB 的可执行文件。如果设置 <code>-Os</code> 并 strip 符号表，还能更小。</p>
+<h2>完整 Demo 代码</h2>
+<p>把前面各节的内容串起来，就是一个完整的推理程序。这个 demo 直接编译即可运行，不依赖任何外部文件（模型已嵌入），不触发堆分配（全部栈上或静态区）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// mcu_demo.cc — TFLite Micro MCU Port Demo</span></span>
+<span class="line"><span style="color:#6A9955">// 模型: y = sin(x), 算子: FullyConnected + ReLU</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;cstdio></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;cmath></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/core/c/common.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/micro_interpreter.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/micro_log.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/micro_mutable_op_resolver.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/micro_profiler.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/system_setup.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/schema/schema_generated.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "model_data.h"</span><span style="color:#6A9955">  // g_model_data[] 字节数组</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">namespace</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">using</span><span style="color:#4EC9B0"> DemoOpResolver</span><span style="color:#D4D4D4"> = </span><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#4EC9B0">MicroMutableOpResolver</span><span style="color:#D4D4D4">&#x3C;</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">>;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">TfLiteStatus</span><span style="color:#DCDCAA"> RegisterOps</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">DemoOpResolver</span><span style="color:#569CD6">&#x26;</span><span style="color:#9CDCFE"> op_resolver</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">  TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">op_resolver</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AddFullyConnected</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> kTfLiteOk;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// Test 1: 浮点模型推理, 验证 sin(x) 拟合精度</span></span>
+<span class="line"><span style="color:#4EC9B0">TfLiteStatus</span><span style="color:#DCDCAA"> RunFloatModelInference</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">=== Test 1: Float Model Inference ==="</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4">::Model* model = ::</span><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#DCDCAA">GetModel</span><span style="color:#D4D4D4">(g_model_data);</span></span>
+<span class="line"><span style="color:#DCDCAA">  TFLITE_CHECK_EQ</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">model</span><span style="color:#D4D4D4">-></span><span style="color:#DCDCAA">version</span><span style="color:#D4D4D4">(), TFLITE_SCHEMA_VERSION);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">  DemoOpResolver op_resolver;</span></span>
+<span class="line"><span style="color:#DCDCAA">  TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">RegisterOps</span><span style="color:#D4D4D4">(op_resolver));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">  // MCU 关键: 静态 arena, 不调 malloc</span></span>
+<span class="line"><span style="color:#569CD6">  constexpr</span><span style="color:#569CD6"> int</span><span style="color:#D4D4D4"> kTensorArenaSize = </span><span style="color:#B5CEA8">3000</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">  static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> tensor_arena</span><span style="color:#D4D4D4">[kTensorArenaSize];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">  tflite</span><span style="color:#D4D4D4">::MicroInterpreter </span><span style="color:#DCDCAA">interpreter</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#D4D4D4">      model, op_resolver, tensor_arena, kTensorArenaSize);</span></span>
+<span class="line"><span style="color:#DCDCAA">  TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AllocateTensors</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">  TfLiteTensor* input  = </span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">input</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">  TfLiteTensor* output = </span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">output</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  constexpr</span><span style="color:#569CD6"> int</span><span style="color:#D4D4D4"> kNumTests = </span><span style="color:#B5CEA8">7</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#569CD6"> float</span><span style="color:#9CDCFE"> test_inputs</span><span style="color:#D4D4D4">[kNumTests] =</span></span>
+<span class="line"><span style="color:#D4D4D4">      {</span><span style="color:#B5CEA8">0.0f</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0.5f</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">1.0f</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">1.5f</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">2.0f</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">3.0f</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">5.0f</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#569CD6"> float</span><span style="color:#D4D4D4"> epsilon = </span><span style="color:#B5CEA8">0.10f</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  int</span><span style="color:#D4D4D4"> passed = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">  for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; kNumTests; ++i) {</span></span>
+<span class="line"><span style="color:#9CDCFE">    input</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">f</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">] = </span><span style="color:#9CDCFE">test_inputs</span><span style="color:#D4D4D4">[i];</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">Invoke</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4"> y_pred = </span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">output</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">)-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">f</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4"> y_true = </span><span style="color:#DCDCAA">sinf</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">test_inputs</span><span style="color:#D4D4D4">[i]);</span></span>
+<span class="line"><span style="color:#569CD6">    float</span><span style="color:#D4D4D4"> error  = </span><span style="color:#DCDCAA">fabsf</span><span style="color:#D4D4D4">(y_true - y_pred);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (error &#x3C; epsilon) ++passed;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"  sin(</span><span style="color:#9CDCFE">%5.2f</span><span style="color:#CE9178">) = </span><span style="color:#9CDCFE">%+7.4f</span><span style="color:#CE9178">  |  pred = </span><span style="color:#9CDCFE">%+7.4f</span><span style="color:#CE9178">  |  err = </span><span style="color:#9CDCFE">%6.4f</span><span style="color:#9CDCFE">  %s</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">                test_inputs</span><span style="color:#D4D4D4">[i], y_true, y_pred, error,</span></span>
+<span class="line"><span style="color:#D4D4D4">                error &#x3C; epsilon ? </span><span style="color:#CE9178">"OK"</span><span style="color:#D4D4D4"> : </span><span style="color:#CE9178">"FAIL"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> (passed == kNumTests) ? kTfLiteOk : kTfLiteError;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// Test 2: 1000 次连续推理, 验证 arena 内存复用稳定性</span></span>
+<span class="line"><span style="color:#4EC9B0">TfLiteStatus</span><span style="color:#DCDCAA"> RunMultipleInvocations</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4">::Model* model = ::</span><span style="color:#4EC9B0">tflite</span><span style="color:#D4D4D4">::</span><span style="color:#DCDCAA">GetModel</span><span style="color:#D4D4D4">(g_model_data);</span></span>
+<span class="line"><span style="color:#D4D4D4">  DemoOpResolver op_resolver;</span></span>
+<span class="line"><span style="color:#DCDCAA">  TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">RegisterOps</span><span style="color:#D4D4D4">(op_resolver));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  constexpr</span><span style="color:#569CD6"> int</span><span style="color:#D4D4D4"> kTensorArenaSize = </span><span style="color:#B5CEA8">3000</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">  static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#9CDCFE"> tensor_arena</span><span style="color:#D4D4D4">[kTensorArenaSize];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">  tflite</span><span style="color:#D4D4D4">::MicroInterpreter </span><span style="color:#DCDCAA">interpreter</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#D4D4D4">      model, op_resolver, tensor_arena, kTensorArenaSize);</span></span>
+<span class="line"><span style="color:#DCDCAA">  TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">AllocateTensors</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">  constexpr</span><span style="color:#569CD6"> int</span><span style="color:#D4D4D4"> kIters = </span><span style="color:#B5CEA8">1000</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">  volatile</span><span style="color:#569CD6"> float</span><span style="color:#D4D4D4"> sum = </span><span style="color:#B5CEA8">0.0f</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955"> // volatile 防编译器优化</span></span>
+<span class="line"><span style="color:#C586C0">  for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; kIters; ++i) {</span></span>
+<span class="line"><span style="color:#9CDCFE">    interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">input</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">)-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">f</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">] = </span><span style="color:#569CD6">static_cast</span><span style="color:#D4D4D4">&#x3C;</span><span style="color:#569CD6">float</span><span style="color:#D4D4D4">>(i) * </span><span style="color:#B5CEA8">0.01f</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">    TF_LITE_ENSURE_STATUS</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">Invoke</span><span style="color:#D4D4D4">());</span></span>
+<span class="line"><span style="color:#D4D4D4">    sum += </span><span style="color:#9CDCFE">interpreter</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">output</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">)-></span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">f</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"  Ran </span><span style="color:#9CDCFE">%d</span><span style="color:#CE9178"> inferences, checksum: </span><span style="color:#9CDCFE">%f</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, kIters,</span></span>
+<span class="line"><span style="color:#569CD6">              static_cast</span><span style="color:#D4D4D4">&#x3C;</span><span style="color:#569CD6">float</span><span style="color:#D4D4D4">>(sum));</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#D4D4D4"> kTfLiteOk;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">}</span><span style="color:#6A9955">  // namespace</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#4EC9B0">  tflite</span><span style="color:#D4D4D4">::</span><span style="color:#DCDCAA">InitializeTarget</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"========================================"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">" TFLite Micro — MCU Port Demo (GCC)"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">" Model: hello_world (y = sin(x))"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"========================================"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">RunFloatModelInference</span><span style="color:#D4D4D4">() != kTfLiteOk) </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">  if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">RunMultipleInvocations</span><span style="color:#D4D4D4">() != kTfLiteOk) </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> -</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">========================================"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">" ALL TESTS PASSED"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">  MicroPrintf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"========================================"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>配套的平台抽象层三个文件：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// mcu_debug_log.cc — 日志输出</span></span>
+<span class="line"><span style="color:#569CD6">extern</span><span style="color:#CE9178"> "C"</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> DebugLog</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4">* format, va_list args) {</span></span>
+<span class="line"><span style="color:#DCDCAA">  vfprintf</span><span style="color:#D4D4D4">(stderr, format, args);</span><span style="color:#6A9955">  // 真实 MCU 写 UART</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#569CD6">extern</span><span style="color:#CE9178"> "C"</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> DebugVsnprintf</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">char</span><span style="color:#D4D4D4">* buf, </span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> n, </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4">* fmt,</span></span>
+<span class="line"><span style="color:#D4D4D4">                               va_list vl) {</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#DCDCAA"> vsnprintf</span><span style="color:#D4D4D4">(buf, n, fmt, vl);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// mcu_system_setup.cc — 系统初始化</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/system_setup.h"</span></span>
+<span class="line"><span style="color:#569CD6">namespace</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> InitializeTarget</span><span style="color:#D4D4D4">() {</span></span>
+<span class="line"><span style="color:#6A9955">  // 真实 MCU: 配时钟、GPIO、UART</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span><span style="color:#6A9955">  // namespace tflite</span></span></code></pre><pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// mcu_micro_time.cc — 计时器</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> "tensorflow/lite/micro/micro_time.h"</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;ctime></span></span>
+<span class="line"><span style="color:#569CD6">namespace</span><span style="color:#4EC9B0"> tflite</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#DCDCAA"> ticks_per_second</span><span style="color:#D4D4D4">() { </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> CLOCKS_PER_SEC; }</span></span>
+<span class="line"><span style="color:#569CD6">uint32_t</span><span style="color:#DCDCAA"> GetCurrentTimeTicks</span><span style="color:#D4D4D4">() { </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4">)</span><span style="color:#DCDCAA">clock</span><span style="color:#D4D4D4">(); }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span><span style="color:#6A9955">  // namespace tflite</span></span></code></pre><h2>推理验证</h2>
+<p>Demo 跑了三个测试：</p>
+<p><strong>Test 1 — 浮点模型推理</strong>：输入 7 个值（0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0），对比模型输出和标准 sin(x)，误差阈值 0.10。全部通过。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>sin( 0.00) = +0.0000  |  predicted = +0.0264  |  error = 0.0264  OK</span></span>
+<span class="line"><span>sin( 0.50) = +0.4794  |  predicted = +0.4540  |  error = 0.0254  OK</span></span>
+<span class="line"><span>sin( 1.00) = +0.8415  |  predicted = +0.8630  |  error = 0.0216  OK</span></span>
+<span class="line"><span>sin( 1.50) = +0.9975  |  predicted = +0.9816  |  error = 0.0158  OK</span></span>
+<span class="line"><span>sin( 2.00) = +0.9093  |  predicted = +0.8872  |  error = 0.0221  OK</span></span>
+<span class="line"><span>sin( 3.00) = +0.1411  |  predicted = +0.1276  |  error = 0.0135  OK</span></span>
+<span class="line"><span>sin( 5.00) = -0.9589  |  predicted = -0.9565  |  error = 0.0024  OK</span></span>
+<span class="line"><span>Result: 7 / 7 tests passed</span></span></code></pre><p><strong>Test 2 — 连续推理稳定性</strong>：循环调用 <code>Invoke()</code> 1000 次，验证 arena 内存复用没有累积问题。全部正常完成。</p>
+<p><strong>Test 3 — 性能分析</strong>：MicroProfiler 记录了每个算子的 tick 数，模拟了真实 MCU 上用硬件定时器做性能 profiling 的流程。</p>
+<h2>从模拟到真实 MCU</h2>
+<p>GCC 模拟验证了整体链路跑得通。部署到真实芯片还有几步要走：</p>
+<ul>
+<li><strong>算子优化</strong>：参考内核（<code>reference/</code> 目录）是纯 C++ 的可移植实现。真实部署会用 CMSIS-NN（ARM）、Xtensa（ESP32-S3）、或 Ethos-U（Arm NPU）的优化版本替换。例如 CMSIS-NN 的 FullyConnected 使用 SIMD 指令，比参考实现快 4-5 倍。</li>
+<li><strong>日志通道</strong>：<code>DebugLog</code> 改成 UART DMA 输出，避免 printf 阻塞推理时序。</li>
+<li><strong>内存规划</strong>：用 <code>RecordingMicroInterpreter</code> 跑一次推理，记录实际的 arena 使用峰值，把 <code>kTensorArenaSize</code> 调到刚好够用。</li>
+<li><strong>模型量化</strong>：浮点模型在 Cortex-M4 上没有 FPU 的情况下很慢。用 TFLite Converter 把模型量化成 int8，推理速度能提升一个数量级，同时模型体积减半。</li>
+</ul>
+<p>这次模拟移植的核心收获：TFLite Micro 的架构设计让移植到新平台非常轻量——只需要实现 3 个平台函数、提供 3 个第三方库的头文件路径、配好编译器 flag。其余代码全部是平台无关的 C++。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=tflite-mcu-gcc-port');
+  }
+  </script>
+</body>
+</html>

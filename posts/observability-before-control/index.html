@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统状态不可见时不要先急着调整控制参数 - CacheRivulet小记</title>
+  <meta name="description" content="排查概率性问题全靠猜？钱学森说要先搞定可观测性">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="控制论">
+  <meta property="article:tag" content="可观测性">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:published_time" content="2026-06-09">
+  <meta property="og:title" content="系统状态不可见时不要先急着调整控制参数">
+  <meta property="og:description" content="排查概率性问题全靠猜？钱学森说要先搞定可观测性">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/observability-before-control/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/observability-before-control/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "系统状态不可见时不要先急着调整控制参数",
+  "description": "排查概率性问题全靠猜？钱学森说要先搞定可观测性",
+  "datePublished": "2026-06-09",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/observability-before-control/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/observability-before-control/"
+  },
+  "keywords": "控制论, 可观测性, 工程调试, 系统设计"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">系统状态不可见时不要先急着调整控制参数</h1>
+  <article class="article-body">
+<h1>系统状态不可见时不要先急着调整控制参数</h1>
+<p>工程调试里经常会直接进入调参、改策略、换实现。但系统状态不可见时，这些控制动作缺少依据，结果很容易变成反复试错。</p>
+<p>控制之前有一个更基础的问题：系统是否能被观测。</p>
+<p>一条更实际的链路是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>观测</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>理解</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>控制</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>反馈</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>优化</span></span></code></pre><p>如果系统状态不可见，后续控制和优化都会退化成猜测。参数可以调整，代码可以修改，策略可以切换，但这些动作没有稳定依据。</p>
+<h2>调试能力经常被误判</h2>
+<p>很多团队会把问题归因到人的经验差异：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>新人不会调试</span></span>
+<span class="line"><span>老工程师会调试</span></span></code></pre><p>这个判断只描述了表象。真实问题经常是系统缺少可观测性：</p>
+<ul>
+<li>没有关键路径日志</li>
+<li>没有运行时统计信息</li>
+<li>没有监控指标</li>
+<li>没有状态记录</li>
+<li>没有关键变量暴露</li>
+</ul>
+<p>在这种条件下，新人在猜，老工程师也在猜。区别通常在于，老工程师更早停止猜测，转而补齐观测点。</p>
+<p>有效调试的第一步应当转向确认系统内部发生了什么，随后再决定是否修改参数。</p>
+<h2>缺少观测会把问题变成玄学</h2>
+<p>当系统缺少观测点时，常见流程会变成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>出现异常</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>无法定位</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>修改参数</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>再次尝试</span></span>
+<span class="line"><span>↓</span></span>
+<span class="line"><span>继续失败</span></span></code></pre><p>多循环几次之后，团队会开始依赖经验、直觉和运气。问题看起来像玄学，本质是关键状态没有暴露出来。</p>
+<p>工程系统通常存在因果链路，只是因果链路被隐藏了。只看最终结果，无法区分错误发生在输入、处理、缓存、调度、传输还是输出阶段。</p>
+<h2>嵌入式系统中的数据丢失问题</h2>
+<p>嵌入式系统里的数据丢失是典型案例。</p>
+<p>如果只能看到最终结果：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>数据少了</span></span></code></pre><p>那就无法判断问题来自哪里：</p>
+<ul>
+<li>ADC 采样异常</li>
+<li>DMA 搬运中断</li>
+<li>Ring Buffer 覆盖或读写错位</li>
+<li>RTOS 任务调度延迟</li>
+<li>网络发送队列阻塞</li>
+<li>接收端解析或落盘失败</li>
+</ul>
+<p>这些问题的表现都可能是“数据丢失”，但修复路径完全不同。</p>
+<p>此时继续优化代码通常没有意义。更有效的做法是沿数据链路增加观测点：</p>
+<ul>
+<li>记录 ADC 采样计数</li>
+<li>记录 DMA 半满和全满中断次数</li>
+<li>记录 Ring Buffer 写入、读取、覆盖次数</li>
+<li>记录任务调度延迟和队列深度</li>
+<li>记录网络发送成功、失败、重试次数</li>
+<li>记录接收端确认和丢包统计</li>
+</ul>
+<p>当每一段链路都有计数和状态，问题会从“数据为什么没了”变成“哪一段计数开始不一致”。后者才是可定位、可复现、可修复的问题。</p>
+<h2>优化前先让系统透明</h2>
+<p>不要急着优化一个看不清楚的系统。</p>
+<p>工程优先级应该先转向可观测性建设：</p>
+<ul>
+<li>增加日志</li>
+<li>增加指标</li>
+<li>增加监控</li>
+<li>增加状态暴露</li>
+<li>增加统计信息</li>
+<li>增加关键路径事件记录</li>
+</ul>
+<p>这些工作看起来不直接修复问题，但能把系统从黑盒变成灰盒，甚至接近白盒。系统越透明，控制动作越容易形成闭环。</p>
+<p>很多时候，可观测性提升带来的收益大于继续调整参数。因为参数优化只影响某个假设下的结果，而观测能力会提高后续所有问题的定位效率。</p>
+<h2>AI 更擅长利用观测，人类工程师更擅长设计观测</h2>
+<p>AI 可以帮助分析已经暴露出来的信息，例如日志、指标、调用链、配置、代码路径和错误堆栈。信息足够完整时，AI 能快速归纳模式，提出候选原因，生成排查步骤。</p>
+<p>但 AI 很难凭空判断系统应该暴露什么：</p>
+<ul>
+<li>哪些指标最关键</li>
+<li>哪些状态必须记录</li>
+<li>哪些变量是真正的问题来源</li>
+<li>哪些链路需要端到端计数</li>
+<li>哪些异常需要保留现场</li>
+</ul>
+<p>这些判断依赖领域经验、系统结构理解，以及对关键变量的选择能力。</p>
+<p>因此，AI 更擅长利用观测结果。人类工程师的核心价值之一，是为系统设计观测方式，让问题在发生时留下足够的信息。</p>
+<h2>结论</h2>
+<p>控制论在工程实践里的重要启发是：看不见的问题，无法被有效控制。</p>
+<p>系统优化之前，先提高可观测性。让输入、状态、链路、队列、计数和异常现场变得可见，控制和反馈才有依据。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-09 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=observability-before-control');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>U8g2 图形库文字渲染速度优化：同一行扫描线缓存后再写入 - CacheRivulet小记</title>
+  <meta name="description" content="U8g2文字渲染速度优化：同一行扫描线缓存再写入">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:tag" content="DMA">
+  <meta property="article:tag" content="缓存">
+  <meta property="article:published_time" content="2026-09-01">
+  <meta property="og:title" content="U8g2 图形库文字渲染速度优化：同一行扫描线缓存后再写入">
+  <meta property="og:description" content="U8g2文字渲染速度优化：同一行扫描线缓存再写入">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/u8g2-horizontal-line-cache/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/u8g2-horizontal-line-cache/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "U8g2 图形库文字渲染速度优化：同一行扫描线缓存后再写入",
+  "description": "U8g2文字渲染速度优化：同一行扫描线缓存再写入",
+  "datePublished": "2026-09-01",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/u8g2-horizontal-line-cache/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/u8g2-horizontal-line-cache/"
+  },
+  "keywords": "嵌入式, MCU, 性能优化, DMA, 缓存"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">U8g2 图形库文字渲染速度优化：同一行扫描线缓存后再写入</h1>
+  <article class="article-body">
+<h1>U8g2 图形库文字渲染速度优化：同一行扫描线缓存后再写入</h1>
+<p>一句话：<strong>同一行的扫描线先缓存，连续线段合并后再写入屏幕。</strong></p>
+<p>U8g2 绘制一个中文字符时，会把字形拆成很多水平线段。旧的写法每得到一段就操作一次 TFT，新的写法先把同一行的连续线段放进 <code>lineBuf</code>，等这一行结束后通过 DMA 一次写入。</p>
+<p>U8g2 在这里运行于彩色 TFT 屏幕，像素数据需要携带颜色信息，单次写屏代价更高。这个设备只有 8KB 内存，无法直接放入 LVGL 这类完整 GUI 框架，只能保留 U8g2 的字形解码和自己的显示适配层。</p>
+<p>菜单文字数量较多，逐个取模后展开成未压缩点阵会快速消耗 Flash。Flash 空间同样有限，所以字形数据需要保持压缩形式，由 U8g2 在绘制时解码成水平扫描线。后面的优化只处理这些扫描线如何写入 TFT，保留压缩字库和现有文字显示能力。</p>
+<h2>两种写法的区别</h2>
+<p>旧路径反复执行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>水平线段 -> 设置 TFT 窗口 -> DMA 写入 -> 等待完成</span></span></code></pre><p>新路径变成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>水平线段 -> lineBuf -> 设置一次窗口 -> DMA 批量写入</span></span></code></pre><p>两种算法写出的像素相同，区别是屏幕提交次数。Demo 把中文字符“中”放到两块 <code>32×16</code> 屏幕上，左侧逐段提交，右侧缓存后提交。</p>
+<p><img src="/posts/u8g2-horizontal-line-cache/u8g2-horizontal-line-cache.svg" alt="同一行扫描线缓存后批量写入"></p>
+<h2>缓存提交的触发点</h2>
+<p><code>DisplayAdapter_drawFastHLine()</code> 记录上一段的行号和结束横坐标：</p>
+<ul>
+<li>同一行，起点等于上一段终点：继续写入缓存；</li>
+<li>换行或出现间隔：提交上一批缓存；</li>
+<li>文字绘制结束：用零长度调用主动提交最后一批。</li>
+</ul>
+<p>项目中的提交调用是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">DisplayAdapter_drawFastHLine</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">888</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">888</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0xFFFF</span><span style="color:#D4D4D4">);</span></span></code></pre><p>这里的 <code>len</code> 是 <code>0</code>，不会真的绘制像素。<code>888,888</code> 只负责制造一次坐标边界，让缓存中的数据进入 TFT。</p>
+<h2>适用范围</h2>
+<p>这项优化只改变水平线段的写屏方式，不改变 U8g2 的 UTF-8 解码和字形查找。中文、英文、数字只要经过 <code>DisplayAdapter_drawFastHLine()</code>，都可以使用同一套缓存逻辑。</p>
+<p>当前效果已通过交互 Demo 展示。项目没有记录独立的帧率或耗时数据，因此这里只说明写屏提交次数减少，不给出虚构的加速比例。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-01 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=u8g2-horizontal-line-cache');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-S3 网页截图 LVGL 界面，作为 AI 视觉闭环的实机入口 - CacheRivulet小记</title>
+  <meta name="description" content="ESP32 把 LVGL 界面截图到网页">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式GUI">
+  <meta property="article:tag" content="LVGL">
+  <meta property="article:tag" content="ESP32-S3">
+  <meta property="article:tag" content="PSRAM">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-08-28">
+  <meta property="og:title" content="ESP32-S3 网页截图 LVGL 界面，作为 AI 视觉闭环的实机入口">
+  <meta property="og:description" content="ESP32 把 LVGL 界面截图到网页">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/lvgl-web-screenshot/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/lvgl-web-screenshot/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP32-S3 网页截图 LVGL 界面，作为 AI 视觉闭环的实机入口",
+  "description": "ESP32 把 LVGL 界面截图到网页",
+  "datePublished": "2026-08-28",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/lvgl-web-screenshot/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/lvgl-web-screenshot/"
+  },
+  "keywords": "嵌入式GUI, LVGL, ESP32-S3, PSRAM, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP32-S3 网页截图 LVGL 界面，作为 AI 视觉闭环的实机入口</h1>
+  <article class="article-body">
+<h1>ESP32-S3 网页截图 LVGL 界面，作为 AI 视觉闭环的实机入口</h1>
+<p>界面跑在立创实战派 ESP32-S3 上，由 LVGL 9.5 渲染。要进文档只能对着屏幕拍照；模拟器又覆盖不了实机行为，AI 要验证界面必须碰真机。我给设备加了一个网页截图接口：浏览器点一下，LVGL 当前画面变成 BMP 图片回传。这个接口同时服务文档整理和 AI 视觉闭环。</p>
+<p><img src="/posts/lvgl-web-screenshot/screenshot.webp" alt="实机截图效果"></p>
+<h2>实机界面是 AI 视觉闭环的入口</h2>
+<p>LVGL 有 PC 模拟器，能跑布局和事件逻辑，但触摸采样、手势轮询、局部刷新时序都依赖真实硬件。模拟器跑不全的界面状态，只能在实机上出现，AI 也就只能在实机上确认。截图接口把实机画面变成机器可读的图片，AI 用视觉模型识别界面状态，再决定下一步构建或修复，形成闭环。文档截图只是这个接口的副产物。</p>
+<h2>总体链路</h2>
+<p><img src="/posts/lvgl-web-screenshot/pipeline.svg" alt="网页截图链路"></p>
+<p>请求从浏览器出发：点「截图」→ GET /screenshot → HTTP 任务把参数写进截图请求结构 → 显示任务用 LVGL 快照渲染当前屏到 PSRAM 缓冲 → BMP 编码逐行流式回传 → 浏览器 blob 预览和下载。</p>
+<p>链路的硬约束是 LVGL 线程模型：渲染只允许在显示任务内发生，HTTP 任务不能碰渲染 API。两端用「请求结构 + 二进制信号量」握手。</p>
+<h2>显示任务内的 LVGL 快照渲染</h2>
+<p>HTTP 服务器任务收到请求后，把宽高、目标缓冲、完成信号量写进全局请求槽。显示任务每帧轮询这个槽，消费后渲染，完成后发信号量，调用方阻塞等待。</p>
+<p>渲染调用 <code>lv_snapshot_take_to_draw_buf</code>，把一个 <code>lv_draw_buf_t</code> 指向调用方提供的 PSRAM 缓冲，目标是当前激活屏。前置条件是 <code>CONFIG_LV_USE_SNAPSHOT=y</code>，这个开关默认关闭。缓冲按 320×320×3 预留，RGB888 每像素 3 字节。</p>
+<h2>RGB888 捕获消除 RGB565 偏色</h2>
+<p>第一版用 RGB565 捕获，网页里看界面背景偏绿。逐像素算过：设计色 (237,237,237) 存进 RGB565，G 通道 6 位向上取整到 59，展开回 8 位变成 253；R、B 各 5 位向下取整到 29，展开 239。结果 (239,253,239)，绿色高了一截。</p>
+<p>屏幕本身就是 RGB565，面板上实际显示的也是这个偏色，截图忠实还原了面板。文档要的是设计原色，所以捕获格式改成 RGB888，渲染器直接输出 24 位，背景精确回到 (237,237,237)。</p>
+<p>字节序顺带省事：LVGL 的 RGB888 内存序是 B,G,R（<code>LV_COLOR_MAKE</code> 宏展开为 <code>{b8,g8,r8}</code>），正好是 BMP 的字节序。逐行 memcpy 直接发送，省掉逐像素转换。</p>
+<h2>BMP 流式回传</h2>
+<p>编码结果流式发送，不整张缓存。先发 54 字节 BMP 头，再按行从底到顶 <code>httpd_resp_send_chunk</code>。320×240 的 24 位 BMP 约 230KB，设备侧只需 307KB 的 RGB888 快照缓冲，输出侧零大缓冲。</p>
+<h2>网页端截图按钮</h2>
+<p>页面顶部工具栏加「📷 截图」按钮，<code>fetch(&#39;/screenshot&#39;)</code> 取回 blob，<code>URL.createObjectURL</code> 生成预览，弹窗内可下载 BMP。更新网页文件走文件管理器的 <code>/api/fs</code> 上传接口，不重烧 littlefs 镜像，避免覆盖设备上已保存的配置。</p>
+<p>两个落地时的坑。一是 httpd 的 <code>max_uri_handlers</code> 默认 8，平台各端点注册完是 17 个，撞满当时 16 的上限，静态回退注册直接触发 <code>ESP_ERROR_CHECK</code> 重启，上限改成 24 解决。二是第一版按钮点了没反应，检查发现页面里 <code>takeScreenshot</code> 函数没有写进去，此后每次改网页都用 curl 校验函数存在。</p>
+<h2>适用边界</h2>
+<p>接口提供一次性截图，实时投屏需要定时轮询和更高压缩率的编码，本实现没有做。BMP 无压缩，单帧约 230KB，适合调试和文档。AI 闭环目前按「截图 → 视觉识别 → 决定下一步」的节奏工作，瓶颈在识别刷新率，截图链路本身开销很小。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-28 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=lvgl-web-screenshot');
+  }
+  </script>
+</body>
+</html>

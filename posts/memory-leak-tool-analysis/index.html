@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>内存泄露分析 - CacheRivulet小记</title>
+  <meta name="description" content="善用工具分析内存泄漏">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="free">
+  <meta property="article:tag" content="malloc">
+  <meta property="article:tag" content="内存泄漏">
+  <meta property="article:tag" content="valgrind">
+  <meta property="article:published_time" content="2026-08-31">
+  <meta property="og:title" content="内存泄露分析">
+  <meta property="og:description" content="善用工具分析内存泄漏">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/memory-leak-tool-analysis/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/memory-leak-tool-analysis/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "内存泄露分析",
+  "description": "善用工具分析内存泄漏",
+  "datePublished": "2026-08-31",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/memory-leak-tool-analysis/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/memory-leak-tool-analysis/"
+  },
+  "keywords": "free, malloc, 内存泄漏, valgrind"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">内存泄露分析</h1>
+  <article class="article-body">
+<h1>内存泄露分析</h1>
+<p>嵌入式设备要长期运行，部署后连续跑几个月是常态。内存一天漏几十字节，几周后系统卡死或看门狗复位，故障现场随重启一起丢。现场排查只能靠猜，猜不中就要返场，代价不小。可观测工具把这类问题在开发期抓出来：记录每一次内存分配与释放，退出时核对配对，谁漏了、漏在哪，一次跑完就有答案。这次用四种工具实测同一个泄漏程序，看它们各自怎么用、输出什么。</p>
+<h2>工具核对每次malloc与free</h2>
+<p>可观测的思路：让工具记录每一次 malloc 和 free，程序退出时核对配对，把未释放的块连同调用栈一起报告。趋势靠全量记录呈现，不用人眼推演。</p>
+<p>实测程序 leak1 故意埋了两个泄漏：100 次循环里，create_packet 每次分配后忘了释放，lost_pointer 先分配一块又覆盖指针，旧块直接丢失。后面四个工具的输出都来自它。</p>
+<ul>
+<li><a href="/posts/memory-leak-tool-analysis/leak1.c" target="_blank" rel="noopener noreferrer">下载 leak1.c</a>：valgrind、massif、ASan 三节用的程序</li>
+<li><a href="/posts/memory-leak-tool-analysis/leak1_mt.c" target="_blank" rel="noopener noreferrer">下载 leak1_mt.c</a>：mtrace 版，带记录开关</li>
+</ul>
+<h2>valgrind：未释放块与调用栈</h2>
+<p>最常用的内存检查工具，不需要改代码。直接运行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">valgrind</span><span style="color:#569CD6"> --leak-check=full</span><span style="color:#CE9178"> ./leak1</span></span></code></pre><p>输出节选（真实数字）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>==16075== 51,200 bytes in 100 blocks are definitely lost in loss record 1 of 2</span></span>
+<span class="line"><span>==16075==    at 0x488545C: malloc (vg_replace_malloc.c:446)</span></span>
+<span class="line"><span>==16075==    by 0x108913: lost_pointer (leak1.c:15)</span></span>
+<span class="line"><span>==16075== 107,350 bytes in 100 blocks are definitely lost in loss record 2 of 2</span></span>
+<span class="line"><span>==16075==    at 0x488545C: malloc (vg_replace_malloc.c:446)</span></span>
+<span class="line"><span>==16075==    by 0x1088C3: create_packet (leak1.c:7)</span></span>
+<span class="line"><span>==16075== LEAK SUMMARY:</span></span>
+<span class="line"><span>==16075==    definitely lost: 158,550 bytes in 200 blocks</span></span></code></pre><p>每个泄漏点一行：字节数、块数、调用栈。definitely lost 是确定漏掉的，still reachable 是进程结束前没释放但指针还在的，这类不算 bug。by 行直接指出泄漏发生在哪个函数的哪一行。</p>
+<h2>massif：堆内存增长曲线</h2>
+<p>valgrind 自带的堆画像工具，记录运行期间堆内存随时间的变化：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">valgrind</span><span style="color:#569CD6"> --tool=massif</span><span style="color:#CE9178"> ./leak1</span></span>
+<span class="line"><span style="color:#DCDCAA">ms_print</span><span style="color:#CE9178"> massif.out</span></span></code></pre><p>输出是一张文本版曲线图，纵轴堆内存、横轴运行时间（节选）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>    KB</span></span>
+<span class="line"><span>161.4^                                                                    ###</span></span>
+<span class="line"><span>     |                                                                  @@#  :</span></span>
+<span class="line"><span>     |                                                                :@@@#  :</span></span>
+<span class="line"><span>     |                                                             ::@:@:@@@#  :</span></span>
+<span class="line"><span>     ...</span></span>
+<span class="line"><span>   0 +----------------------------------------------------------------------->ki</span></span>
+<span class="line"><span>     0                                                                   149.8</span></span>
+<span class="line"><span>Number of snapshots: 70</span></span>
+<span class="line"><span>Detailed snapshots: [28, 34, 40, ..., 68 (peak)]</span></span></code></pre><p>正常程序的曲线锯齿但长期平稳，泄漏程序锯齿且整体持续上行。</p>
+<p><img src="/posts/memory-leak-tool-analysis/memory-leak-curve.svg" alt="正常与泄漏的堆内存曲线对比"></p>
+<p>只看最终数字可能漏掉缓慢增长，曲线让趋势直接可见。怀疑泄漏是每次操作漏一点的缓慢累积，先跑它看形状。</p>
+<h2>ASan：编译期插桩</h2>
+<p>地址消毒器，编译时改写代码里的内存访问，运行时检查：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">gcc</span><span style="color:#569CD6"> -fsanitize=address</span><span style="color:#569CD6"> -g</span><span style="color:#CE9178"> leak1.c</span><span style="color:#569CD6"> -o</span><span style="color:#CE9178"> leak1_asan</span></span>
+<span class="line"><span style="color:#DCDCAA">./leak1_asan</span></span></code></pre><p>输出泄漏报告（节选）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>==934==ERROR: LeakSanitizer: detected memory leaks</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Direct leak of 107350 byte(s) in 100 object(s) allocated from:</span></span>
+<span class="line"><span>    #1 0x... in create_packet /home/codespace/tmp/leak.c:4</span></span>
+<span class="line"><span>    #2 0x... in main /home/codespace/tmp/leak.c:7</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Direct leak of 51200 byte(s) in 100 object(s) allocated from:</span></span>
+<span class="line"><span>    #1 0x... in lost_pointer /home/codespace/tmp/leak.c:5</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>SUMMARY: AddressSanitizer: 158550 byte(s) leaked in 200 allocation(s).</span></span></code></pre><p>格式与 valgrind 类似：泄漏字节数、块数、调用栈。额外能查数组越界、重复释放。局限是依赖运行时环境，容器等受限环境可能无法启动，实测在 proot 容器里因 shadow memory 映射冲突直接崩溃。</p>
+<h2>mtrace：glibc内置记录</h2>
+<p>glibc 自带的内存记录机制，不依赖额外工具链，适合 valgrind 装不上的嵌入式环境。先在代码里开启记录：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;mcheck.h></span></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">    mtrace</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">          /* 开始记录 */</span></span>
+<span class="line"><span style="color:#6A9955">    /* 业务代码 */</span></span>
+<span class="line"><span style="color:#DCDCAA">    muntrace</span><span style="color:#D4D4D4">();</span><span style="color:#6A9955">        /* 结束并写日志 */</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>编译时链接调试库，运行后生成日志：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">gcc</span><span style="color:#569CD6"> -g</span><span style="color:#CE9178"> leak1_mt.c</span><span style="color:#569CD6"> -o</span><span style="color:#CE9178"> leak1_mt</span><span style="color:#569CD6"> -lmalloc_debug</span></span>
+<span class="line"><span style="color:#9CDCFE">MALLOC_TRACE</span><span style="color:#D4D4D4">=</span><span style="color:#CE9178">mtrace.log</span><span style="color:#DCDCAA"> ./leak1_mt</span></span></code></pre><p>日志按行记录每次分配与释放（节选）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>= Start</span></span>
+<span class="line"><span>@ ./leak1_mt:[0x984] + 0x30000224a0 0x400</span></span>
+<span class="line"><span>@ ./leak1_mt:[0x9d4] + 0x30000228b0 0x200</span></span>
+<span class="line"><span>@ ./leak1_mt:[0xa04] - 0x3000022ac0</span></span>
+<span class="line"><span>= End</span></span></code></pre><ul>
+<li>是分配，记录地址与大小；- 是释放。离线把未释放的块按调用点聚合：</li>
+</ul>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>  4096 bytes in   1 blocks  @ /lib/...:(_IO_file_doallocate+e8)[0x6ec88]</span></span>
+<span class="line"><span>107350 bytes in 100 blocks  @ ./leak1_mt:[0x984]</span></span>
+<span class="line"><span> 51200 bytes in 100 blocks  @ ./leak1_mt:[0x9d4]</span></span>
+<span class="line"><span>TOTAL: 162646 bytes in 201 blocks</span></span></code></pre><p>第一行是 printf 的内部缓冲，属于正常分配，剔除后与 valgrind 的数字一致。glibc 2.35 之后需要显式调用 mtrace()，不再靠环境变量自动开启。</p>
+<h2>AI执行分析，人负责设计</h2>
+<p>这些工具的输出都交给 AI 解读：让 AI 执行分析命令、读报告、把泄漏点整理成结论。人不需要逐行翻代码，知道有哪些工具、各自输出什么就够。本地开发首选 valgrind 一步到位，怀疑缓慢增长先跑 massif 看曲线，装不了工具链的环境用 mtrace。执行与分析交给 AI，人把精力留给设计。</p>
+<h2>内存生命周期的所有权设计</h2>
+<p>工具定位泄漏，正解在架构：每个动态内存分配都要有明确的所有权。谁分配，谁负责释放；所有权转移要显式交接，由新持有者负责。malloc 与 free 成对是设计结果，靠约定保证，不靠运气。</p>
+<p>实测程序的两个泄漏点，一个忘了释放，一个覆盖指针丢了所有权，都属于所有权没有落实。工具的价值是验证所有权是否被遵守：配对漏掉一次，跑完就现形。人负责把所有权架构设计好，AI 负责跑工具，工具负责验证设计。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-31 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=memory-leak-tool-analysis');
+  }
+  </script>
+</body>
+</html>

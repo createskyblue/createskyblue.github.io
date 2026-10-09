@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="150" viewBox="0 0 800 150" font-family="'Microsoft YaHei', sans-serif">
+  <rect width="800" height="150" fill="#fafafa"/>
+  <text x="400" y="24" text-anchor="middle" fill="#1a1a1a" font-size="13">接收中断只入队字节，帧解析器逐字节拆帧，帧队列隔离解析与业务</text>
+  <g font-size="13" fill="#1a1a1a" text-anchor="middle">
+    <rect x="10" y="60" width="140" height="52" rx="4" fill="#dae8fc" stroke="#6c8ebf"/>
+    <text x="80" y="91">字节流数据源</text>
+    <rect x="176" y="60" width="140" height="52" rx="4" fill="#fff2cc" stroke="#d6b656"/>
+    <text x="246" y="91">字节流队列 FIFO</text>
+    <rect x="342" y="60" width="140" height="52" rx="4" fill="#dae8fc" stroke="#6c8ebf"/>
+    <text x="412" y="91">帧解析器</text>
+    <rect x="508" y="60" width="140" height="52" rx="4" fill="#fff2cc" stroke="#d6b656"/>
+    <text x="578" y="91">帧队列</text>
+    <rect x="674" y="60" width="116" height="52" rx="4" fill="#dae8fc" stroke="#6c8ebf"/>
+    <text x="732" y="91">指令解析器</text>
+  </g>
+  <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M150 86 H166"/>
+    <path d="M316 86 H332"/>
+    <path d="M482 86 H498"/>
+    <path d="M648 86 H664"/>
+  </g>
+  <g fill="#4a4a4a">
+    <path d="M166 80 L176 86 L166 92 Z"/>
+    <path d="M332 80 L342 86 L332 92 Z"/>
+    <path d="M498 80 L508 86 L498 92 Z"/>
+    <path d="M664 80 L674 86 L664 92 Z"/>
+  </g>
+</svg>

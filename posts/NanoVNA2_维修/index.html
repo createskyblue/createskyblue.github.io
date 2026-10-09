@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NanoVNA2 高频扫频乱线 排查 ADF4350 锁定状态 - CacheRivulet小记</title>
+  <meta name="description" content="NanoVNA2高频乱跳，发现ADF4350失锁">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="NanoVNA2">
+  <meta property="article:tag" content="ADF4350">
+  <meta property="article:tag" content="SI5351">
+  <meta property="article:tag" content="PLL">
+  <meta property="article:tag" content="射频维修">
+  <meta property="article:tag" content="LoRa">
+  <meta property="article:published_time" content="2026-05-10">
+  <meta property="og:title" content="NanoVNA2 高频扫频乱线 排查 ADF4350 锁定状态">
+  <meta property="og:description" content="NanoVNA2高频乱跳，发现ADF4350失锁">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/NanoVNA2_维修/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/NanoVNA2_维修/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "NanoVNA2 高频扫频乱线 排查 ADF4350 锁定状态",
+  "description": "NanoVNA2高频乱跳，发现ADF4350失锁",
+  "datePublished": "2026-05-10",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/NanoVNA2_维修/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/NanoVNA2_维修/"
+  },
+  "keywords": "NanoVNA2, ADF4350, SI5351, PLL, 射频维修, LoRa"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">NanoVNA2 高频扫频乱线 排查 ADF4350 锁定状态</h1>
+  <article class="article-body">
+<h1>NanoVNA2 高频扫频乱线 排查 ADF4350 锁定状态</h1>
+<p>这次维修的起点是一个很具体的需求：给 LoRa 模块做天线阻抗匹配，目标频段是 430MHz 到 500MHz。NanoVNA2 很久没有开机，再次使用时，扫频结果只能正常维持大约 1 秒。开机后前 1 秒曲线正常，随后屏幕开始乱跳，显示大量杂乱线条。</p>
+<p>这个故障有两个明显特征：</p>
+<ul>
+<li>低频段可用，高频段异常。</li>
+<li>异常出现在启动后一小段时间内。</li>
+</ul>
+<p>后续排查借助 GPT 做故障树分析。先从频率范围切入，再根据原理图定位到高频段的频率合成器。</p>
+<p><img src="/posts/NanoVNA2_维修/cover.webp" alt="拆开的 NanoVNA2 主板"></p>
+<h2>频率范围测试</h2>
+<p>第一步是缩小异常条件。通过切换不同扫频范围，可以看到 140MHz 以下基本正常；频率越高于 140MHz，扫频越不稳定，屏幕越容易出现杂乱线条。</p>
+<p>这个现象很关键。NanoVNA2 在不同频段使用不同的频率源。结合原理图分析后，140MHz 以下主要由 SI5351 产生频率；超过 140MHz 后，高频部分由 ADF4350 参与产生。</p>
+<p><img src="/posts/NanoVNA2_维修/img/NanoVNA_%E5%8E%9F%E7%90%86%E5%9B%BE_v2_2.webp" alt="NanoVNA2 原理图总览"></p>
+<p>因此故障范围从整机显示、MCU、校准数据，收敛到高频频率合成链路。430MHz 到 500MHz 正好落在需要 ADF4350 正常工作的范围内。</p>
+<h2>锁定状态指示</h2>
+<p>拆机后先观察 ADF4350 的锁定状态。通道一的 TX synthesizer 附近有一颗指示灯，位号为 LED601，对应 ADF4350 的 LD 引脚。LD 用于指示 PLL 锁定状态。</p>
+<p>实测现象如下：</p>
+<ul>
+<li>开机后约 1 秒内，LED601 常亮。</li>
+<li>约 1 秒后，LED601 开始闪烁。</li>
+<li>随后 LED601 熄灭，扫频曲线同时变成杂乱线条。</li>
+</ul>
+<p>这说明异常和 ADF4350 的 PLL 锁定状态高度相关。扫频还能短暂正常，说明 SPI 配置、电源上电、参考时钟至少在启动初期能工作；后续失锁指向合成器环路、VCO 调谐或芯片状态失效。</p>
+<p><img src="/posts/NanoVNA2_维修/img/2041894575.webp" alt="ADF4350 局部放大">
+<img src="/posts/NanoVNA2_维修/img/ADF4350%E5%B1%80%E9%83%A8%E5%8E%9F%E7%90%86%E5%9B%BE.webp" alt="ADF4350 局部原理图"></p>
+<h2>Vtune 波形对比</h2>
+<p>下一步检查 ADF4350 的 Vtune 引脚。Vtune 是 PLL 环路滤波后的 VCO 调谐电压。扫频过程中，它应该随目标频点变化，呈现阶梯状扫描波形。</p>
+<p>通道一的 Vtune 实测结果：</p>
+<ul>
+<li>启动后约 1 秒内，有阶梯状扫描波形。</li>
+<li>失锁后，Vtune 变成噪声状波形。</li>
+<li>Vtune 乱掉后，屏幕扫频曲线同步乱掉。</li>
+</ul>
+<p>NanoVNA2 板上有两颗 ADF4350。一颗用于通道一发射链路，另一颗用于通道二相关链路。对通道二做同样测量时，Vtune 一直保持正常阶梯状扫描，LD 指示灯也保持常亮。</p>
+<p>这个对比把问题进一步压到通道一 ADF4350 及其外围环路。供电、MCU、参考时钟、整机软件的嫌疑降低，因为另一颗 ADF4350 在同一台机器上持续正常。</p>
+<h2>环路滤波器排查</h2>
+<p>长期放置后的设备，先怀疑外围无源件是合理路径。Vtune 连接到 ADF4350 的电荷泵环路滤波网络，相关电阻、电容异常可能导致 PLL 无法稳定锁定。</p>
+<p>围绕 Vtune 和 CPout 检查并替换了一圈阻容件。重点包括环路滤波电容、串联电阻、下拉电阻，以及靠近 Vtune 的小电容。替换后故障没有恢复，通道一仍然在启动后约 1 秒失锁。</p>
+<p>这一步排除了最容易处理的外围失效。剩下的可疑点主要是：</p>
+<ul>
+<li>通道一 ADF4350 本体异常。</li>
+<li>焊点、封装底部或局部连接存在接触问题。</li>
+<li>热风返修过程中可能改变了某些隐性接触状态。</li>
+</ul>
+<p><img src="/posts/NanoVNA2_维修/img/ADF4350%E5%B1%80%E9%83%A8%E5%8E%9FPCB%E5%AE%9E%E6%8B%8D%E5%AF%B9%E7%85%A7.webp" alt="ADF4350 外围 PCB 与原理图位置对照"></p>
+<h2>对调两颗 ADF4350</h2>
+<p>板上正好有两颗 ADF4350。为了确认故障是否跟随芯片移动，直接使用热风枪把两颗 ADF4350 对调。</p>
+<p>这个操作本来预期会得到两个结果之一：</p>
+<ul>
+<li>如果故障跟随芯片移动，说明原通道一 ADF4350 损坏。</li>
+<li>如果故障仍留在原通道一，说明外围电路、焊盘或布局附近存在问题。</li>
+</ul>
+<p>实际结果更简单：对调后，两路都恢复正常。140MHz 以上扫频恢复稳定，LED 锁定状态正常，目标的 430MHz 到 500MHz 频段也可以继续用于 LoRa 天线匹配。</p>
+<p><img src="/posts/NanoVNA2_维修/img/1673303399.webp" alt="通道一 ADF4350 附近实拍"></p>
+<h2>结论</h2>
+<p>这次故障的有效排查路径是：</p>
+<ol>
+<li>先用扫频范围确认故障频段，发现 140MHz 以下正常、140MHz 以上异常。</li>
+<li>结合原理图确认频率源切换关系，定位到 ADF4350。</li>
+<li>观察 LD 指示灯，确认通道一 PLL 会在启动后失锁。</li>
+<li>用示波器测 Vtune，对比通道一和通道二的调谐电压。</li>
+<li>检查并替换 Vtune/CPout 环路阻容，确认外围滤波网络嫌疑降低。</li>
+<li>对调两颗 ADF4350，最终恢复正常。</li>
+</ol>
+<p>最终原因没有被拆到单点。可能是某颗 ADF4350 的焊接状态、引脚接触、局部污染或热风返修后恢复的隐性连接问题。维修记录的实用结论是：NanoVNA2 在高频段出现开机短暂正常、随后扫频乱线时，可以优先检查 ADF4350 的 LD 状态和 Vtune 波形；如果板上两颗 ADF4350 表现不同，对调芯片是一个直接的验证手段。</p>
+<p>能修好就先修好。射频小板有时就是这么朴素。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-10 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=NanoVNA2_%E7%BB%B4%E4%BF%AE');
+  }
+  </script>
+</body>
+</html>

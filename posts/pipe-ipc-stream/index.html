@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>fork 后父子进程可以用 pipe 传递字节流 - CacheRivulet小记</title>
+  <meta name="description" content="fork后进程要交换数据，用pipe建立单向字节流">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Linux">
+  <meta property="article:tag" content="pipe">
+  <meta property="article:tag" content="IPC">
+  <meta property="article:tag" content="系统编程">
+  <meta property="article:published_time" content="2026-05-05">
+  <meta property="og:title" content="fork 后父子进程可以用 pipe 传递字节流">
+  <meta property="og:description" content="fork后进程要交换数据，用pipe建立单向字节流">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/pipe-ipc-stream/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/pipe-ipc-stream/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "fork 后父子进程可以用 pipe 传递字节流",
+  "description": "fork后进程要交换数据，用pipe建立单向字节流",
+  "datePublished": "2026-05-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/pipe-ipc-stream/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/pipe-ipc-stream/"
+  },
+  "keywords": "Linux, pipe, IPC, 系统编程"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">fork 后父子进程可以用 pipe 传递字节流</h1>
+  <article class="article-body">
+<h1>fork 后父子进程可以用 pipe 传递字节流</h1>
+<p><code>pipe</code> 是 Unix/Linux 中最基础的进程间通信机制之一。它创建一条由内核维护的单向字节流通道，一个文件描述符用于读取，另一个文件描述符用于写入。</p>
+<p>它常用于父子进程通信、命令行管道、日志转发、数据流处理，以及和 <code>splice</code>、<code>tee</code>、<code>vmsplice</code> 等零拷贝接口组合使用。</p>
+<h2>函数签名</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;unistd.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> pipe</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">int</span><span style="color:#9CDCFE"> pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">]);</span></span></code></pre><p>调用成功返回 <code>0</code>，失败返回 <code>-1</code> 并设置 <code>errno</code>。</p>
+<p><code>pipefd</code> 数组包含两个文件描述符：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]</span><span style="color:#6A9955">  // 读端</span></span>
+<span class="line"><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]</span><span style="color:#6A9955">  // 写端</span></span></code></pre><p>数据流向固定为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>write(pipefd[1]) -> kernel pipe buffer -> read(pipefd[0])</span></span></code></pre><p>pipe 是单向通道。如果两个进程需要双向通信，通常需要创建两个 pipe。</p>
+<h2>基本读写示例</h2>
+<p>同一个进程中也可以使用 pipe。下面示例先写入字符串，再从读端取出数据：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdio.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;unistd.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#9CDCFE"> pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">pipe</span><span style="color:#D4D4D4">(pipefd) &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        perror</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"pipe"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#B5CEA8"> 1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *msg = </span><span style="color:#CE9178">"hello pipe"</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">    write</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">], msg, </span><span style="color:#DCDCAA">strlen</span><span style="color:#D4D4D4">(msg));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    char</span><span style="color:#9CDCFE"> buf</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#569CD6">    ssize_t</span><span style="color:#D4D4D4"> n = </span><span style="color:#DCDCAA">read</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], buf, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(buf) - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (n > </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#9CDCFE">        buf</span><span style="color:#D4D4D4">[n] = </span><span style="color:#CE9178">'</span><span style="color:#D7BA7D">\0</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"read: </span><span style="color:#9CDCFE">%s</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, buf);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这段代码没有体现进程间通信，但展示了 pipe 的基本数据方向：写端进入，读端取出。</p>
+<h2>父子进程通信</h2>
+<p>pipe 最常见的用法是配合 <code>fork</code>。父进程先创建 pipe，然后 fork 子进程。<code>fork()</code> 会复制当前进程，形成父进程和子进程两条执行路径。调用返回后，两边都会继续从 <code>fork()</code> 后面的代码往下执行，但返回值不同：子进程中返回 <code>0</code>，父进程中返回子进程的 PID，失败时返回 <code>-1</code>。</p>
+<p>fork 后，父子进程都持有同一组 pipe 文件描述符，因此可以通过关闭不用的一端来建立单向通信。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdio.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;sys/wait.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;unistd.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">    // pipefd[0] 是读端，pipefd[1] 是写端。</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#9CDCFE"> pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 创建一条匿名管道。失败时返回 -1，并设置 errno。</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">pipe</span><span style="color:#D4D4D4">(pipefd) &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        perror</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"pipe"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#B5CEA8"> 1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // fork 会创建一个子进程。</span></span>
+<span class="line"><span style="color:#6A9955">    // 从这一行之后，父进程和子进程都会继续执行后面的代码。</span></span>
+<span class="line"><span style="color:#569CD6">    pid_t</span><span style="color:#D4D4D4"> pid = </span><span style="color:#DCDCAA">fork</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (pid &#x3C; </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">        // pid &#x3C; 0 表示 fork 失败，没有创建出子进程。</span></span>
+<span class="line"><span style="color:#DCDCAA">        perror</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"fork"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#B5CEA8"> 1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (pid == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">        // pid == 0 表示当前代码运行在子进程中。</span></span>
+<span class="line"><span style="color:#6A9955">        // 子进程只负责读取，所以关闭不用的写端。</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">        char</span><span style="color:#9CDCFE"> buf</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">128</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        // 从 pipe 的读端读取父进程写入的数据。</span></span>
+<span class="line"><span style="color:#6A9955">        // 这里最多读取 sizeof(buf) - 1 字节，留 1 字节给字符串结尾 '\0'。</span></span>
+<span class="line"><span style="color:#569CD6">        ssize_t</span><span style="color:#D4D4D4"> n = </span><span style="color:#DCDCAA">read</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], buf, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(buf) - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (n > </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">            // read 读取的是原始字节，不会自动补字符串结尾。</span></span>
+<span class="line"><span style="color:#6A9955">            // 如果要按 C 字符串打印，需要手动添加 '\0'。</span></span>
+<span class="line"><span style="color:#9CDCFE">            buf</span><span style="color:#D4D4D4">[n] = </span><span style="color:#CE9178">'</span><span style="color:#D7BA7D">\0</span><span style="color:#CE9178">'</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">            printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"child read: </span><span style="color:#9CDCFE">%s</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, buf);</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        // 子进程读完后关闭读端并退出。</span></span>
+<span class="line"><span style="color:#DCDCAA">        close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 运行到这里的是父进程。</span></span>
+<span class="line"><span style="color:#6A9955">    // 父进程只负责写入，所以关闭不用的读端。</span></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#569CD6"> char</span><span style="color:#D4D4D4"> *msg = </span><span style="color:#CE9178">"hello from parent"</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 向 pipe 的写端写入数据，子进程会从读端读到这些字节。</span></span>
+<span class="line"><span style="color:#DCDCAA">    write</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">], msg, </span><span style="color:#DCDCAA">strlen</span><span style="color:#D4D4D4">(msg));</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 写完后关闭写端。这样子进程继续 read 时可以正确感知 EOF。</span></span>
+<span class="line"><span style="color:#DCDCAA">    close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 等待子进程退出，避免产生僵尸进程。</span></span>
+<span class="line"><span style="color:#DCDCAA">    wait</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这里父进程只保留写端，子进程只保留读端。关闭不用的一端很重要，否则读端可能无法正确收到 EOF。<code>wait(NULL)</code> 用于等待子进程结束，避免子进程退出后短暂变成僵尸进程。</p>
+<h2>close 只关闭当前进程的 fd</h2>
+<p><code>fork()</code> 之后，父进程和子进程里的 <code>pipefd[0]</code>、<code>pipefd[1]</code> 数字通常是一样的。但这个数字不是系统全局唯一的管道编号，而是各自进程文件描述符表里的索引。</p>
+<p>可以把 fork 后的关系理解成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>内核 pipe 对象</span></span>
+<span class="line"><span>  ↑</span></span>
+<span class="line"><span>父进程 fd 3 -> 读端引用</span></span>
+<span class="line"><span>父进程 fd 4 -> 写端引用</span></span>
+<span class="line"><span>子进程 fd 3 -> 读端引用</span></span>
+<span class="line"><span>子进程 fd 4 -> 写端引用</span></span></code></pre><p>当子进程执行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">close</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">]);</span></span></code></pre><p>关闭的是子进程 fd 表里的写端引用，不会关闭父进程 fd 表里的 <code>pipefd[1]</code>。关闭后可以理解成：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>内核 pipe 对象</span></span>
+<span class="line"><span>  ↑</span></span>
+<span class="line"><span>父进程 fd 3 -> 读端引用</span></span>
+<span class="line"><span>父进程 fd 4 -> 写端引用</span></span>
+<span class="line"><span>子进程 fd 3 -> 读端引用</span></span>
+<span class="line"><span>子进程 fd 4 已关闭</span></span></code></pre><p>此时父进程仍然可以通过自己的 <code>pipefd[1]</code> 写入数据。只有当所有进程里指向写端的 fd 都关闭后，读端继续读取才会得到 EOF。反过来，只有当所有进程里指向读端的 fd 都关闭后，写端继续写入才会触发 <code>SIGPIPE</code> 或返回 <code>EPIPE</code>。</p>
+<p>因此示例中的 <code>close</code> 不是关闭对方的端口，而是关闭当前进程不需要的引用。这样可以让内核准确判断还有没有读者或写者。</p>
+<h2>pipe 是字节流</h2>
+<p>pipe 传输的是字节流，不是消息队列。它不保留每一次 <code>write</code> 的业务边界。</p>
+<p>例如写端连续写入：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">write</span><span style="color:#D4D4D4">(fd, </span><span style="color:#CE9178">"hello"</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">write</span><span style="color:#D4D4D4">(fd, </span><span style="color:#CE9178">"world"</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">5</span><span style="color:#D4D4D4">);</span></span></code></pre><p>读端可能一次读到：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>helloworld</span></span></code></pre><p>也可能分多次读到。应用层如果需要消息边界，应自行定义协议，例如固定长度头部、换行分隔、TLV 格式等。</p>
+<p>有一个特殊规则：当单次写入长度不超过 <code>PIPE_BUF</code> 时，Linux 保证这次写入相对于其他写入是原子的。这个保证只解决多个写者并发写入时的数据交错问题，不等于读端一定按同样长度读取。</p>
+<h2>阻塞与 EOF</h2>
+<p>默认情况下，pipe 是阻塞的。</p>
+<p>读端行为：</p>
+<ul>
+<li>pipe 中有数据：<code>read</code> 返回实际读取的字节数。</li>
+<li>pipe 中没有数据，但仍有写端打开：<code>read</code> 阻塞等待。</li>
+<li>所有写端都已关闭：<code>read</code> 返回 <code>0</code>，表示 EOF。</li>
+</ul>
+<p>写端行为：</p>
+<ul>
+<li>pipe 缓冲区有空间：<code>write</code> 写入数据并返回。</li>
+<li>pipe 缓冲区已满：<code>write</code> 阻塞等待读端消费。</li>
+<li>所有读端都已关闭：<code>write</code> 触发 <code>SIGPIPE</code>，或在忽略信号时返回 <code>-1</code> 并设置 <code>errno = EPIPE</code>。</li>
+</ul>
+<p>这些规则决定了 pipe 程序必须认真关闭不再使用的文件描述符。</p>
+<h2>非阻塞 pipe</h2>
+<p>可以使用 <code>pipe2</code> 创建带标志的 pipe：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> _GNU_SOURCE</span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;fcntl.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;unistd.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#9CDCFE"> pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#DCDCAA">pipe2</span><span style="color:#D4D4D4">(pipefd, O_NONBLOCK | O_CLOEXEC);</span></span></code></pre><p>常用标志：</p>
+<ul>
+<li><code>O_NONBLOCK</code>：读写操作不阻塞，没有数据或没有空间时返回错误。</li>
+<li><code>O_CLOEXEC</code>：执行 <code>exec</code> 后自动关闭文件描述符，避免泄漏到新程序。</li>
+</ul>
+<p>非阻塞 pipe 常与 <code>poll</code>、<code>epoll</code> 或事件循环组合使用。</p>
+<h2>命名管道 FIFO</h2>
+<p>普通 <code>pipe</code> 通常用于有亲缘关系的进程，因为文件描述符需要通过 <code>fork</code> 继承。没有亲缘关系的进程可以使用 FIFO，也叫命名管道。</p>
+<p>创建 FIFO：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;sys/stat.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">mkfifo</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"/tmp/myfifo"</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">0600</span><span style="color:#D4D4D4">);</span></span></code></pre><p>之后不同进程可以像打开普通文件一样打开它：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">int</span><span style="color:#D4D4D4"> fd = </span><span style="color:#DCDCAA">open</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"/tmp/myfifo"</span><span style="color:#D4D4D4">, O_RDONLY);</span></span></code></pre><p>FIFO 仍然是字节流，读写语义和 pipe 接近，但它在文件系统中有名字，适合无亲缘关系进程之间建立简单通信通道。</p>
+<h2>与 splice 的关系</h2>
+<p><code>splice</code> 经常需要 pipe 作为中转结构：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">int</span><span style="color:#9CDCFE"> pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#DCDCAA">pipe</span><span style="color:#D4D4D4">(pipefd);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">splice</span><span style="color:#D4D4D4">(file_fd, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, len, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#DCDCAA">splice</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">pipefd</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">], </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, socket_fd, </span><span style="color:#569CD6">NULL</span><span style="color:#D4D4D4">, len, </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">);</span></span></code></pre><p>这时 pipe 不一定是为了两个进程通信，而是作为内核中的数据搬运缓冲区。数据路径是：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>file_fd -> pipe buffer -> socket_fd</span></span></code></pre><p>用户态不需要分配大块数据缓冲区，也不直接读取文件内容。</p>
+<h2>注意事项</h2>
+<p>pipe 的容量有限，不能把它当作无限队列使用。写端速度长期高于读端时，最终会阻塞或在非阻塞模式下返回 <code>EAGAIN</code>。</p>
+<p>多个进程同时写同一个 pipe 时，应关注写入大小和协议边界。超过 <code>PIPE_BUF</code> 的写入可能和其他写者的数据交错。</p>
+<p>长期运行的程序应统一管理文件描述符生命周期。忘记关闭写端会导致读端一直等不到 EOF；忘记关闭读端会让写端错误处理变得不明确。</p>
+<h2>总结</h2>
+<p><code>pipe</code> 是一条由内核维护的单向字节流。它可以连接父子进程，也可以作为 <code>splice</code> 的内核中转缓冲区。正确使用 pipe 的关键是理解读端、写端、阻塞、EOF 和文件描述符关闭规则。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=pipe-ipc-stream');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>按键消抖可以用滑动窗口或积分法过滤抖动 - CacheRivulet小记</title>
+  <meta name="description" content="按键消抖 积分阈值 or 寄存器滑动窗口">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="按键消抖">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="滑动窗口">
+  <meta property="article:tag" content="积分消抖">
+  <meta property="article:tag" content="单片机">
+  <meta property="article:published_time" content="2026-05-17">
+  <meta property="og:title" content="按键消抖可以用滑动窗口或积分法过滤抖动">
+  <meta property="og:description" content="按键消抖 积分阈值 or 寄存器滑动窗口">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/key-debounce-shift-register/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/key-debounce-shift-register/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "按键消抖可以用滑动窗口或积分法过滤抖动",
+  "description": "按键消抖 积分阈值 or 寄存器滑动窗口",
+  "datePublished": "2026-05-17",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/key-debounce-shift-register/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/key-debounce-shift-register/"
+  },
+  "keywords": "按键消抖, 嵌入式, 滑动窗口, 积分消抖, 单片机"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">按键消抖可以用滑动窗口或积分法过滤抖动</h1>
+  <article class="article-body">
+<h1>按键消抖可以用滑动窗口或积分法过滤抖动</h1>
+<p><img src="/posts/key-debounce-shift-register/principle.webp" alt="32位移位寄存器滑动窗口法原理图"></p>
+<p>机械按键在按下和松开瞬间有几毫秒到十几毫秒的触点抖动，直接读 GPIO 会把一次按压识别成多次。</p>
+<p>常见软件做法是检测到电平变化时记一个时间戳，挂一个软件定时器，到时再回来检查电平是否仍然稳定。逻辑没问题，但需要维护&quot;上一次电平&quot;、&quot;定时器句柄&quot;、&quot;等待中&quot;等额外状态。</p>
+<p>下面这种方法只用一个 <code>uint32_t</code> 变量加一个固定节拍的扫描。</p>
+<h2>原理</h2>
+<p>每 1ms 采样一次按键电平，左移进 32 位历史寄存器：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">history = (history &#x3C;&#x3C; </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) | sample;</span></span></code></pre><p><code>history</code> 保存最近 32 次（32ms）采样。判定规则：</p>
+<ul>
+<li><code>history == 0xFFFFFFFF</code>：连续 32 次为 1，稳定按下，<code>state = 1</code>。</li>
+<li><code>history == 0x00000000</code>：连续 32 次为 0，稳定松开，<code>state = 0</code>。</li>
+<li>其他：窗口里还有抖动位，<code>state</code> 保持不变。</li>
+</ul>
+<p>抖动只要还落在 32ms 窗口里，<code>history</code> 就不会是全 1 或全 0，状态被冻结。</p>
+<h2>实现</h2>
+<p>按键低电平有效，1ms 定时器中断驱动扫描：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdint.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint32_t</span><span style="color:#D4D4D4"> key_history = </span><span style="color:#B5CEA8">0xFFFFFFFFu</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4">  key_state   = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> key_scan_1ms</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> sample = (</span><span style="color:#DCDCAA">read_key_gpio</span><span style="color:#D4D4D4">() == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) ? </span><span style="color:#B5CEA8">1u</span><span style="color:#D4D4D4"> : </span><span style="color:#B5CEA8">0u</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">    key_history = (key_history &#x3C;&#x3C; </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) | sample;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (key_history == </span><span style="color:#B5CEA8">0xFFFFFFFFu</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        key_state = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    } </span><span style="color:#C586C0">else</span><span style="color:#C586C0"> if</span><span style="color:#D4D4D4"> (key_history == </span><span style="color:#B5CEA8">0x00000000u</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        key_state = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>需要&quot;按下瞬间&quot;事件时加一个上次状态：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> key_state_prev = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#DCDCAA"> key_pressed_edge</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4"> edge = (key_state_prev == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) &#x26;&#x26; (key_state == </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">    key_state_prev = key_state;</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> edge;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h2>参数</h2>
+<ul>
+<li>采样周期 1ms × 窗口 32 位 = 32ms 稳定判定时间。换 <code>uint16_t</code> 得 16ms 窗口。</li>
+<li><code>key_history</code> 初值设为 <code>0xFFFFFFFF</code> 对应&quot;松开&quot;，避免上电瞬间被误判成按下。</li>
+<li>多按键就把 <code>history</code> 和 <code>state</code> 做成数组，扫描里循环一次。</li>
+</ul>
+<h2>另一种思路：积分消抖法</h2>
+<p>滑动窗口法严格要求 32 次采样完全一致，任何一次反向毛刺都会重置窗口。工程现场如果存在偶发尖刺干扰，按键事件会被无限推迟。</p>
+<p>积分消抖法换一种判定方式：用一个计数器累计趋势，类似软件实现的 RC 滤波。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> CNT_MAX  </span><span style="color:#B5CEA8">10</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> cnt = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> key_state = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> key_scan_1ms</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4"> sample = (</span><span style="color:#DCDCAA">read_key_gpio</span><span style="color:#D4D4D4">() == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) ? </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4"> : </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (sample) {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (cnt &#x3C; CNT_MAX) cnt++;</span></span>
+<span class="line"><span style="color:#D4D4D4">    } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (cnt > </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) cnt--;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (cnt == CNT_MAX) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        key_state = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    } </span><span style="color:#C586C0">else</span><span style="color:#C586C0"> if</span><span style="color:#D4D4D4"> (cnt == </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#D4D4D4">        key_state = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><ul>
+<li><code>sample = 1</code>：计数器加一，触顶后 <code>state = 1</code>。</li>
+<li><code>sample = 0</code>：计数器减一，触底后 <code>state = 0</code>。</li>
+<li>中间区域保持原状态，偶发反向毛刺只把计数器拉低一格，不会击穿判定。</li>
+</ul>
+<p>判定门限可调（<code>CNT_MAX</code>）、抗毛刺、只需要一个计数变量。</p>
+<h2>两种方案对比</h2>
+<p><img src="/posts/key-debounce-shift-register/compare.webp" alt="32位滑动窗口法与积分消抖法对比图"></p>
+<table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>32位滑动窗口法</th>
+<th>积分消抖法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>判定语义</td>
+<td>最近 N 次采样必须完全一致</td>
+<td>趋势累积到阈值</td>
+</tr>
+<tr>
+<td>抗偶发毛刺</td>
+<td>弱，一次反向采样即重置窗口</td>
+<td>强，单次毛刺只让计数回退一格</td>
+</tr>
+<tr>
+<td>阈值调节</td>
+<td>只能改窗口位宽，粒度粗</td>
+<td><code>CNT_MAX</code> 任意整数，粒度细</td>
+</tr>
+<tr>
+<td>状态信息</td>
+<td>保留最近 N 次原始采样序列</td>
+<td>只剩一个计数值</td>
+</tr>
+<tr>
+<td>RAM 占用</td>
+<td>每键 4 字节（uint32_t）+ 状态</td>
+<td>每键 1 字节计数 + 状态</td>
+</tr>
+</tbody></table>
+<h2>本质：都是脉宽判定</h2>
+<p>两种方法做的是同一件事 —— 判定输入电平的稳定脉宽是否超过阈值。</p>
+<ul>
+<li>滑动窗口法：要求脉宽 ≥ N×Ts，且中途不允许反向脉冲，等价于一个零容忍的脉宽阈值判定。</li>
+<li>积分消抖法：要求&quot;按下&quot;采样数减&quot;松开&quot;采样数的净累积 ≥ <code>CNT_MAX</code>，等价于带容忍度的脉宽阈值判定，允许窄毛刺嵌在长脉冲里。</li>
+</ul>
+<p>抖动是窄脉冲，按键事件是宽脉冲，所有软件消抖归根到底都是在时域上设一个宽度门限。差别只在门限&quot;硬不硬&quot;。</p>
+<p>结论：</p>
+<ul>
+<li>默认用积分消抖法。<code>CNT_MAX</code> 可以根据实测抖动调到合适值，抗毛刺，RAM 占用低。</li>
+<li>选 32 位滑动窗口法的两种情况：一是需要排查接触不良或硬件抖动，<code>history</code> 的二进制位直接就是采样波形；二是上层要求&quot;必须连续 N 次稳定才认&quot;的严格语义，例如安全相关输入。</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-17 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=key-debounce-shift-register');
+  }
+  </script>
+</body>
+</html>

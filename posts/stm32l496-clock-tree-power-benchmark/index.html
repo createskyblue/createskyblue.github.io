@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STM32L496 低功耗时钟树怎么选？19 组实测告诉你 - CacheRivulet小记</title>
+  <meta name="description" content="STM32L496 19 组时钟组合实测">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="STM32L496">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="测试">
+  <meta property="article:published_time" content="2026-10-09">
+  <meta property="og:title" content="STM32L496 低功耗时钟树怎么选？19 组实测告诉你">
+  <meta property="og:description" content="STM32L496 19 组时钟组合实测">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32l496-clock-tree-power-benchmark/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32l496-clock-tree-power-benchmark/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "STM32L496 低功耗时钟树怎么选？19 组实测告诉你",
+  "description": "STM32L496 19 组时钟组合实测",
+  "datePublished": "2026-10-09",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32l496-clock-tree-power-benchmark/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32l496-clock-tree-power-benchmark/"
+  },
+  "keywords": "低功耗, STM32, STM32L496, 嵌入式, 测试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">STM32L496 低功耗时钟树怎么选？19 组实测告诉你</h1>
+  <article class="article-body">
+<h1>STM32L496 低功耗时钟树怎么选？19 组实测告诉你</h1>
+<p>一句话结论：<strong>用内部 RC 时钟，CPU密集任务频率开高，干完就睡；IO密集任务降低主频，保持时钟域精简，减少外设时钟常开开销。</strong> </p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/1_%E8%83%BD%E8%80%97%E6%8E%92%E8%A1%8C.webp" alt="能耗排行"></p>
+<h2>测试方法</h2>
+<p>程序是一个典型的周期性任务，RTC 定时唤醒，干一段固定计算量的活，然后回到 Stop 模式：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/0_%E6%B5%81%E7%A8%8B%E7%A4%BA%E6%84%8F.webp" alt="流程示意"></p>
+<p>LSE 32.768kHz 全程运行，19 组测试只改变唤醒后的系统时钟来源和频率。LED 在波形上打标记，用来切分唤醒段和工作段。</p>
+<p>低功耗分析仪上一轮完整的波形长这样：平时趴在 2.3uA，唤醒后电流抬起来，干完活掉回去。</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/MSI_8MHz_%E6%95%B4%E8%BD%AE%E6%B3%A2%E5%BD%A2.webp" alt="MSI 8MHz 整轮波形"></p>
+<p>对比最费的那组，形状一样，但&quot;台子&quot;明显更高：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/HSE_PLL64M_div8_%E6%95%B4%E8%BD%AE%E6%B3%A2%E5%BD%A2.webp" alt="HSE PLL64M÷8 整轮波形"></p>
+<h2>发现 1：固定计算量的 CPU 密集任务，主频越高总能耗越低</h2>
+<p>直觉上频率高电流大，应该更费电。实测正好相反：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/2_%E9%A2%91%E7%8E%87%E4%B8%8E%E8%83%BD%E8%80%97.webp" alt="频率与能耗"></p>
+<p>原因是能耗 = 电流 × 时间。计算量固定时，频率翻倍，耗时减半，但电流涨不到两倍，因为芯片有一块和频率无关的底电流（稳压器、Flash、外设）。频率越高，这块底电流&quot;计时&quot;越短。画成面积一眼就明白：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/3_%E9%9D%A2%E7%A7%AF%E5%AF%B9%E6%AF%94.webp" alt="面积对比"></p>
+<p>MSI 32MHz 的工作段实测：5.33mA 跑 1.67s。</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/MSI_32MHz_%E5%B7%A5%E4%BD%9C%E6%AE%B5.webp" alt="MSI 32MHz 工作段"></p>
+<p>这就是低功耗设计常说的 Race to Sleep：快点干完，快点睡觉。</p>
+<p>有一个例外：HSI→PLL 32M（2.63uAh）只比 HSI 16M 直出（2.65uAh）省一点点，PLL 自身的电流基本抵掉了升频的收益。HSI 要拉到 64M 才明显占优。</p>
+<h2>发现 2：同样的频率，时钟来源差很多</h2>
+<p>HCLK 都是 8MHz，CPU 干活一样快，能耗却能差到 2.4 倍：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/4_%E5%90%8C%E9%A2%91%E5%AF%B9%E6%AF%94.webp" alt="同频对比"></p>
+<p>两个坑：</p>
+<ul>
+<li><strong>HSE 比 MSI 贵。</strong> 同样 8MHz 直出，HSE 工作电流 1.97mA，MSI 只要 1.41mA，晶振驱动电路本身就要耗电。</li>
+<li><strong>HSI 介于两者之间。</strong> 同频下 HSI 每个点都比 MSI 费电（8MHz 多 26%，32MHz 多 6.5%），但都比 HSE 省。</li>
+<li><strong>先倍频再分频最浪费。</strong> PLL 64M÷8 要 3.31mA，比 HSE 直出多 68%。分频只降了 CPU 频率，PLL 自己仍在 64MHz 下运行。需要多少频率，就让 PLL 直接输出多少。</li>
+</ul>
+<h2>发现 3：唤醒速度 MSI 最快，但对本程序影响不大</h2>
+<p>MSI 和 HSI 都是内部 RC，唤醒后很快可用；HSE 要等晶振起振，PLL 要等锁定。MSI 直出最快（100<del>320us），HSI 次之（370</del>730us），HSE 相关的配置都在 1.2ms 以上：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/5_%E5%94%A4%E9%86%92%E8%80%97%E6%97%B6.webp" alt="唤醒耗时"></p>
+<p>放到分析仪上看差别很直观。MSI 32MHz 唤醒只要 100us：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/MSI_32MHz_%E5%94%A4%E9%86%92%E6%AE%B5.webp" alt="MSI 32MHz 唤醒"></p>
+<p>HSE→PLL 64M÷8 要 4.1ms，中间一大段在等时钟稳定：</p>
+<p><img src="/posts/stm32l496-clock-tree-power-benchmark/img/HSE_PLL64M_div8_%E5%94%A4%E9%86%92%E6%AE%B5.webp" alt="HSE PLL64M÷8 唤醒"></p>
+<p>不过唤醒能耗只有 0.1~1.4nAh，工作段是 2.46uAh 起，差了三个数量级。只有工作任务很短（毫秒级）时，唤醒速度才值得优化。</p>
+<h2>发现 4：休眠电流和主时钟无关</h2>
+<p>19 组全部是 2.3uA。进入 Stop 后高速时钟全关，只剩 LSE 和 RTC，主时钟怎么配都不影响睡眠。</p>
+<h2>选型建议</h2>
+<ol>
+<li><strong>首选 MSI。</strong> 不用外部晶振，唤醒快、电流低。开启 LSE 后打开 MSIPLLEN，MSI 会被 LSE 自动校准，UART 等外设够用。MSI 32MHz 直出和最优值只差 0.4%，不用 PLL，工作峰值电流 5.33mA，只有 HSI→PLL 64M（10.59mA）的一半，对纽扣电池这类内阻大的电源更友好。</li>
+<li><strong>在允许范围内把 HCLK 拉高</strong>，让任务尽快做完再睡。需要 64MHz 算力时，用 HSI→PLL 比 HSE→PLL 更省（2.46 vs 2.57uAh）。</li>
+<li><strong>确实需要高精度时钟才用 HSE</strong>，并让 PLL 直接输出目标频率，不要&quot;高配低用&quot;。</li>
+<li><strong>还能更省：</strong> HCLK ≤ 26MHz 时可把内核电压切到 Range 2（本次未测）。</li>
+<li><strong>任务类型决定频率策略。</strong> 本文 19 组都是固定计算量的 CPU 密集任务，高主频省电的前提是 CPU 一直在算。IO 密集型任务的时间花在等外设上，升主频缩短不了这段等待，工作段电流照旧在涨。这类任务值得临时把主频切到外设速率附近，本文没有这组实测数据，需要按任务类型自己拉一张&quot;任务类型 × 时钟组合&quot;的能耗表，逐类找到最优组合再固定下来。</li>
+</ol>
+<h2>附录：完整实测数据</h2>
+<table>
+<thead>
+<tr>
+<th>组合</th>
+<th>HCLK</th>
+<th>休眠电流</th>
+<th>唤醒电流</th>
+<th>唤醒耗时</th>
+<th>唤醒能耗</th>
+<th>工作电流</th>
+<th>工作耗时</th>
+<th>工作能耗</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MSI 8MHz</td>
+<td>8MHz</td>
+<td>2.3uA</td>
+<td>1.71mA</td>
+<td>320us</td>
+<td>151pAh</td>
+<td>1.41mA</td>
+<td>6622ms</td>
+<td>2.62uAh</td>
+</tr>
+<tr>
+<td>MSI 16MHz</td>
+<td>16MHz</td>
+<td>2.3uA</td>
+<td>3.08mA</td>
+<td>170us</td>
+<td>145pAh</td>
+<td>2.74mA</td>
+<td>3316ms</td>
+<td>2.52uAh</td>
+</tr>
+<tr>
+<td>MSI 32MHz</td>
+<td>32MHz</td>
+<td>2.3uA</td>
+<td>5.18mA</td>
+<td>100us</td>
+<td>143pAh</td>
+<td>5.33mA</td>
+<td>1671ms</td>
+<td>2.47uAh</td>
+</tr>
+<tr>
+<td>MSI 4M → PLL 32M ÷4</td>
+<td>8MHz</td>
+<td>2.3uA</td>
+<td>509.86uA</td>
+<td>1990us</td>
+<td>281pAh</td>
+<td>2.06mA</td>
+<td>6704ms</td>
+<td>3.84uAh</td>
+</tr>
+<tr>
+<td>MSI 4M → PLL 32M ÷2</td>
+<td>16MHz</td>
+<td>2.3uA</td>
+<td>725.38uA</td>
+<td>1020us</td>
+<td>205pAh</td>
+<td>3.23mA</td>
+<td>3351ms</td>
+<td>3.01uAh</td>
+</tr>
+<tr>
+<td>MSI 4M → PLL 32M ÷1</td>
+<td>32MHz</td>
+<td>2.3uA</td>
+<td>1.11mA</td>
+<td>550us</td>
+<td>170pAh</td>
+<td>5.33mA</td>
+<td>1658ms</td>
+<td>2.46uAh</td>
+</tr>
+<tr>
+<td>HSE 8MHz 直出</td>
+<td>8MHz</td>
+<td>2.3uA</td>
+<td>3.11mA</td>
+<td>1210us</td>
+<td>1.11nAh</td>
+<td>1.97mA</td>
+<td>6768ms</td>
+<td>3.70uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 8M ÷1</td>
+<td>8MHz</td>
+<td>2.3uA</td>
+<td>3.31mA</td>
+<td>1270us</td>
+<td>1.17nAh</td>
+<td>2.16mA</td>
+<td>6753ms</td>
+<td>4.05uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 16M ÷1</td>
+<td>16MHz</td>
+<td>2.3uA</td>
+<td>3.31mA</td>
+<td>1230us</td>
+<td>1.13nAh</td>
+<td>3.43mA</td>
+<td>3366ms</td>
+<td>3.21uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 32M ÷1</td>
+<td>32MHz</td>
+<td>2.3uA</td>
+<td>3.29mA</td>
+<td>1240us</td>
+<td>1.13nAh</td>
+<td>5.94mA</td>
+<td>1665ms</td>
+<td>2.75uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 32M ÷4</td>
+<td>8MHz</td>
+<td>2.3uA</td>
+<td>1.95mA</td>
+<td>2260us</td>
+<td>1.22nAh</td>
+<td>2.62mA</td>
+<td>6766ms</td>
+<td>4.93uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 64M ÷8</td>
+<td>8MHz</td>
+<td>2.3uA</td>
+<td>1.20mA</td>
+<td>4100us</td>
+<td>1.37nAh</td>
+<td>3.31mA</td>
+<td>6762ms</td>
+<td>6.22uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 64M ÷4</td>
+<td>16MHz</td>
+<td>2.3uA</td>
+<td>1.91mA</td>
+<td>2190us</td>
+<td>1.16nAh</td>
+<td>4.49mA</td>
+<td>3354ms</td>
+<td>4.19uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 64M ÷2</td>
+<td>32MHz</td>
+<td>2.3uA</td>
+<td>2.56mA</td>
+<td>1520us</td>
+<td>1.08nAh</td>
+<td>6.85mA</td>
+<td>1670ms</td>
+<td>3.18uAh</td>
+</tr>
+<tr>
+<td>HSE 8M → PLL 64M ÷1</td>
+<td>64MHz</td>
+<td>2.3uA</td>
+<td>3.18mA</td>
+<td>1250us</td>
+<td>1.10nAh</td>
+<td>11.11mA</td>
+<td>831ms</td>
+<td>2.57uAh</td>
+</tr>
+<tr>
+<td>HSI 16M ÷2</td>
+<td>8MHz</td>
+<td>2.3uA</td>
+<td>898uA</td>
+<td>730us</td>
+<td>182.2pAh</td>
+<td>1.78mA</td>
+<td>6701ms</td>
+<td>3.31uAh</td>
+</tr>
+<tr>
+<td>HSI 16MHz 直出</td>
+<td>16MHz</td>
+<td>2.3uA</td>
+<td>1.11mA</td>
+<td>370us</td>
+<td>114.3pAh</td>
+<td>2.85mA</td>
+<td>3358ms</td>
+<td>2.65uAh</td>
+</tr>
+<tr>
+<td>HSI 16M → PLL 32M ÷1</td>
+<td>32MHz</td>
+<td>2.3uA</td>
+<td>1.22mA</td>
+<td>410us</td>
+<td>139.4pAh</td>
+<td>5.66mA</td>
+<td>1674ms</td>
+<td>2.63uAh</td>
+</tr>
+<tr>
+<td>HSI 16M → PLL 64M ÷1</td>
+<td>64MHz</td>
+<td>2.3uA</td>
+<td>952uA</td>
+<td>460us</td>
+<td>121.7pAh</td>
+<td>10.59mA</td>
+<td>837ms</td>
+<td>2.46uAh</td>
+</tr>
+</tbody></table>
+<p>前三名相差约 0.4%，每组只测了一次，可能在测量误差以内，可视为打平。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-10-09 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32l496-clock-tree-power-benchmark');
+  }
+  </script>
+</body>
+</html>

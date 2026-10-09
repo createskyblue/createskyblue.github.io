@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 330" role="img" aria-labelledby="title desc">
+  <title id="title">ESP32-S3 IMU 手势识别项目架构</title>
+  <desc id="desc">从 IMU 采集到数据标注、AutoML 搜索、AI 协作重实现、仿真对齐和设备端实时推理的流程图</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="330" rx="20" fill="#f8fafc"/>
+  <text x="44" y="42" font-family="Segoe UI,Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#0f172a">数据采集 → 模型搜索 → 端侧推理</text>
+  <text x="44" y="68" font-family="Segoe UI,Microsoft YaHei,sans-serif" font-size="14" fill="#475569">训练阶段与部署阶段分离，最终设备端只保留确定的纯 C 运算链路</text>
+  <g font-family="Segoe UI,Microsoft YaHei,sans-serif">
+    <rect x="44" y="112" width="200" height="136" rx="14" fill="#dbeafe" stroke="#60a5fa" stroke-width="2"/>
+    <text x="68" y="145" font-size="18" font-weight="700" fill="#1e3a8a">设备采集</text>
+    <text x="68" y="177" font-size="14" fill="#1e40af">QMI8658 IMU</text>
+    <text x="68" y="201" font-size="14" fill="#1e40af">50 Hz × 2 s</text>
+    <text x="68" y="225" font-size="14" fill="#1e40af">SD 卡 CSV 标注</text>
+
+    <rect x="298" y="112" width="200" height="136" rx="14" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2"/>
+    <text x="322" y="145" font-size="18" font-weight="700" fill="#4c1d95">离线搜索</text>
+    <text x="322" y="177" font-size="14" fill="#5b21b6">预处理组合</text>
+    <text x="322" y="201" font-size="14" fill="#5b21b6">特征与分类器</text>
+    <text x="322" y="225" font-size="14" fill="#5b21b6">确定部署方案</text>
+
+    <rect x="552" y="112" width="200" height="136" rx="14" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+    <text x="576" y="145" font-size="18" font-weight="700" fill="#78350f">AI 协作重实现</text>
+    <text x="576" y="177" font-size="14" fill="#92400e">按流水线重建</text>
+    <text x="576" y="201" font-size="14" fill="#92400e">纯 C + 仿真对齐</text>
+    <text x="576" y="225" font-size="14" fill="#92400e">可移植推理组件</text>
+
+    <rect x="806" y="112" width="200" height="136" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+    <text x="830" y="145" font-size="18" font-weight="700" fill="#14532d">设备推理</text>
+    <text x="830" y="177" font-size="14" fill="#166534">ESP32-S3 本地计算</text>
+    <text x="830" y="201" font-size="14" fill="#166534">A / B / C 分类</text>
+    <text x="830" y="225" font-size="14" fill="#166534">LVGL 结果展示</text>
+
+    <path d="M244 180 H292" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M498 180 H546" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M752 180 H800" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  </g>
+</svg>

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 210" font-family="Arial, sans-serif">
+  <rect width="920" height="210" fill="#F8FAFC"/>
+  <text x="18" y="28" font-size="13" fill="#475569">INA228 采样管线：中断只发事件，慢读取交回高优先级任务</text>
+
+  <!-- box 1: esp_timer -->
+  <rect x="20" y="70" width="150" height="76" rx="8" fill="#E0F2FE" stroke="#0284C7" stroke-width="1.5"/>
+  <text x="95" y="94" text-anchor="middle" font-size="14" fill="#0C4A6E" font-weight="bold">esp_timer 回调</text>
+  <text x="95" y="114" text-anchor="middle" font-size="12" fill="#0C4A6E">1kHz 周期触发</text>
+  <text x="95" y="132" text-anchor="middle" font-size="12" fill="#0C4A6E">只发事件通知</text>
+
+  <!-- arrow 1 -->
+  <line x1="170" y1="108" x2="208" y2="108" stroke="#64748B" stroke-width="2"/>
+  <polygon points="208,102 220,108 208,114" fill="#64748B"/>
+
+  <!-- box 2: reader task -->
+  <rect x="222" y="52" width="176" height="112" rx="8" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <text x="310" y="76" text-anchor="middle" font-size="14" fill="#78350F" font-weight="bold">高优先级实时采样任务</text>
+  <text x="310" y="96" text-anchor="middle" font-size="12" fill="#78350F">软件 I2C 位总线</text>
+  <text x="310" y="114" text-anchor="middle" font-size="12" fill="#78350F">单次读取 ~240us</text>
+  <text x="310" y="132" text-anchor="middle" font-size="12" fill="#78350F">ADC 换挡 + 入队</text>
+  <text x="310" y="152" text-anchor="middle" font-size="11" fill="#B45309">高优先级，保证采样实时性</text>
+
+  <!-- arrow 2 -->
+  <line x1="398" y1="108" x2="436" y2="108" stroke="#64748B" stroke-width="2"/>
+  <polygon points="436,102 448,108 436,114" fill="#64748B"/>
+
+  <!-- box 3: queue -->
+  <rect x="450" y="70" width="90" height="76" rx="8" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="495" y="100" text-anchor="middle" font-size="14" fill="#4C1D95" font-weight="bold">队列</text>
+  <text x="495" y="120" text-anchor="middle" font-size="12" fill="#4C1D95">128 x 32B</text>
+
+  <!-- arrow 3 -->
+  <line x1="540" y1="108" x2="578" y2="108" stroke="#64748B" stroke-width="2"/>
+  <polygon points="578,102 590,108 578,114" fill="#64748B"/>
+
+  <!-- box 4: LTTB consumer -->
+  <rect x="592" y="52" width="150" height="112" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="667" y="76" text-anchor="middle" font-size="14" fill="#14532D" font-weight="bold">LTTB 降采样</text>
+  <text x="667" y="96" text-anchor="middle" font-size="12" fill="#14532D">200ms 窗口 -> 10 点</text>
+  <text x="667" y="114" text-anchor="middle" font-size="12" fill="#14532D">50 点/秒，只发 V+A</text>
+  <text x="667" y="132" text-anchor="middle" font-size="12" fill="#14532D">避免 32KB/s 全量流</text>
+
+  <!-- arrow 4 -->
+  <line x1="742" y1="108" x2="780" y2="108" stroke="#64748B" stroke-width="2"/>
+  <polygon points="780,102 792,108 780,114" fill="#64748B"/>
+
+  <!-- box 5: websocket -->
+  <rect x="794" y="70" width="108" height="76" rx="8" fill="#FFE4E6" stroke="#E11D48" stroke-width="1.5"/>
+  <text x="848" y="100" text-anchor="middle" font-size="14" fill="#881337" font-weight="bold">WebSocket</text>
+  <text x="848" y="120" text-anchor="middle" font-size="12" fill="#881337">/ws 5Hz 帧</text>
+
+  <!-- bottom note -->
+  <text x="20" y="188" font-size="12" fill="#64748B">慢读取放进 esp_timer 回调会看门狗：它托管所有周期回调，读取必须交回独立任务。</text>
+  <text x="20" y="204" font-size="12" fill="#64748B">1kHz 读取占 ~24% CPU 是这台 C3（160MHz）加位总线 I2C 的实用上限；2kHz 的 ~50% CPU 会饿死 Web 服务器。</text>
+</svg>

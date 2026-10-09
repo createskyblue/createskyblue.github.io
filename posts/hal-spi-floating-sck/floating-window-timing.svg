@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 280" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="680" height="280" fill="#ffffff"/>
+  <text x="24" y="30" font-size="15" font-weight="bold" fill="#1a1a1a">HAL_SPI_Transmit 一次 8bit 传输的 SCK 时间线（CPOL=0）</text>
+
+  <!-- SPE 状态条 -->
+  <text x="24" y="66" font-size="13" fill="#1a1a1a">SPE 位</text>
+  <rect x="90" y="52" width="110" height="20" fill="#2e7d32"/>
+  <text x="100" y="66" font-size="12" fill="#ffffff">1（驱动中）</text>
+  <rect x="200" y="52" width="150" height="20" fill="#c62828"/>
+  <text x="210" y="66" font-size="12" fill="#ffffff">0（引脚悬空窗口）</text>
+  <rect x="350" y="52" width="290" height="20" fill="#2e7d32"/>
+  <text x="360" y="66" font-size="12" fill="#ffffff">1（重新使能，发 8 个真实脉冲）</text>
+
+  <!-- SCK 波形 -->
+  <text x="24" y="130" font-size="13" fill="#1a1a1a">SCK</text>
+  <!-- 空闲低 -->
+  <polyline points="90,150 200,150" fill="none" stroke="#f9a825" stroke-width="2.5"/>
+  <!-- 悬空窗口：SCK 无人驱动，虚线表示不受 MCU 控制 -->
+  <polyline points="200,150 205,105 350,105" fill="none" stroke="#c62828" stroke-width="2.5" stroke-dasharray="6 4"/>
+  <!-- 使能后 8 个脉冲，每个宽 32.5 -->
+  <polyline points="350,105 355,150 387,150 387,105 419,105 419,150 451,150 451,105 483,105 483,150 515,150 515,105 547,105 547,150 579,150 579,105 611,105 611,150 640,150" fill="none" stroke="#f9a825" stroke-width="2.5"/>
+
+  <!-- 假跳变标注 -->
+  <line x1="205" y1="98" x2="205" y2="70" stroke="#c62828" stroke-width="1.5"/>
+  <text x="150" y="196" font-size="12.5" fill="#c62828">悬空期间被外部未知干扰扰动，</text>
+  <text x="150" y="214" font-size="12.5" fill="#c62828">这次假跳变被计成多出的第 9 个脉冲</text>
+  <line x1="205" y1="180" x2="205" y2="112" stroke="#c62828" stroke-width="1" stroke-dasharray="3 3"/>
+
+  <!-- 8 个真实脉冲标注 -->
+  <text x="420" y="196" font-size="12.5" fill="#1a1a1a">8bit 数据对应的 8 个 SCK 脉冲</text>
+  <line x1="480" y1="185" x2="480" y2="155" stroke="#888888" stroke-width="1" stroke-dasharray="3 3"/>
+
+  <!-- 底注 -->
+  <text x="24" y="248" font-size="12" fill="#555555">从设备按第 1 个上升沿对齐采样，假跳变让整个字节流错位 1 bit。</text>
+  <text x="24" y="266" font-size="12" fill="#555555">窗口内 SCK 无人驱动，易受外部未知干扰扰动，产生假跳变。</text>
+</svg>

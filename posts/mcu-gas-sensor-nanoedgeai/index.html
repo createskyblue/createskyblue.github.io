@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCU 边缘 AI 多气体传感器融合 异常分类 - CacheRivulet小记</title>
+  <meta name="description" content="多气体传感器融合、异常检测、NanoEdge AI、AutoML、MCU 边缘推理">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="边缘AI">
+  <meta property="article:tag" content="NanoEdge AI">
+  <meta property="article:tag" content="TFLite">
+  <meta property="article:tag" content="AutoML">
+  <meta property="article:tag" content="异常检测">
+  <meta property="article:published_time" content="2026-06-27">
+  <meta property="og:title" content="MCU 边缘 AI 多气体传感器融合 异常分类">
+  <meta property="og:description" content="多气体传感器融合、异常检测、NanoEdge AI、AutoML、MCU 边缘推理">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/mcu-gas-sensor-nanoedgeai/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/mcu-gas-sensor-nanoedgeai/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "MCU 边缘 AI 多气体传感器融合 异常分类",
+  "description": "多气体传感器融合、异常检测、NanoEdge AI、AutoML、MCU 边缘推理",
+  "datePublished": "2026-06-27",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/mcu-gas-sensor-nanoedgeai/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/mcu-gas-sensor-nanoedgeai/"
+  },
+  "keywords": "嵌入式, MCU, 边缘AI, NanoEdge AI, TFLite, AutoML, 异常检测"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">MCU 边缘 AI 多气体传感器融合 异常分类</h1>
+  <article class="article-body">
+<h1>用 NanoEdge AI 做 MCU 多气体异常分类</h1>
+<p>多气体传感器融合可以用于异常气味识别，例如腐败气味、烧焦气味或其他污染源。基本流程是采集同一时刻的多路传感器数据，整理成带标签的数据集，再用 NanoEdge AI 生成可在 MCU 上运行的检测或分类库。</p>
+<p><img src="/posts/mcu-gas-sensor-nanoedgeai/PixPin_2026-06-27_18-20-11.webp" alt="电化学气体传感器"></p>
+<h2>采集数据样本</h2>
+<p>异常分类先看数据。样本需要覆盖正常环境和异常环境。正常环境建议来自多个位置、不同通风条件、不同温湿度和不同背景气味，避免模型只记住某个房间的底噪。</p>
+<p>异常环境要贴近真实触发场景。腐败气味、烧焦气味、溶剂气味等目标来源，都应在接近实际扩散状态下采集。每条样本记录同一时刻的多路传感器值，字段顺序、单位、采样频率保持一致。</p>
+<p>正常样本和异常样本数量尽量接近。样本严重不均衡时，模型容易偏向数量更多的类别。标签边界也要谨慎处理，边界模糊样本可以单独留出，避免直接混进主训练集。</p>
+<h2>AutoML</h2>
+<p>数据准备好后，可以导入 NanoEdge AI 做 AutoML 搜索。多气体异常识别常用两条路线：异常检测和分类。</p>
+<p>异常检测适合异常样本少、现场环境差异大的场景。工具主要学习正常环境数据，设备运行时可以先做一段正常环境学习，后续输入偏离正常分布时输出异常结果。这条路线更适合需要抗环境干扰的设备。</p>
+<p>分类适合正常数据和异常数据都比较明确的场景。正常环境、烧焦、腐败、溶剂等样本分别作为标签导入，生成库后在 MCU 侧直接输出类别结果。</p>
+<p>选择可以按数据条件判断：异常样本少、需要现场学习，选异常检测；正常和异常数据都足够、需要输出具体类别，选分类。</p>
+<p><img src="/posts/mcu-gas-sensor-nanoedgeai/neai-benchmark-plots.webp" alt="NanoEdge AI Studio benchmark 结果曲线"></p>
+<h2>Nano Edge Ai 黑箱</h2>
+<p>NanoEdge AI 的优点是落地快。数据集先在本地评估，但生成库所需参数需要再上传到 ST 服务器云编译。最后下载 C 库，链接进 MCU 工程，运行时把传感器数组传进去，读取检测或分类结果。</p>
+<p>缺点也清楚：库是黑箱，模型结构、特征选择、训练过程和内部参数都不能完全控制。它更适合工程落地，不适合追求模型细节可解释的研究流程。</p>
+<p>尽管NanoEdgeAI生成的模型可以在其他兼容arm芯片上使用，甚至把把本地评估程序exe挪到其他地方使用，但是这是违反用户许可协议的，不能商用</p>
+<h2>自训练</h2>
+<p>NanoEdge AI 的优点是落地快，缺点是黑箱程度高。它适合快速做出 MCU 端可运行的边缘 AI 功能；如果后期产品对可解释性、模型结构和部署格式有更强要求，就需要考虑自训练模型，再通过 TFLite Micro 或手写 C 推理部署。
+你可以把标注过的数据集丢给Agent，再给一台服务器让它自己做模型，自动评估、转换成 C 代码，部署到 MCU。代码智能体可以辅助完成数据处理、训练和转换。</p>
+<p>这条路线控制权更高，但是我测试过，最后出来的模型没有NanoEdgeAI跑出来的强</p>
+<h2>参考资料</h2>
+<ul>
+<li><a href="https://www.st.com/en/development-tools/nanoedgeaistudio.html" target="_blank" rel="noopener noreferrer">NanoEdgeAIStudio | Software - STMicroelectronics</a></li>
+<li><a href="https://wiki.st.com/stm32mcu/wiki/AI%3ANanoEdge_AI_Studio" target="_blank" rel="noopener noreferrer">AI:NanoEdge AI Studio - stm32mcu - ST wiki</a></li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助整理，请以实际测试结果和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-27 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=mcu-gas-sensor-nanoedgeai');
+  }
+  </script>
+</body>
+</html>

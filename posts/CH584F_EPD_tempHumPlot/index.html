@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步 - CacheRivulet小记</title>
+  <meta name="description" content="磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="墨水屏">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="温度计">
+  <meta property="article:tag" content="CH58X">
+  <meta property="article:published_time" content="2026-10-05">
+  <meta property="og:title" content="磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步">
+  <meta property="og:description" content="磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/CH584F_EPD_tempHumPlot/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/CH584F_EPD_tempHumPlot/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步",
+  "description": "磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步",
+  "datePublished": "2026-10-05",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/CH584F_EPD_tempHumPlot/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/CH584F_EPD_tempHumPlot/"
+  },
+  "keywords": "嵌入式, 墨水屏, 低功耗, 温度计, CH58X"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步</h1>
+  <article class="article-body">
+<h1>磁吸式墨水屏温度计：1年续航，30天历史，蓝牙同步</h1>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/%E6%96%B0%E5%B0%81%E9%9D%A2%E5%9B%BE.webp" alt="封面"></p>
+<h2>1. 项目概述</h2>
+<p>针对传统温湿度计无历史趋势、带曲线设备需持续供电或联网上云的问题，本项目基于墨水屏打造<code>磁吸式低功耗温湿度记录仪</code>：本地存储 30 天温湿度曲线，两节 7 号电池供电，蓝牙按需导出；待机电流 8µA，标称续航 1 年，实测可达 2~3 年。</p>
+<ul>
+<li>30 天分级采样，共 10080 个数据点：近 24h 为 1 分钟 / 点，历史时段压缩为 5 分钟 / 点</li>
+<li>单键交互：单击清残影、双击切换曲线区间、长按 3s 开启蓝牙；环境舒适度表情指示</li>
+<li>蓝牙导出：浏览器查看实时数据、曲线缩放、CSV 导出；个人用户免费激活使用</li>
+</ul>
+<p>Web 上位机：<a href="https://ch58x-th-plot.cacherivulet.cn" target="_blank" rel="noopener noreferrer">https://ch58x-th-plot.cacherivulet.cn</a></p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E4%B8%8A%E4%BD%8D%E6%9C%BA.webp" alt=""></p>
+<p>本项目为<strong>首次公开的完全原创项目</strong>，未在其他赛事获奖、未在校内答辩，参赛提交为社区复刻版本。</p>
+<h2>2. 开源协议</h2>
+<ul>
+<li><strong>硬件工程</strong>（原理图 / PCB / BOM）：CERN-OHL-P-2.0，可自由学习、修改、打样与商用，仅需保留版权声明与协议出处，衍生设计无需开源。</li>
+<li><strong>墨水屏驱动、Web 上位机、ChaCha20 密钥注册机 keygen、3D 打印外壳模型</strong>：MIT 协议。</li>
+<li><strong>完整固件</strong>：保留版权，暂不开放源码，以预编译 .hex 提供社区版；个人免费激活、功能完整无限制，允许个人以学习为目的反编译、逆向，但固件及逆向成果不得二次发布、不得商用。</li>
+</ul>
+<h2>3. 硬件设计</h2>
+<h3>3.1 单芯片集成</h3>
+<p>主控选用 CH584F（RISC-V，78MHz，内置 BLE5.4），片上 504KB Flash（448KB 用户可用）、96KB SRAM。单芯片统一完成墨水屏 SPI 驱动、I²C 传感器采集、电池电压 ADC 采样、RTC 定时唤醒与蓝牙通信；除传感器、屏幕外，核心外围仅需双晶振、DCDC 电感与射频匹配网络。通过减少器件数量同时优化 BOM 成本与静态功耗，实现 8µA 待机。</p>
+<p>支持量产硬件裁剪：无蓝牙版本可省外部晶振改用内部时钟；也可移除 DCDC 电感切换线性供电，以功耗上升换取更低物料成本。</p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/%E4%B8%BB%E6%8E%A7CH584F.webp" alt="">
+<img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/%E4%B8%BB%E6%8E%A7%E9%83%A8%E5%88%86PCB.webp" alt=""></p>
+<h3>3.2 天线与射频</h3>
+<p>板载天线及净空区按官方参考设计布局，馈点预留 PI 型匹配网络，需用 VNA 完成阻抗匹配调试。BLE 依赖外部 32MHz 高速晶振。</p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/%E5%A4%A9%E7%BA%BF%E8%AE%BE%E8%AE%A1%E5%8F%82%E8%80%83.webp" alt=""></p>
+<h3>3.3 墨水屏驱动</h3>
+<p>选用 4.2 寸 400×300 墨水屏，搭载 SSD1619A 控制器，<strong>24Pin 上接触 FPC 连接器（下接触版本无法装配）</strong>。SPI 通信为保证信号完整性：SCK 串联 22Ω 源端匹配电阻，时钟与数据信号线包地布线，抑制高速过冲与串扰。</p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/SPI_SCK%E4%B8%B2%E8%81%9422R.webp" alt="SPI_SCK串联22R">
+<img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/%E5%A2%A8%E6%B0%B4%E5%B1%8F%E9%A9%B1%E5%8A%A8.webp" alt="墨水屏驱动电路原理图">
+<img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/%E5%A2%A8%E6%B0%B4%E5%B1%8F%E9%A9%B1%E5%8A%A8%E6%97%B6%E9%92%9F%E7%BA%BF%E5%8C%85%E5%9C%B0.webp" alt="墨水屏驱动时钟线包地">
+<img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/%E5%B1%8F%E5%B9%95%E9%A9%B1%E5%8A%A8PCB.webp" alt="屏幕驱动PCB"></p>
+<h3>3.4 传感器热隔离与误差抑制</h3>
+<p>硬件兼容 AHT30、SHT40 两款温湿度传感器。板载热源、环境凝露及焊接热冲击均会引入测量误差，方案从 PCB、铜皮、外壳三层设计实现误差抑制；</p>
+<p>温湿度传感器焊接后需<code>静置48小时</code>等待水合恢复，未充分静置时湿度测量存在负偏差，出现<code>暂时性湿度读数偏低</code>。</p>
+<ol>
+<li><strong>PCB 布局</strong>：传感器放置于板边，开槽切断平面热传导，开槽保留少量连接筋保证 PCB 机械强度；</li>
+<li><strong>铜皮处理</strong>：传感器周边不铺设连续铜皮，降低铜皮蓄热，同时减少凝露附着风险；</li>
+<li><strong>外壳结构</strong>：传感器放置在独立隔仓，侧边开设通气孔，增设第二通气孔形成自然对流，加快与外界空气交换。</li>
+</ol>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%94%B5%E8%B7%AF/%E6%B8%A9%E6%B9%BF%E5%BA%A6%E4%BC%A0%E6%84%9F%E5%99%A8.webp" alt="温湿度传感器原理图">
+<img src="/posts/CH584F_EPD_tempHumPlot/img/%E7%83%AD%E9%9A%94%E7%A6%BB%E8%AE%BE%E8%AE%A1.webp" alt="温湿度传感器热隔离设计">
+<img src="/posts/CH584F_EPD_tempHumPlot/img/PixPin_2026-09-28_21-48-38.webp" alt="结构内部"></p>
+<h3>3.5 外壳结构</h3>
+<p>3D 打印分层堆叠外壳（屏幕 / PCB 托盘 / 按键 / 电池 / 后盖），建模阶段完成装配仿真与干涉检查，完整 3D 模型随附件交付。</p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/01_%E9%9B%B6%E4%BB%B6%E5%85%A8%E5%AE%B6%E7%A6%8F.webp" alt="01_零件全家福"></p>
+<table>
+<thead>
+<tr>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/01_%E9%9B%B6%E4%BB%B6%E5%85%A8%E5%AE%B6%E7%A6%8F.webp" alt="零件全家福"></th>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/02_%E7%BB%84%E8%A3%85%E5%B1%8F%E5%B9%95.webp" alt="组装屏幕"></th>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/03_%E5%8F%A0%E5%8A%A0PCB%E6%89%98%E7%9B%98.webp" alt="叠加 PCB 托盘"></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>图01：全套零件全家福</td>
+<td>图02：装配4.2寸墨水屏</td>
+<td>图03：叠放PCB与内部托盘</td>
+</tr>
+<tr>
+<td><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/05_%E5%AE%89%E8%A3%85%E6%A9%99%E8%89%B2%E6%8C%89%E9%92%AE.webp" alt="安装橙色按钮"></td>
+<td><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/06_%E5%AE%89%E8%A3%85PCB%E5%92%8C%E7%94%B5%E6%B1%A0.webp" alt="安装 PCB 和电池"></td>
+<td><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/07_%E7%9B%96%E4%B8%8A%E7%9B%96%E5%AD%90.webp" alt="盖上盖子"></td>
+</tr>
+<tr>
+<td>图04：装入橙色按键</td>
+<td>图05：装配PCB与7号电池</td>
+<td>图06：合上外壳上盖</td>
+</tr>
+<tr>
+<td><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/08_%E7%BB%84%E8%A3%85%E5%AE%8C%E6%88%90.webp" alt="组装完成"></td>
+<td><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%A4%96%E7%9B%92%E7%BB%93%E6%9E%84_%E6%9C%AA%E6%A3%80%E6%B5%8B%E5%88%B0%E5%B9%B2%E6%B6%89.webp" alt="外盒结构未检测到干涉"></td>
+<td></td>
+</tr>
+<tr>
+<td>图07：整机装配完成</td>
+<td>图08：外壳结构仿真，无干涉</td>
+<td></td>
+</tr>
+</tbody></table>
+<h2>4. 低功耗设计与续航</h2>
+<p>整机低功耗依托器件本身特性实现，未增加专用低功耗电路：墨水屏静态功耗接近零，主控待机实测 <strong>7.33µA</strong>（保守取 8µA）。以下为低功耗分析仪在 <strong>2.5V 供电</strong>下的实测数据。</p>
+<table>
+<thead>
+<tr>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E4%BC%91%E7%9C%A0%E7%94%B5%E6%B5%817ua.webp" alt="休眠电流 7.33µA 实测波形"></th>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E6%AF%8F%E5%88%86%E9%92%9F%E6%B8%A9%E5%BA%A6%E6%B5%8B%E9%87%8F0.02uah.webp" alt="单次温湿度采样 0.02µAh 功耗波形"></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>休眠电流实测波形（7.33 µA）</td>
+<td>单次温湿度采样功耗波形（0.02 µAh）</td>
+</tr>
+<tr>
+<td><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%B1%80%E9%83%A8%E5%88%B7%E5%B1%8F5.7uah.webp" alt="墨水屏局部刷新 5.7µAh 功耗波形"></td>
+<td><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%85%A8%E5%B1%80%E5%88%B7%E5%B1%8F15.85uah.webp" alt="墨水屏全局刷新 15.85µAh 功耗波形"></td>
+</tr>
+<tr>
+<td>墨水屏局部刷新功耗波形（5.7 µAh）</td>
+<td>墨水屏全局刷新功耗波形（15.85 µAh）</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th>动作</th>
+<th>实测值</th>
+<th>最坏估计</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>主控待机</td>
+<td>7.33 µA</td>
+<td>8 µA</td>
+</tr>
+<tr>
+<td>单次温湿度采样</td>
+<td>0.02 µAh</td>
+<td>0.1 µAh</td>
+</tr>
+<tr>
+<td>墨水屏局部刷新</td>
+<td>5.7 µAh</td>
+<td>7 µAh</td>
+</tr>
+<tr>
+<td>墨水屏全局刷新</td>
+<td>15.85 µAh</td>
+<td>16 µAh</td>
+</tr>
+</tbody></table>
+<p>刷屏采用 <strong>9 次局部刷新 + 1 次全局刷新</strong>循环消残影，按最坏值估算单次平均刷屏功耗：</p>
+<blockquote>
+<p>(7 × 9 + 16) ÷ 10 = 7.9　→　保守取 <strong>8 µAh / 次</strong></p>
+</blockquote>
+<p>在线电池寿命计算器（含加速实测外推模块）：<a href="https://createskyblue.github.io/embedded-battery-lifetime-calculator/" target="_blank" rel="noopener noreferrer">https://createskyblue.github.io/embedded-battery-lifetime-calculator/</a></p>
+<table>
+<thead>
+<tr>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/5%E5%88%86%E9%92%9F%E5%88%B7%E5%B1%8F%E5%AF%BF%E5%91%BD1%E5%B9%B413%E5%A4%A9.webp" alt="5分钟刷新间隔续航1年13天"></th>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/15%E5%88%86%E9%92%9F%E5%88%B7%E5%B1%8F%E5%AF%BF%E5%91%BD2%E5%B9%B4175%E5%A4%A9.webp" alt="15分钟刷新间隔续航2年175天"></th>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/6%E5%B0%8F%E6%97%B6%E5%88%B7%E5%B1%8F%E5%AF%BF%E5%91%BD7%E5%B9%B4162%E5%A4%A9.webp" alt="6小时刷新间隔续航7年162天"></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>5 分钟刷新间隔，续航 1 年 13 天</td>
+<td>15 分钟刷新间隔，续航 2 年 175 天</td>
+<td>6 小时刷新间隔，续航 7 年 162 天</td>
+</tr>
+</tbody></table>
+<h3>4.1 续航加速实测验证</h3>
+<p>理论续航的可信度取决于功耗模型。固件内置加速测试宏压缩虚拟时间，将数年运行压缩至数周验证。周期性采样、刷屏可倍数加速，但<strong>休眠电流与电池日历自放电两项不随虚拟时间加速，必须单独校正</strong>，否则会严重高估续航。</p>
+<ul>
+<li>倍率：默认虚拟 1 分钟 = 现实 10 秒（K=6），预留时序余量避免刷新任务重叠失真；</li>
+<li>校正项：休眠功耗随真实时间累积；电池自放电按碱性电池 2%/年指数衰减；</li>
+<li>外推公式：<ul>
+<li>真实日均耗电 = [Q 实测 + I 休眠 × (K − 1) × T] ÷ (K × T / 24)</li>
+<li>计入自放电续航（天）= (1/r) × ln(1 + r × C / I 年) × 365，r 为年自放电率。</li>
+</ul>
+</li>
+</ul>
+<p><strong>模型自洽校验</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>刷新间隔</th>
+<th>倍率 K</th>
+<th>朴素外推</th>
+<th>补休眠校正</th>
+<th>理论值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>5 min</td>
+<td>6×</td>
+<td>1 年 38 天</td>
+<td>1 年 14 天</td>
+<td><strong>1 年 13 天</strong></td>
+</tr>
+<tr>
+<td>15 min</td>
+<td>6×</td>
+<td>2 年 331 天</td>
+<td>2 年 177 天</td>
+<td><strong>2 年 175 天</strong></td>
+</tr>
+<tr>
+<td>6 h</td>
+<td>6×</td>
+<td>13 年 64 天</td>
+<td>7 年 162 天</td>
+<td><strong>7 年 162 天</strong></td>
+</tr>
+<tr>
+<td>6 h</td>
+<td>60×</td>
+<td>15 年 107 天</td>
+<td>7 年 162 天</td>
+<td><strong>7 年 162 天</strong></td>
+</tr>
+</tbody></table>
+<p>校正休眠电流后结果与理论值误差 &lt; 0.1%，验证功耗模型有效；未校正的朴素外推在低占空比场景下偏差接近一倍。</p>
+<p>基于两节串联 7 号电池（满电 3.2V，容量 1000mAh）估算：<strong>保守标称续航 1 年，低刷新极端场景最长可达 7 年以上。</strong></p>
+<h2>5. 软件设计</h2>
+<h3>5.1 内存规划与两级缓存</h3>
+<p>片上 RAM 96KiB，实测固件占用 84,608B（约 82.6KiB），栈堆余量约 13.4KiB；Flash 占用约 183/448KiB。受容量限制设计两级历史缓存：</p>
+<ul>
+<li><strong>最近区</strong>：一整天 1440 点、1 分钟精度，为滑动窗口——存满后每次仅将最旧的 5 点用 LTTB 压成长期区 1 个 5 分钟点，1 分钟粒度始终贴合&quot;最近一天&quot;，不会整小时或整天一次性降精度；</li>
+<li><strong>长期区</strong>：5 分钟粒度 × 30 天（8640 点），写满淘汰最旧。</li>
+</ul>
+<p>相比全程 1 分钟全量存储压缩约 4.3 倍；LTTB 保留曲线拐点与极值，避免均值降采样抹平温湿度波动。显示端去掉独立画面基线，仅留一块 15,200B 的 U8G2 帧缓冲，同时充当局部刷新的旧值。</p>
+<h3>5.2 TMOS 协作式调度与状态机</h3>
+<p>基于芯片配套 TMOS 协作式任务系统：任务由事件 / 定时器唤醒，无独立任务栈，RAM 占用低。协作内核禁止长时间阻塞主循环，约束单次任务时长 &lt; 蓝牙连接间隔的 1/2；所有耗时操作均拆分为非阻塞状态机，每次主循环单步执行，防止蓝牙断连与任务饿死。单核 MCU 搭配内置蓝牙协议栈必须使用 TMOS，不支持阻塞式任务。</p>
+<table>
+<thead>
+<tr>
+<th>耗时操作</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>温湿度采样</td>
+<td>传感器转换等待分步推进，不阻塞主循环</td>
+</tr>
+<tr>
+<td>墨水屏刷新</td>
+<td>拆分为复位、等待 BUSY、DMA 分段传输、刷新、休眠五步状态</td>
+</tr>
+<tr>
+<td>历史导出</td>
+<td>10080 点分多帧发送，支持进度上报、取消、超时保护</td>
+</tr>
+</tbody></table>
+<h3>5.3 硬件无关的驱动抽象</h3>
+<p>传感器与屏幕驱动均采用<strong>结构体 + 函数指针的抽象接口解耦</strong>（C 语言模拟面向对象）：实例地址与状态由结构体保存，总线读写、延时逻辑通过回调外部注入，驱动不绑定具体 I²C / SPI 实现与主控芯片。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    void</span><span style="color:#D4D4D4"> *context;</span></span>
+<span class="line"><span style="color:#569CD6">    void</span><span style="color:#D4D4D4"> (*delay_ms)(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *context, </span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> ms);</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#D4D4D4"> (*write)(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *context, </span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> addr, </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> uint8_t</span><span style="color:#D4D4D4"> *data, </span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> len);</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#D4D4D4"> (*read)(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4"> *context, </span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> addr, </span><span style="color:#569CD6">uint8_t</span><span style="color:#D4D4D4"> *data, </span><span style="color:#569CD6">size_t</span><span style="color:#D4D4D4"> len);</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">sht40_io_t</span><span style="color:#D4D4D4">;</span></span></code></pre><p>运行时可注入软件 I²C；主机单元测试时替换为测试桩即可，驱动无需修改。开机自动探测传感器，AHT30 与 SHT40 共存时优先 SHT40；未识别到传感器时报错，不写入无效数据。</p>
+<h3>5.4 墨水屏刷新与睡眠恢复</h3>
+<p>底层 SSD1619A 驱动支持局部 / 全局 / 窗口刷新，上层 U8G2 绘图，提交前转换缓冲区格式；刷新状态机分步执行，刷新期间蓝牙与按键正常响应。按数据时效自适应调整刷新间隔，仅刷新变化区域，9 次局刷触发一次全刷消残影。</p>
+<p><strong>睡眠恢复（关键设计）</strong>：深度睡眠断电后墨水屏控制器丢失片内画面缓存，若直接刷新会被强制全局刷新。设备在主控侧保存上一帧基线，唤醒时先将基线回送控制器当旧值，再下发差分局部刷新，异常自动降级全刷。</p>
+<p>驱动已开源：<a href="https://github.com/createskyblue/ssd1619a-epd" target="_blank" rel="noopener noreferrer">https://github.com/createskyblue/ssd1619a-epd</a></p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/diagram/refresh-interval.svg" alt="刷新间隔随数据变老而拉长"></p>
+<table>
+<thead>
+<tr>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%B1%8F%E5%B9%95/checkerboard.webp" alt="棋盘测试"></th>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%B1%8F%E5%B9%95/dither.webp" alt="抖动"></th>
+<th><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%B1%8F%E5%B9%95/gray16.webp" alt="4 阶灰度测试"></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>棋盘格刷新测试</td>
+<td>图像抖动效果</td>
+<td>4阶灰度显示测试</td>
+</tr>
+</tbody></table>
+<h3>5.5 数据持久化</h3>
+<p>激活码、设备配置等少量关键数据使用自研轻量组件 FlashStore，避免引入键值库 / 文件系统的开销：</p>
+<ul>
+<li><strong>极轻量</strong>：Cortex-M0、-Os 下约 500B Flash，0 静态 RAM，栈开销约 20B，零外部依赖；</li>
+<li><strong>掉电安全</strong>：A/B 双页备份依次写入，任意时刻断电至少保留一份完整数据，开机校验并自动修复损坏页；</li>
+<li><strong>易移植</strong>：仅需实现读、擦、写三个底层回调，逻辑页可跨多个物理扇区，不限制单块大小。</li>
+</ul>
+<p>组件已开源：<a href="https://github.com/createskyblue/flashstore-ab-partition" target="_blank" rel="noopener noreferrer">https://github.com/createskyblue/flashstore-ab-partition</a></p>
+<h3>5.6 蓝牙通信与上位机</h3>
+<p>蓝牙默认关闭，长按开启限时广播窗口，采用三层架构：</p>
+<ul>
+<li><strong>底层</strong>：自定义 GATT 服务实现 SPP 类虚拟串口（RX 写入、TX 通知）；</li>
+<li><strong>中间层</strong>：TinyFrame 负责字节流帧解析与校验；</li>
+<li><strong>上层</strong>：自定义业务协议，路由实时读数、历史导出等指令。</li>
+</ul>
+<p>长按开启 60 秒广播，连接后维持链路、断开重新计时、超时自动关闭；设备名 <code>TH-Plot_&lt;UID前2字节&gt;</code>。Web Bluetooth 上位机免安装，支持实时读数、曲线缩放平移、CSV 导出与激活码读写，实测吞吐约 15~60KB/s。</p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E4%B8%8A%E4%BD%8D%E6%9C%BA.webp" alt=""></p>
+<h3>5.7 历史数据导出</h3>
+<p>30 天约 40KB 历史数据采用 ChaCha20 加密传输，搭配类 MQTT QoS2 双向确认分包机制，保证不丢包、不重复：</p>
+<ul>
+<li>导出前告知总点数与时间跨度，数据拆小包有序推送并实时上报进度，上位机完整接收后回传确认才结束传输；</li>
+<li>传输期间冻结历史写入防止边发边改，采样、显示、按键保持可用；</li>
+<li>支持用户取消、断连、无进度等异常恢复，30 天数据一般数秒内导出完成。</li>
+</ul>
+<h3>5.8 加密与授权</h3>
+<p>激活码兼具功能解锁凭证与历史数据解密密钥，机制包含密钥派生、设备激活、加密传输三个环节：</p>
+<ul>
+<li><strong>密钥派生</strong>：利用芯片唯一 UID、预置盐与填充，通过 ChaCha20 确定性派生一机一码密钥；UID 相关地址与常量不硬编码，改为多步运算动态获取，增加静态分析与逆向代价；</li>
+<li><strong>激活流程</strong>：上位机读取 UID，开发者离线算号，用户写入后设备校验匹配即解锁；激活码可回读用于上位机解密；</li>
+<li><strong>加密传输</strong>：每帧生成独立随机 nonce——ChaCha20 流密码严禁复用同一密钥 + nonce 组合，否则相同明文产生重复密文，存在密码分析风险；密文与 nonce 一并下发，无有效激活码无法解密历史数据。</li>
+</ul>
+<p>安全边界：固件逆向可获取派生算法与盐，商业版本依靠芯片读保护与固件加密升级防护，开源测试版公开盐与算法仅供学习。</p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%90%AF%E5%8A%A8%E7%94%BB%E9%9D%A2.webp" alt=""></p>
+<h3>5.9 固件烧录</h3>
+<p>使用 WCH_MCU_ProgramTool 烧录：系列设为 &quot;CH581/4/5&quot;，使用 WCH-Link 烧录器并处于 &quot;WCH-LinkRV (RISC-V)&quot; 模式，选择附件中最新固件 .hex 后点击烧录。</p>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/%E7%83%A7%E5%BD%95.webp" alt="烧录接口引脚定义">
+<img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%9B%BA%E4%BB%B6%E7%83%A7%E5%BD%95.webp" alt="固件烧录工具"></p>
+<h2>6. BOM 与成本</h2>
+<p>30 套小批量嘉立创打样核算，单套均摊约 <strong>55 元</strong>（打样含 PCB 制版、贴片加工综合费用）：</p>
+<p>表格</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>单套成本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PCB 打样 + 物料 + SMT 加工（30 套合计 575 元：打样 71 + 物料 367 + 加工 137）</td>
+<td>约 19.2 元</td>
+</tr>
+<tr>
+<td>4.2 寸 SSD1619A 墨水屏</td>
+<td>18 元</td>
+</tr>
+<tr>
+<td>两节 7 号电池 + 卡簧 + 磁铁</td>
+<td>5 元</td>
+</tr>
+<tr>
+<td>3D 打印外壳</td>
+<td>10 元</td>
+</tr>
+<tr>
+<td><strong>小批量打样合计</strong></td>
+<td><strong>约 52 元</strong></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>说明：上表为嘉立创平台整套打样报价。拆分外购器件参考行情：主控 CH584F 约 3.5 元；SHT40 温湿度传感器约 4.4 元；FPC 连接器 0.33 元；SSD1619A 墨水屏全新货源约 24 元，瑕疵屏幕可低至 5 元；其余阻容等零散小件合计约 3 元。</p>
+<p>打样阶段 SMT 制版、工程服务会带来额外均摊开销；实现大批量采购与拼板生产后，单板电子部分具备较大降本空间，因此期待对接具备量产能力的伙伴开展量产合作，优化整机成本。</p>
+</blockquote>
+<p>成本主要来自外购器件（墨水屏约 18 元、传感器约 5 元），主控成本较低；小批量均摊偏高属打样特性。量产拼板后不含屏幕、传感器的电子单板可降至 10 元以内，外购件与基础加工费为成本底线。</p>
+<h2>7. 大赛LOGO验证</h2>
+<p><img src="/posts/CH584F_EPD_tempHumPlot/img/%E5%AE%9E%E6%8B%8D/%E5%A4%A7%E8%B5%9BLOGO%E9%AA%8C%E8%AF%81.webp" alt="大赛LOGO验证_嘉立创电子设计大赛"></p>
+<h2>8. 项目演示</h2>
+<p><a href="https://www.bilibili.com/video/BV1zFaq6SEEr/" target="_blank" rel="noopener noreferrer">https://www.bilibili.com/video/BV1zFaq6SEEr/</a></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-10-05 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=CH584F_EPD_tempHumPlot');
+  }
+  </script>
+</body>
+</html>

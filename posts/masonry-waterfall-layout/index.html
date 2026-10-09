@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>博客首页卡片瀑布流：让各列高度均匀分布 - CacheRivulet小记</title>
+  <meta name="description" content="卡片瀑布流最短列优先贪心算法">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="前端">
+  <meta property="article:tag" content="Vue">
+  <meta property="article:tag" content="CSS Grid">
+  <meta property="article:tag" content="瀑布流">
+  <meta property="article:tag" content="布局算法">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:published_time" content="2026-07-04">
+  <meta property="og:title" content="博客首页卡片瀑布流：让各列高度均匀分布">
+  <meta property="og:description" content="卡片瀑布流最短列优先贪心算法">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/masonry-waterfall-layout/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/masonry-waterfall-layout/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "博客首页卡片瀑布流：让各列高度均匀分布",
+  "description": "卡片瀑布流最短列优先贪心算法",
+  "datePublished": "2026-07-04",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/masonry-waterfall-layout/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/masonry-waterfall-layout/"
+  },
+  "keywords": "前端, Vue, CSS Grid, 瀑布流, 布局算法, 性能优化"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">博客首页卡片瀑布流：让各列高度均匀分布</h1>
+  <article class="article-body">
+<p><img src="/posts/masonry-waterfall-layout/PixPin_2026-07-04_20-30-53.webp" alt="各列底部高度均匀"></p>
+<h2>一个直观的问题</h2>
+<p>想象你在整理书架。你有一堆书要放进五格书架，每本书厚度不同。如果你只是从左到右、一格一格轮流放——第一本放第一格，第二本放第二格……绕回来继续——那么很可能某一格塞满了厚书，另一格全是薄册子，五格书架看起来歪歪扭扭。</p>
+<p>博客首页的卡片瀑布流面对的是完全一样的问题。每张卡片高度不同：有封面截图的卡片比较&quot;厚&quot;（300–500px），纯文字标题卡比较&quot;薄&quot;（150–200px）。原来的做法就是轮流往各列塞卡片，完全不看每张卡片高还是矮。运气好时各列差不多，运气差时某一列比其他列长出一大截，视觉上很难看。</p>
+<p><strong>一句话：轮流分配 + 高度参差不齐 = 底部必然不平。</strong></p>
+<h2>直觉上的解法：哪列最矮就往哪列放</h2>
+<p>回到书架的例子，聪明一点的整理方式是：拿起一本书，扫一眼哪一格最空，就把书放进去。再拿下一本，继续找最空的那一格。这样不管书厚书薄，最终五格的高度一定差不多。</p>
+<p>卡片瀑布流用的就是同一套思路。每张新卡片到来时，先看看当前哪一列总高度最小，然后塞进去。这个策略在算法领域有一个名字，叫「最短列优先」。它解决的核心矛盾是：<strong>卡片高度差异很大，而轮流分配对这种差异完全视而不见。</strong></p>
+<h2>真正的难点：怎么知道每张卡片有多高</h2>
+<p>思路说清楚了只剩一个障碍——书是拿在手里的，厚度一眼能看到。但网页上的卡片高度在它真正渲染出来之前是未知的。封面截图加载出来多大？标题换了几行？这些都得到浏览器里实际跑一遍才知道。</p>
+<p>所以我们采取的办法是：<strong>不猜，直接量。</strong> 每一张卡片在真正进入瀑布流之前，先被放到一个隐藏的测量区里渲染一遍。测量区宽度和真实列完全一致，卡片在里面怎么折行、图片撑多高，跟最终效果一模一样。</p>
+<p>最初的设计是等封面图加载完再量——图片没加载时浏览器只给了一个 150px 的最小高度兜底，量出来的数字比真实值小一半以上，会严重误导最短列优先的判断。但这个串行等待带来了一个隐蔽问题：每张有封面图的卡片都要等图片加载，哪怕本地服务器图片秒开，几十张卡片累积的异步等待也会产生可感知的卡顿。排在队列末尾的卡片，要等前面所有卡片的图片全部加载完才能轮到自己，底部最后几张卡像是&quot;卡住了&quot;。</p>
+<p>后来的改进是：<strong>不等待，先量再修正。</strong> 卡片渲染后立即测量当前高度（图片未加载时至少有 min-height 兜底），直接放入瀑布流。同时监听实际卡片中图片的加载完成事件——如果图片加载后实际高度变化超过阈值，就更新高度记录并重排瀑布流。这样卡片流出的速度不再被图片加载阻塞，而最终各列高度仍然收敛到精确值。</p>
+<h2>逐张处理，一张没出来下一张不许开始</h2>
+<p>每一张卡片严格按原始顺序排队进入测量区：渲染 → 量高度（不等图片） → 找当前最矮的列放进去 → 从透明渐入 → 图片后台加载完后必要时修正高度并重排。整个过程串行执行，当前卡片没有完成放置步骤之前，下一张卡片绝不开始。</p>
+<p>这样保证了两个关键性质：</p>
+<p>一是<strong>列高度优先基于实测数据做决策</strong>。每放入一张卡片时，先用量到的当前高度（图片可能还在后台加载），最短列优先算法拿到的是当前最准确的输入。图片加载完成后如果高度有显著变化，自动修正记录并触发重排。在本地服务器上绝大多数图片在卡片放置时已经加载完，修正触发极少。</p>
+<p>二是<strong>卡片按原始顺序依次出现</strong>。无论文字卡还是图片卡，都不需要等封面图加载完就能先进入瀑布流，所以每张卡片流出的间隔均匀。顺序不会乱——不会出现&quot;文字卡全部堆在上面、图片卡全部压在底下&quot;的情况。</p>
+<h2>每张卡片独立渐入</h2>
+<p>渐入动画不是做在整个网格上，而是做在每一张卡片上。卡片在测量区完成测量后，被移入瀑布流的某一列，此时它是完全透明的。等浏览器渲染完第一帧之后，再把透明度从 0 过渡到 1，播放 0.5 秒的淡入动画。</p>
+<p>这里有一个容易踩的坑：如果刚把卡片插入 DOM 就立刻把透明度设为 1，浏览器还没来得及画&quot;透明&quot;的第一帧，transition 根本不会触发——它不知道从哪开始过渡。解决办法是在设置透明度之前插入一个 <code>requestAnimationFrame</code>，强制浏览器先画一帧初始状态。</p>
+<h2>处理并发和分页</h2>
+<p>卡片逐个处理的逻辑用一个互斥锁保护起来，确保同一时间只会有一个处理循环在跑。如果处理过程中有新卡片到达（比如用户滚动了页面触发了分页），当前循环结束后会自动重入再跑一轮。</p>
+<p>分页加载也被限流了：只要还有卡片在排队等待逐个处理，哨兵就不会触发下一页。等当前批次全部处理完再判断是否真的需要加载更多。这防止了卡片逐个加载时页面高度不够、哨兵一直可见、一次性把所有分页全部拉下来的问题。</p>
+<p>手机上还有一个额外的坑：两列布局下，两列的实际高度可能差很多。原来整个瀑布流只有一个哨兵放在网格底部，它的位置由最高的那一列决定。如果左列全是文字卡（矮），右列全是截图卡（高），哨兵在右列最下方——用户滚到左列底部时看到大片空白，但哨兵还没进入视口，分页不会触发。解决方案是给每一列底部各放一个哨兵，用 IntersectionObserver 同时观察所有列的哨兵，任一列进入视口就触发下一页。这样无论各列高度差多少，用户滚到最短列的底部时也能正常加载。</p>
+<h2>效果</h2>
+<p>所有卡片按顺序逐张浮现，0.5 秒淡入，不会被封面图加载阻塞。各列高度基于 DOM 实测值做最短列优先分配，底部均匀；图片加载完成后有修正机制兜底。分页加载通过每列独立哨兵触发，手机端两列高度不均时也能正常翻页。整个流程的额外性能开销极小——每张卡片只在隐藏测量区多渲染了一次，对几十张卡片的首页来说完全无感。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-04 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=masonry-waterfall-layout');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>万用表短接表笔读出微安级电流，来源是表笔热电势 - CacheRivulet小记</title>
+  <meta name="description" content="短接表笔出现微安级电流，表笔热电势干扰微弱电流测量">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="干扰">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="测试">
+  <meta property="article:published_time" content="2026-09-11">
+  <meta property="og:title" content="万用表短接表笔读出微安级电流，来源是表笔热电势">
+  <meta property="og:description" content="短接表笔出现微安级电流，表笔热电势干扰微弱电流测量">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/multimeter-probe-thermal-emf/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/multimeter-probe-thermal-emf/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "万用表短接表笔读出微安级电流，来源是表笔热电势",
+  "description": "短接表笔出现微安级电流，表笔热电势干扰微弱电流测量",
+  "datePublished": "2026-09-11",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/multimeter-probe-thermal-emf/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/multimeter-probe-thermal-emf/"
+  },
+  "keywords": "嵌入式, 工程调试, 故障诊断, 干扰, 低功耗, 测试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">万用表短接表笔读出微安级电流，来源是表笔热电势</h1>
+  <article class="article-body">
+<h1>万用表短接表笔读出微安级电流，来源是表笔热电势</h1>
+<p>测低功耗器件电流时，开路电流档接近 0，短接表笔也应接近 0。实测短接后仍有微安级残余，手温或打火机加热单侧笔尖会让读数更大，确认干扰来自表笔热电势。</p>
+<h2>现象</h2>
+<p>仪器：RIGOL DM3058E，5½ 位台式万用表，直流电流档。</p>
+<p>开路时电流档为 0。先碰到过红色表笔笔尖，再去短接测量，读数莫名其妙停在两三个微安，没有回零：</p>
+<p><img src="/posts/multimeter-probe-thermal-emf/01-hand-probe.webp" alt="先碰过红色表笔笔尖后短接，电流约 2.249 µA"></p>
+<h2>红色表笔电流端子与表笔尖的插入端对调</h2>
+<p>同一只红色表笔，把电流端子与表笔尖分别改接到电流档的正、负端子。</p>
+<p>红色表笔的电流端子接正电流端子，红色表笔它自己插入负端子，短接后读数为 +6.825 µA：</p>
+<p><img src="/posts/multimeter-probe-thermal-emf/02-jack-a.webp" alt="红色表笔电流端子接正、表笔插入负，读数 6.825 µA"></p>
+<p>红色表笔的电流端子接负电流端子，红色表笔插入正端子，短接后读数变为 −1.270 µA：</p>
+<p><img src="/posts/multimeter-probe-thermal-emf/03-jack-b.webp" alt="红色表笔电流端子接负、表笔插入正，读数 −1.270 µA"></p>
+<p>端子对调后，残余电流符号相反。</p>
+<h2>打火机加热表笔</h2>
+<p>用打火机分别加热红色表笔与另一只表笔的笔尖，再短接读数：</p>
+<table>
+<thead>
+<tr>
+<th>加热红色表笔</th>
+<th>加热黑色表笔</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/posts/multimeter-probe-thermal-emf/04-heat-red.webp" alt="打火机加热红色表笔"></td>
+<td><img src="/posts/multimeter-probe-thermal-emf/06-heat-black.webp" alt="打火机加热黑色表笔"></td>
+</tr>
+<tr>
+<td>加热后短接：+40.592 µA</td>
+<td>加热后短接：−107.194 µA</td>
+</tr>
+<tr>
+<td><img src="/posts/multimeter-probe-thermal-emf/05-heat-red-reading.webp" alt="加热红色表笔后的读数"></td>
+<td><img src="/posts/multimeter-probe-thermal-emf/07-heat-black-reading.webp" alt="加热黑色表笔后的读数"></td>
+</tr>
+</tbody></table>
+<p>单侧笔尖被加热，短接回路里出现几十到上百微安；加热不同侧，读数符号也不同。</p>
+<p>加热实验过程：</p>
+<video controls loop playsinline width="100%" style="border-radius: 12px;">
+  <source src="/posts/multimeter-probe-thermal-emf/lighter-demo.mp4" type="video/mp4">
+  你的浏览器不支持视频播放。
+</video>
+
+<p>放置一段时间后，两只表笔温度接近，再短接读数降到 0.135 µA：</p>
+<p><img src="/posts/multimeter-probe-thermal-emf/08-equilibrium.webp" alt="热平衡后短接，电流 0.135 µA"></p>
+<h2>热电势来源</h2>
+<p>热电势并不要求两只笔尖基材一定不同。回路里凡是异种金属结点，笔尖镀膜与基材、镀层磨损处、接插件与香蕉头、氧化膜两侧，只要结点两侧存在温差，就会按塞贝克效应产生热电势。手温、打火机火焰都在制造局部温度差；电流档把热电势驱动的电流一并读出。手碰过笔尖后，汗液还可能在镀膜与氧化层之间形成微弱原电池，再叠上一点直流分量。</p>
+<p>表笔插入极性决定热电势在电流表里呈现正号还是负号。哪一侧更热，热电势方向就跟着变。温度差消失后，读数回到零点附近的残余值（本次约 0.135 µA）。</p>
+<p>热电势也出现在仪器内部。开机时间一长，机内功率器件、电源与外壳之间会形成温差，输入回路和开关接点上的异种金属接头同样按塞贝克效应产生毫伏级以下的寄生电势。这部分零点残余在预热过程中会缓慢变化，只能靠预热稳定、扣零或相对测量压下去，消不掉。</p>
+<p><img src="/posts/multimeter-probe-thermal-emf/thermal-emf.svg" alt="表笔短接回路里的热电势示意"></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-11 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=multimeter-probe-thermal-emf');
+  }
+  </script>
+</body>
+</html>

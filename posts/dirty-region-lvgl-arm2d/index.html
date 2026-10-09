@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>嵌入式 GUI 脏区域局部刷新机制：LVGL 与 ARM-2D 源码级实现对比 - CacheRivulet小记</title>
+  <meta name="description" content="LVGL脏区域+ARM-2D提高帧率，减少刷新数据量">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式GUI">
+  <meta property="article:tag" content="LVGL">
+  <meta property="article:tag" content="ARM-2D">
+  <meta property="article:tag" content="脏区域">
+  <meta property="article:tag" content="局部刷新">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:published_time" content="2026-05-31">
+  <meta property="og:title" content="嵌入式 GUI 脏区域局部刷新机制：LVGL 与 ARM-2D 源码级实现对比">
+  <meta property="og:description" content="LVGL脏区域+ARM-2D提高帧率，减少刷新数据量">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/dirty-region-lvgl-arm2d/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/dirty-region-lvgl-arm2d/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "嵌入式 GUI 脏区域局部刷新机制：LVGL 与 ARM-2D 源码级实现对比",
+  "description": "LVGL脏区域+ARM-2D提高帧率，减少刷新数据量",
+  "datePublished": "2026-05-31",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/dirty-region-lvgl-arm2d/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/dirty-region-lvgl-arm2d/"
+  },
+  "keywords": "嵌入式GUI, LVGL, ARM-2D, 脏区域, 局部刷新, MCU"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">嵌入式 GUI 脏区域局部刷新机制：LVGL 与 ARM-2D 源码级实现对比</h1>
+  <article class="article-body">
+<h1>嵌入式 GUI 脏区域局部刷新机制：LVGL 与 ARM-2D 源码级实现对比</h1>
+<p>屏幕上只有一个小按钮变了，为什么要整屏重画？脏区域（Dirty Region）机制记录哪些区域内容失效，刷新时只重绘这些区域，减少 CPU 绘制和 LCD 传输开销。</p>
+<h2>两种策略：脏矩形 vs 脏矩阵</h2>
+<p><strong>脏矩形</strong>：记录每个变化区域的精确矩形坐标。区域精确，但合并算法复杂。LVGL 采用此方案。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    int</span><span style="color:#D4D4D4"> x, y, w, h;</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">dirty_rect_t</span><span style="color:#D4D4D4">;</span></span></code></pre><p><strong>脏矩阵</strong>：把屏幕切成网格，用二维数组记录哪些块脏了。逻辑简单、内存可控，适合低端 MCU。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> TILE_W  </span><span style="color:#B5CEA8">16</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> TILE_H  </span><span style="color:#B5CEA8">16</span></span>
+<span class="line"><span style="color:#569CD6">uint8_t</span><span style="color:#9CDCFE"> dirty_matrix</span><span style="color:#D4D4D4">[ROWS][COLS];</span><span style="color:#6A9955">  // 0=干净, 1=脏</span></span></code></pre><p>下面是一个 320×240 屏幕按 16×16 分块的脏矩阵可视化。按钮区域 (x=30, y=40, w=80, h=48) 发生变化，对应网格被标脏：</p>
+<div style="margin:20px 0;text-align:center;">
+<svg viewBox="0 0 440 350" style="max-width:500px;width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+  <text x="220" y="18" text-anchor="middle" font-size="11" fill="#64748b">320×240 屏幕 · 16×16 分块 · 20×15 网格</text>
+  <g transform="translate(30,30)">
+    <!-- grid bg -->
+    <rect x="0" y="0" width="380" height="300" fill="#f0fdf4" stroke="#cbd5e1" stroke-width="0.5"/>
+    <!-- grid lines -->
+    <g stroke="#d1d5db" stroke-width="0.3" opacity="0.6">
+      <line x1="0" y1="20" x2="380" y2="20"/><line x1="0" y1="40" x2="380" y2="40"/><line x1="0" y1="60" x2="380" y2="60"/><line x1="0" y1="80" x2="380" y2="80"/><line x1="0" y1="100" x2="380" y2="100"/><line x1="0" y1="120" x2="380" y2="120"/><line x1="0" y1="140" x2="380" y2="140"/><line x1="0" y1="160" x2="380" y2="160"/><line x1="0" y1="180" x2="380" y2="180"/><line x1="0" y1="200" x2="380" y2="200"/><line x1="0" y1="220" x2="380" y2="220"/><line x1="0" y1="240" x2="380" y2="240"/><line x1="0" y1="260" x2="380" y2="260"/><line x1="0" y1="280" x2="380" y2="280"/>
+      <line x1="20" y1="0" x2="20" y2="300"/><line x1="40" y1="0" x2="40" y2="300"/><line x1="60" y1="0" x2="60" y2="300"/><line x1="80" y1="0" x2="80" y2="300"/><line x1="100" y1="0" x2="100" y2="300"/><line x1="120" y1="0" x2="120" y2="300"/><line x1="140" y1="0" x2="140" y2="300"/><line x1="160" y1="0" x2="160" y2="300"/><line x1="180" y1="0" x2="180" y2="300"/><line x1="200" y1="0" x2="200" y2="300"/><line x1="220" y1="0" x2="220" y2="300"/><line x1="240" y1="0" x2="240" y2="300"/><line x1="260" y1="0" x2="260" y2="300"/><line x1="280" y1="0" x2="280" y2="300"/><line x1="300" y1="0" x2="300" y2="300"/><line x1="320" y1="0" x2="320" y2="300"/><line x1="340" y1="0" x2="340" y2="300"/><line x1="360" y1="0" x2="360" y2="300"/>
+    </g>
+    <!-- dirty tiles: row 2-5, col 1-6 -->
+    <rect x="20" y="40" width="120" height="80" fill="#fecaca" stroke="#ef4444" stroke-width="1.5" rx="1"/>
+    <!-- button outline -->
+    <rect x="30" y="40" width="80" height="48" rx="3" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="70" y="68" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="600">按钮</text>
+    <!-- col numbers -->
+    <text x="10" y="316" text-anchor="middle" font-size="7" fill="#94a3b8">0</text>
+    <text x="30" y="316" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="700">1</text>
+    <text x="50" y="316" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="700">2</text>
+    <text x="70" y="316" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="700">3</text>
+    <text x="90" y="316" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="700">4</text>
+    <text x="110" y="316" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="700">5</text>
+    <text x="130" y="316" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="700">6</text>
+    <text x="150" y="316" text-anchor="middle" font-size="7" fill="#94a3b8">7</text>
+    <text x="370" y="316" text-anchor="middle" font-size="7" fill="#94a3b8">19</text>
+    <!-- row numbers -->
+    <text x="-6" y="14" text-anchor="end" font-size="7" fill="#94a3b8">0</text>
+    <text x="-6" y="34" text-anchor="end" font-size="7" fill="#94a3b8">1</text>
+    <text x="-6" y="54" text-anchor="end" font-size="7" fill="#ef4444" font-weight="700">2</text>
+    <text x="-6" y="74" text-anchor="end" font-size="7" fill="#ef4444" font-weight="700">3</text>
+    <text x="-6" y="94" text-anchor="end" font-size="7" fill="#ef4444" font-weight="700">4</text>
+    <text x="-6" y="114" text-anchor="end" font-size="7" fill="#ef4444" font-weight="700">5</text>
+    <text x="-6" y="134" text-anchor="end" font-size="7" fill="#94a3b8">6</text>
+    <text x="-6" y="294" text-anchor="end" font-size="7" fill="#94a3b8">14</text>
+    <!-- dimension labels -->
+    <text x="80" y="335" text-anchor="middle" font-size="8" fill="#64748b">← col 1~6 (x: 16~112px) →</text>
+    <text x="-22" y="82" text-anchor="middle" font-size="8" fill="#64748b" transform="rotate(-90,-22,82)">← row 2~5 →</text>
+  </g>
+</svg>
+<div style="font-size:12px;color:#64748b;margin-top:6px;">
+  <span style="display:inline-block;width:12px;height:12px;background:#fecaca;border:1px solid #ef4444;vertical-align:middle;margin-right:4px;"></span>脏网格 24/300 = 8%
+  <span style="margin-left:16px;display:inline-block;width:12px;height:12px;background:#f0fdf4;border:1px solid #86efac;vertical-align:middle;margin-right:4px;"></span>干净网格
+  <span style="margin-left:16px;border:1.5px dashed #2563eb;display:inline-block;width:12px;height:12px;vertical-align:middle;margin-right:4px;"></span>按钮实际区域
+</div>
+</div>
+
+<p>标脏计算：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>col_start = 30 / 16 = 1        col_end = (30+80-1) / 16 = 6</span></span>
+<span class="line"><span>row_start = 40 / 16 = 2        row_end = (40+48-1) / 16 = 5</span></span>
+<span class="line"><span>→ 标记 row 2~5, col 1~6 共 4×6 = 24 个网格块</span></span></code></pre><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>脏矩形</th>
+<th>脏矩阵</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>精度</td>
+<td>像素级</td>
+<td>块级</td>
+</tr>
+<tr>
+<td>内存</td>
+<td>取决于矩形数量</td>
+<td>固定</td>
+</tr>
+<tr>
+<td>合并</td>
+<td>复杂</td>
+<td>天然连续</td>
+</tr>
+<tr>
+<td>代表</td>
+<td>LVGL、Qt</td>
+<td>部分低端嵌入式 GUI</td>
+</tr>
+</tbody></table>
+<p>全量刷新 vs 局部刷新的 SPI 传输量对比（240×240 RGB565 屏幕）：</p>
+<div style="margin:16px 0;">
+<svg viewBox="0 0 520 180" style="max-width:560px;width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+  <text x="260" y="20" text-anchor="middle" font-size="11" fill="#64748b">SPI 传输量对比（240×240 RGB565）</text>
+  <!-- full refresh bar -->
+  <text x="10" y="58" font-size="10" fill="#334155">全量刷新</text>
+  <rect x="100" y="44" width="360" height="24" fill="#fca5a5" stroke="#ef4444" stroke-width="1" rx="4"/>
+  <text x="280" y="60" text-anchor="middle" font-size="9" fill="#991b1b" font-weight="600">115,200 bytes (240×240×2)</text>
+  <!-- partial refresh bar -->
+  <text x="10" y="100" font-size="10" fill="#334155">局部刷新</text>
+  <rect x="100" y="86" width="60" height="24" fill="#86efac" stroke="#16a34a" stroke-width="1" rx="4"/>
+  <text x="170" y="102" text-anchor="start" font-size="9" fill="#166534" font-weight="600">6,400 bytes (80×40×2)</text>
+  <!-- ratio -->
+  <text x="260" y="140" text-anchor="middle" font-size="11" fill="#1d4ed8" font-weight="700">局部刷新仅需 5.6% 的数据量，差 18 倍</text>
+  <text x="260" y="158" text-anchor="middle" font-size="9" fill="#64748b">SPI 40MHz 下：全量 ~23ms vs 局部 ~1.3ms（不含绘制开销）</text>
+</svg>
+</div>
+
+<h2>LVGL 的脏区域实现</h2>
+<h3>核心数据结构</h3>
+<p>脏区域管理在 <code>lv_display_private.h</code> 中定义：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> LV_INV_BUF_SIZE </span><span style="color:#B5CEA8">32</span><span style="color:#6A9955">  // 最多记录 32 个脏区域</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">struct </span><span style="color:#4EC9B0">_lv_display_t</span><span style="color:#569CD6"> {</span></span>
+<span class="line"><span style="color:#4EC9B0">    lv_area_t</span><span style="color:#9CDCFE">  inv_areas</span><span style="color:#D4D4D4">[LV_INV_BUF_SIZE];</span><span style="color:#6A9955">      // 32 个矩形区域</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#9CDCFE">    inv_area_joined</span><span style="color:#D4D4D4">[LV_INV_BUF_SIZE];</span><span style="color:#6A9955"> // 合并标记</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4">   inv_p;</span><span style="color:#6A9955">                            // 当前脏区域计数</span></span>
+<span class="line"><span style="color:#4EC9B0">    lv_display_render_mode_t</span><span style="color:#D4D4D4"> render_mode;</span><span style="color:#6A9955">        // PARTIAL / DIRECT / FULL</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4">   tile_cnt : </span><span style="color:#B5CEA8">8</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">                     // 并行渲染 tile 数量</span></span>
+<span class="line"><span style="color:#4EC9B0">    lv_draw_buf_t</span><span style="color:#D4D4D4"> *buf_1;</span><span style="color:#6A9955">    // 缓冲区 1</span></span>
+<span class="line"><span style="color:#4EC9B0">    lv_draw_buf_t</span><span style="color:#D4D4D4"> *buf_2;</span><span style="color:#6A9955">    // 缓冲区 2（双缓冲）</span></span>
+<span class="line"><span style="color:#4EC9B0">    lv_draw_buf_t</span><span style="color:#D4D4D4"> *buf_act;</span><span style="color:#6A9955">  // 当前活动缓冲区</span></span>
+<span class="line"><span style="color:#4EC9B0">    lv_display_flush_cb_t</span><span style="color:#D4D4D4"> flush_cb;</span><span style="color:#6A9955">  // 写入 LCD 的回调</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><p><code>lv_area_t</code> 用四个坐标定义矩形：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    int32_t</span><span style="color:#D4D4D4"> x1, y1;</span><span style="color:#6A9955">  // 左上角</span></span>
+<span class="line"><span style="color:#569CD6">    int32_t</span><span style="color:#D4D4D4"> x2, y2;</span><span style="color:#6A9955">  // 右下角</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">lv_area_t</span><span style="color:#D4D4D4">;</span></span></code></pre><h3>标脏流程</h3>
+<p>控件状态变化时，调用链为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>lv_obj_invalidate(obj)</span></span>
+<span class="line"><span>  → obj_invalidate_area_internal(disp, obj, &#x26;obj_coords)</span></span>
+<span class="line"><span>    → invalidate_area_core(obj, &#x26;area_tmp)</span></span>
+<span class="line"><span>      → lv_inv_area(disp, area_p)</span></span></code></pre><p><code>lv_inv_area()</code> 核心逻辑（<code>src/core/lv_refr.c</code>）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#4EC9B0">lv_result_t</span><span style="color:#DCDCAA"> lv_inv_area</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">lv_display_t</span><span style="color:#D4D4D4"> * </span><span style="color:#9CDCFE">disp</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">const</span><span style="color:#4EC9B0"> lv_area_t</span><span style="color:#D4D4D4"> * </span><span style="color:#9CDCFE">area_p</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#6A9955">    // 1. 裁剪到屏幕范围</span></span>
+<span class="line"><span style="color:#4EC9B0">    lv_area_t</span><span style="color:#D4D4D4"> com_area;</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4">(!</span><span style="color:#DCDCAA">lv_area_intersect</span><span style="color:#D4D4D4">(&#x26;com_area, area_p, &#x26;scr_area))</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> LV_RESULT_INVALID;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 2. 全屏模式：直接标记整个屏幕</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">render_mode</span><span style="color:#D4D4D4"> == LV_DISPLAY_RENDER_MODE_FULL) {</span></span>
+<span class="line"><span style="color:#9CDCFE">        disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">] = scr_area;</span></span>
+<span class="line"><span style="color:#9CDCFE">        disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#D4D4D4"> LV_RESULT_OK;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 3. 去重：如果新区域已被包含，跳过</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4">(i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; </span><span style="color:#9CDCFE">disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4">; i++) {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">lv_area_is_in</span><span style="color:#D4D4D4">(&#x26;com_area, &#x26;</span><span style="color:#9CDCFE">disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[i], </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">))</span></span>
+<span class="line"><span style="color:#C586C0">            return</span><span style="color:#D4D4D4"> LV_RESULT_OK;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    // 4. 缓冲区满则回退到整屏刷新</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4"> >= LV_INV_BUF_SIZE) {</span></span>
+<span class="line"><span style="color:#9CDCFE">        disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        tmp_area_p = &#x26;scr_area;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#DCDCAA">    lv_area_copy</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[</span><span style="color:#9CDCFE">disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4">], tmp_area_p);</span></span>
+<span class="line"><span style="color:#9CDCFE">    disp</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4">++;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>区域合并</h3>
+<p>刷新前，<code>lv_refr_join_area()</code> 合并重叠或相邻的脏区域：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> lv_refr_join_area</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4">(join_in = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; join_in &#x3C; </span><span style="color:#9CDCFE">disp_refr</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4">; join_in++) {</span></span>
+<span class="line"><span style="color:#C586C0">        for</span><span style="color:#D4D4D4">(join_from = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; join_from &#x3C; </span><span style="color:#9CDCFE">disp_refr</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">inv_p</span><span style="color:#D4D4D4">; join_from++) {</span></span>
+<span class="line"><span style="color:#C586C0">            if</span><span style="color:#D4D4D4">(!</span><span style="color:#DCDCAA">lv_area_is_on</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[join_in], &#x26;</span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[join_from]))</span></span>
+<span class="line"><span style="color:#C586C0">                continue</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">            lv_area_join</span><span style="color:#D4D4D4">(&#x26;joined_area, &#x26;</span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[join_in], &#x26;</span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[join_from]);</span></span>
+<span class="line"><span style="color:#6A9955">            // 只有合并后面积更小时才合并</span></span>
+<span class="line"><span style="color:#C586C0">            if</span><span style="color:#D4D4D4">(</span><span style="color:#DCDCAA">lv_area_get_size</span><span style="color:#D4D4D4">(&#x26;joined_area) &#x3C;</span></span>
+<span class="line"><span style="color:#DCDCAA">               lv_area_get_size</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[join_in]) +</span></span>
+<span class="line"><span style="color:#DCDCAA">               lv_area_get_size</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[join_from])) {</span></span>
+<span class="line"><span style="color:#DCDCAA">                lv_area_copy</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">inv_areas</span><span style="color:#D4D4D4">[join_in], &#x26;joined_area);</span></span>
+<span class="line"><span style="color:#9CDCFE">                inv_area_joined</span><span style="color:#D4D4D4">[join_from] = </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">            }</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>刷新流程</h3>
+<p>定时器驱动 <code>lv_display_refr_timer()</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>lv_obj_update_layout()    → 更新布局</span></span>
+<span class="line"><span>lv_refr_join_area()       → 合并脏区域</span></span>
+<span class="line"><span>refr_sync_areas()         → 同步双缓冲区</span></span>
+<span class="line"><span>refr_invalid_areas()      → 逐区域渲染</span></span>
+<span class="line"><span>清空 inv_areas[]           → 完成</span></span></code></pre><p>在 PARTIAL 模式下，<code>refr_invalid_areas()</code> 将脏区域切分为多个 row band：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">int32_t</span><span style="color:#D4D4D4"> max_row = </span><span style="color:#DCDCAA">get_max_row</span><span style="color:#D4D4D4">(disp, w, h);</span></span>
+<span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4">(row = inv_a.y1; row &#x3C;= inv_a.y2; row += max_row) {</span></span>
+<span class="line"><span style="color:#D4D4D4">    sub_area = {</span><span style="color:#9CDCFE">inv_a</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">x1</span><span style="color:#D4D4D4">, row, </span><span style="color:#9CDCFE">inv_a</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">x2</span><span style="color:#D4D4D4">, row+max_row-</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#DCDCAA">    refr_area</span><span style="color:#D4D4D4">(&#x26;sub_area, y_off);</span></span>
+<span class="line"><span style="color:#DCDCAA">    draw_buf_flush</span><span style="color:#D4D4D4">(disp);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><div style="margin:20px 0;text-align:center;">
+<svg viewBox="0 0 520 300" style="max-width:560px;width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+  <text x="260" y="18" text-anchor="middle" font-size="11" fill="#64748b">LVGL PARTIAL 模式：脏区域 → row band 切分</text>
+  <!-- left: dirty area -->
+  <g transform="translate(30,40)">
+    <text x="60" y="-4" text-anchor="middle" font-size="10" fill="#334155" font-weight="600">脏区域</text>
+    <rect x="0" y="0" width="120" height="200" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" rx="2"/>
+    <rect x="10" y="20" width="100" height="160" fill="#fecaca" stroke="#ef4444" stroke-width="1.5" rx="1"/>
+    <text x="60" y="105" text-anchor="middle" font-size="9" fill="#991b1b">inv_a</text>
+    <text x="60" y="118" text-anchor="middle" font-size="8" fill="#991b1b">(x1,y1)~(x2,y2)</text>
+    <text x="60" y="215" text-anchor="middle" font-size="8" fill="#94a3b8">整个屏幕</text>
+  </g>
+  <!-- arrow -->
+  <g transform="translate(175,120)">
+    <text x="25" y="-2" text-anchor="middle" font-size="9" fill="#64748b">切分</text>
+    <line x1="0" y1="10" x2="40" y2="10" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    <defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#64748b"/></marker></defs>
+  </g>
+  <!-- right: row bands -->
+  <g transform="translate(240,40)">
+    <text x="120" y="-4" text-anchor="middle" font-size="10" fill="#334155" font-weight="600">Row Band 切分结果</text>
+    <!-- band 0 -->
+    <rect x="0" y="20" width="240" height="36" fill="#bfdbfe" stroke="#2563eb" stroke-width="1" rx="2"/>
+    <text x="120" y="42" text-anchor="middle" font-size="9" fill="#1e40af">Band 0: row 0~max_row-1</text>
+    <text x="250" y="42" text-anchor="start" font-size="8" fill="#64748b">→ refr + flush</text>
+    <!-- band 1 -->
+    <rect x="0" y="60" width="240" height="36" fill="#93c5fd" stroke="#2563eb" stroke-width="1" rx="2"/>
+    <text x="120" y="82" text-anchor="middle" font-size="9" fill="#1e40af">Band 1: row max_row~2*max_row-1</text>
+    <text x="250" y="82" text-anchor="start" font-size="8" fill="#64748b">→ refr + flush</text>
+    <!-- band 2 -->
+    <rect x="0" y="100" width="240" height="36" fill="#bfdbfe" stroke="#2563eb" stroke-width="1" rx="2"/>
+    <text x="120" y="122" text-anchor="middle" font-size="9" fill="#1e40af">Band 2: row 2*max_row~3*max_row-1</text>
+    <text x="250" y="122" text-anchor="start" font-size="8" fill="#64748b">→ refr + flush</text>
+    <!-- dots -->
+    <text x="120" y="150" text-anchor="middle" font-size="14" fill="#94a3b8">···</text>
+    <!-- last band -->
+    <rect x="0" y="155" width="240" height="28" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="2" stroke-dasharray="3,2"/>
+    <text x="120" y="173" text-anchor="middle" font-size="9" fill="#1e40af">Band N: row N*max_row~y2 (剩余)</text>
+    <text x="250" y="173" text-anchor="start" font-size="8" fill="#64748b">→ refr + flush</text>
+    <!-- annotation -->
+    <text x="120" y="205" text-anchor="middle" font-size="9" fill="#059669">每个 band 独立渲染 + flush 到 LCD</text>
+    <text x="120" y="220" text-anchor="middle" font-size="8" fill="#64748b">max_row = draw_buf_size / stride</text>
+  </g>
+</svg>
+</div>
+
+<h3>三种渲染模式</h3>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>Buffer</th>
+<th>脏区域处理</th>
+<th>RAM</th>
+<th>适用平台</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PARTIAL</td>
+<td>小 buffer</td>
+<td>切分为 row band 逐块渲染</td>
+<td>极低</td>
+<td>STM32/ESP32</td>
+</tr>
+<tr>
+<td>DIRECT</td>
+<td>完整 framebuffer</td>
+<td>直接渲染脏区域</td>
+<td>高</td>
+<td>Linux/高配嵌入式</td>
+</tr>
+<tr>
+<td>FULL</td>
+<td>完整 framebuffer</td>
+<td>忽略脏区域，全屏刷新</td>
+<td>最高</td>
+<td>电子墨水屏</td>
+</tr>
+</tbody></table>
+<h2>ARM-2D 的脏区域实现</h2>
+<p>ARM-2D（ARM-software/arm-2d）是 ARM 官方的 2D 图形加速库，专为 Cortex-M 优化。脏区域管理放在 Helper 层，每个 Scene 独立管理。</p>
+<h3>核心数据结构</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#4EC9B0"> arm_2d_region_t</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_location_t</span><span style="color:#D4D4D4"> tLocation;</span><span style="color:#6A9955">  // {int16_t iX, iY}</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_size_t</span><span style="color:#D4D4D4">     tSize;</span><span style="color:#6A9955">      // {int16_t iWidth, iHeight}</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">arm_2d_region_t</span><span style="color:#D4D4D4">;</span></span></code></pre><p><code>arm_2d_tile_t</code> 同时描述区域和像素缓冲区：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">struct</span><span style="color:#4EC9B0"> arm_2d_tile_t</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    struct</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">        uint8_t</span><span style="color:#D4D4D4"> bIsRoot           : </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">        uint8_t</span><span style="color:#D4D4D4"> bVirtualScreen    : </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">  // 用于脏区域计算</span></span>
+<span class="line"><span style="color:#569CD6">        uint8_t</span><span style="color:#D4D4D4"> u3ExtensionID     : </span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">    } tInfo;</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_region_t</span><span style="color:#D4D4D4"> tRegion;</span></span>
+<span class="line"><span style="color:#569CD6">    union</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#4EC9B0">        arm_2d_tile_t</span><span style="color:#D4D4D4"> *ptParent;</span><span style="color:#6A9955">   // 父 tile</span></span>
+<span class="line"><span style="color:#569CD6">        uint16_t</span><span style="color:#D4D4D4">      *phwBuffer;</span><span style="color:#6A9955">  // 像素缓冲区</span></span>
+<span class="line"><span style="color:#D4D4D4">    };</span></span>
+<span class="line"><span style="color:#D4D4D4">};</span></span></code></pre><h3>配置参数</h3>
+<p>在 <code>arm_2d_disp_adapter_0.h</code> 中配置：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> __DISP0_CFG_OPTIMIZE_DIRTY_REGIONS__     </span><span style="color:#B5CEA8">1</span><span style="color:#6A9955">   // 启用优化</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> __DISP0_CFG_DIRTY_REGION_POOL_SIZE__      </span><span style="color:#B5CEA8">8</span><span style="color:#6A9955">   // 脏区域池大小</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> __DISP0_CFG_PFB_BLOCK_WIDTH__             </span><span style="color:#B5CEA8">320</span><span style="color:#6A9955"> // PFB 块宽度</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> __DISP0_CFG_PFB_BLOCK_HEIGHT__            </span><span style="color:#B5CEA8">24</span><span style="color:#6A9955">  // PFB 块高度</span></span>
+<span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> __DISP0_CFG_PFB_HEAP_SIZE__               </span><span style="color:#B5CEA8">1</span><span style="color:#6A9955">   // PFB 块数量</span></span></code></pre><p>PFB（Partial Frame Buffer）大小 = 320 × 24 × 2 = 15 KB，相比全屏 320 × 240 × 2 = 153 KB，节省 90% 内存。</p>
+<h3>脏区域池</h3>
+<p>ARM-2D 使用对象池模式管理脏区域，避免动态内存分配：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#4EC9B0">arm_2d_region_list_item_t</span><span style="color:#D4D4D4"> *</span></span>
+<span class="line"><span style="color:#DCDCAA">__arm_2d_helper_dirty_region_pool_new</span><span style="color:#D4D4D4">(</span><span style="color:#4EC9B0">arm_2d_helper_pfb_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptThis</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> void</span><span style="color:#DCDCAA"> __arm_2d_helper_dirty_region_pool_free</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_helper_pfb_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptThis</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_region_list_item_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptRegion</span><span style="color:#D4D4D4">);</span></span></code></pre><h3>更新流程</h3>
+<p>场景级更新，每个控件调用：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">arm_2d_helper_dirty_region_update_dirty_regions</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#D4D4D4">    &#x26;ptScene-></span><span style="color:#9CDCFE">tDirtyRegionHelper</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#D4D4D4">    ptTargetTile,</span></span>
+<span class="line"><span style="color:#D4D4D4">    ptVisibleArea,</span><span style="color:#6A9955">   // 裁剪区域</span></span>
+<span class="line"><span style="color:#D4D4D4">    ptNewRegion);</span><span style="color:#6A9955">    // 新脏区域</span></span></code></pre><p>内部实现（<code>arm_2d_helper_pfb.c</code>）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> __arm_2d_helper_dirty_region_update_dirty_regions2</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_helper_dirty_region_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptThis</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4EC9B0"> arm_2d_tile_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptTargetTile</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4EC9B0"> arm_2d_region_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptVisibleArea</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4EC9B0"> arm_2d_region_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptNewRegion</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#DCDCAA">    __arm_2d_helper_dirty_region_item_update</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#D4D4D4">        &#x26;</span><span style="color:#9CDCFE">this</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">tDefaultItem</span><span style="color:#D4D4D4">, ptTargetTile, ptVisibleArea, ptNewRegion);</span></span>
+<span class="line"><span style="color:#DCDCAA">    __arm_2d_helper_dirty_region_update_dirty_regions</span><span style="color:#D4D4D4">(ptThis, ptTargetTile);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>加权列表优化</h3>
+<p>ARM-2D 用加权列表决定脏区域处理优先级：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> __arm_2d_helper_add_item_to_weighted_dirty_region_list</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_helper_pfb_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptThis</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_region_list_item_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptItem</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">arm_2d_region_list_item_t</span><span style="color:#D4D4D4"> *</span></span>
+<span class="line"><span style="color:#DCDCAA">__arm_2d_helper_remove_item_from_weighted_dirty_region_list</span><span style="color:#D4D4D4">(</span></span>
+<span class="line"><span style="color:#4EC9B0">    arm_2d_helper_pfb_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">ptThis</span><span style="color:#D4D4D4">);</span></span></code></pre><p>合并策略使用包围盒优化：当两个区域的包围盒面积小于两者面积之和时，合并为一个刷新区域。</p>
+<h3>刷新流程</h3>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>arm_2d_helper_dirty_region_on_frame_start()  → 帧开始</span></span>
+<span class="line"><span>控件更新脏区域                                → 池分配 + 加权排序</span></span>
+<span class="line"><span>disp_adapter0_task()                          → 驱动 PFB 刷新</span></span>
+<span class="line"><span>PFB 块绘制（Helium/MVE SIMD 加速）            → 像素生成</span></span>
+<span class="line"><span>flush_cb() → LCD（支持异步 DMA）              → 传输</span></span>
+<span class="line"><span>脏区域池释放                                   → 完成</span></span></code></pre><h2>LVGL vs ARM-2D 对比</h2>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>LVGL</th>
+<th>ARM-2D</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>脏区域存储</td>
+<td>固定数组 inv_areas[32]</td>
+<td>对象池 + 链表</td>
+</tr>
+<tr>
+<td>合并策略</td>
+<td>O(n²) 遍历合并</td>
+<td>加权列表 + 包围盒</td>
+</tr>
+<tr>
+<td>管理粒度</td>
+<td>全局（per display）</td>
+<td>场景级（per scene）</td>
+</tr>
+<tr>
+<td>内存分配</td>
+<td>静态数组</td>
+<td>对象池（避免 malloc）</td>
+</tr>
+<tr>
+<td>硬件加速</td>
+<td>软件渲染为主</td>
+<td>Helium/MVE SIMD</td>
+</tr>
+<tr>
+<td>适用平台</td>
+<td>通用（MCU 到 Linux）</td>
+<td>Cortex-M 专用</td>
+</tr>
+</tbody></table>
+<h2>有无 Framebuffer 的架构差异</h2>
+<p><strong>有完整 framebuffer</strong>：GUI 绘制到 framebuffer，脏矩阵决定哪些区域 flush 到 LCD。适合 Linux、RTOS + 外部 SRAM。</p>
+<p><strong>小 buffer + 脏区域</strong>：只有小块 draw buffer，脏区域决定哪些 tile 需要现画。每次刷新重新遍历控件树绘制。适合 STM32/ESP32、SPI LCD。</p>
+<p>无 framebuffer 时，GUI 框架保存的是界面描述 + 当前状态（控件树），不是整张像素图。刷新时需要从背景开始，按层级重画该区域内所有相关控件。</p>
+<h2>工程实践要点</h2>
+<p><strong>旧位置也要标脏</strong>：控件移动时，旧位置和新位置都需要标脏。很多残影问题就是因为忘记标脏旧位置。</p>
+<p><strong>脏区域要适当扩大</strong>：阴影、边框、抗锯齿的实际影响区域可能比控件本身大。LVGL 中 <code>invalidate_area_core()</code> 会自动扩大 5 像素。</p>
+<p><strong>不要每次标脏就立即刷新</strong>：多次标脏后统一刷新，效率更高。</p>
+<p><strong>缓冲区满时回退整屏刷新</strong>：LVGL 的 <code>LV_INV_BUF_SIZE = 32</code>，超过时 <code>inv_p</code> 重置为 0 并标脏整个屏幕。</p>
+<h2>常用 API 速查</h2>
+<p><strong>LVGL：</strong></p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>lv_obj_invalidate(obj)</code></td>
+<td>标脏整个控件</td>
+</tr>
+<tr>
+<td><code>lv_obj_invalidate_area(obj, area)</code></td>
+<td>标脏指定区域</td>
+</tr>
+<tr>
+<td><code>lv_inv_area(disp, area)</code></td>
+<td>底层标脏</td>
+</tr>
+<tr>
+<td><code>lv_refr_join_area()</code></td>
+<td>合并重叠区域</td>
+</tr>
+<tr>
+<td><code>lv_display_refr_timer()</code></td>
+<td>定时刷新入口</td>
+</tr>
+</tbody></table>
+<p><strong>ARM-2D：</strong></p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>arm_2d_helper_dirty_region_update_dirty_regions()</code></td>
+<td>更新脏区域</td>
+</tr>
+<tr>
+<td><code>arm_2d_helper_dirty_region_on_frame_start()</code></td>
+<td>帧开始初始化</td>
+</tr>
+<tr>
+<td><code>arm_2d_helper_pfb_enable_dirty_region_optimization()</code></td>
+<td>启用优化</td>
+</tr>
+<tr>
+<td><code>disp_adapter0_task()</code></td>
+<td>显示适配器任务</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-31 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=dirty-region-lvgl-arm2d');
+  }
+  </script>
+</body>
+</html>

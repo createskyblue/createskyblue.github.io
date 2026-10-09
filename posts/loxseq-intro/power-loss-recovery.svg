@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="360" viewBox="0 0 920 360" font-family="'Microsoft YaHei','PingFang SC',sans-serif">
+  <rect x="0" y="0" width="920" height="360" fill="#ffffff"/>
+
+  <text x="20" y="42" font-size="14" fill="#6b7280">正常运行</text>
+  <text x="20" y="232" font-size="14" fill="#6b7280">断电重启后</text>
+
+  <!-- Row 1: normal run -->
+  <rect x="40" y="62" width="110" height="48" rx="6" fill="#dbe7f5" stroke="#4a6fa5" stroke-width="1.5"/>
+  <text x="95" y="90" text-anchor="middle" font-size="14" fill="#1f2937">灌装</text>
+
+  <line x1="150" y1="86" x2="190" y2="86" stroke="#6b7280" stroke-width="1.5"/>
+  <polygon points="190,82 200,86 190,90" fill="#6b7280"/>
+
+  <rect x="200" y="62" width="140" height="48" rx="6" fill="#e8f4ea" stroke="#3f8f5a" stroke-width="1.5"/>
+  <text x="270" y="83" text-anchor="middle" font-size="13" fill="#1f2937">检查点（32 字节）</text>
+  <text x="270" y="99" text-anchor="middle" font-size="11" fill="#4b5563">记录当前步骤与进度</text>
+
+  <line x1="340" y1="86" x2="380" y2="86" stroke="#6b7280" stroke-width="1.5"/>
+  <polygon points="380,82 390,86 380,90" fill="#6b7280"/>
+
+  <rect x="390" y="62" width="110" height="48" rx="6" fill="#dbe7f5" stroke="#4a6fa5" stroke-width="1.5"/>
+  <text x="445" y="90" text-anchor="middle" font-size="14" fill="#1f2937">加热</text>
+
+  <polygon points="530,68 508,98 522,98 510,124 544,86 528,86 540,68" fill="#f59e0b"/>
+  <text x="556" y="94" font-size="13" fill="#b45309">断电</text>
+
+  <rect x="620" y="62" width="130" height="48" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="685" y="90" text-anchor="middle" font-size="13" fill="#6b7280">加热（中断）</text>
+
+  <!-- dashed connector: interrupted step -> reboot -->
+  <line x1="660" y1="110" x2="115" y2="250" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <polygon points="108,244 125,254 112,255" fill="#9ca3af"/>
+
+  <!-- Row 2: recovery -->
+  <rect x="40" y="250" width="100" height="48" rx="6" fill="#dbe7f5" stroke="#4a6fa5" stroke-width="1.5"/>
+  <text x="90" y="278" text-anchor="middle" font-size="13" fill="#1f2937">上电重启</text>
+
+  <line x1="140" y1="274" x2="170" y2="274" stroke="#6b7280" stroke-width="1.5"/>
+  <polygon points="170,270 180,274 170,278" fill="#6b7280"/>
+
+  <rect x="180" y="250" width="150" height="48" rx="6" fill="#e8f4ea" stroke="#3f8f5a" stroke-width="1.5"/>
+  <text x="255" y="272" text-anchor="middle" font-size="13" fill="#1f2937">读检查点</text>
+  <text x="255" y="288" text-anchor="middle" font-size="11" fill="#4b5563">CRC 校验，损坏判无效</text>
+
+  <line x1="330" y1="274" x2="360" y2="274" stroke="#6b7280" stroke-width="1.5"/>
+  <polygon points="360,270 370,274 360,278" fill="#6b7280"/>
+
+  <rect x="370" y="250" width="180" height="48" rx="6" fill="#fdf3e3" stroke="#d97706" stroke-width="1.5"/>
+  <text x="460" y="272" text-anchor="middle" font-size="13" fill="#1f2937">恢复裁决</text>
+  <text x="460" y="288" text-anchor="middle" font-size="11" fill="#92400e">续跑 / 重跑 / 放弃 / 问操作员</text>
+
+  <line x1="550" y1="274" x2="570" y2="274" stroke="#6b7280" stroke-width="1.5"/>
+  <polygon points="570,270 580,274 570,278" fill="#6b7280"/>
+
+  <rect x="580" y="250" width="140" height="48" rx="6" fill="#e8f4ea" stroke="#3f8f5a" stroke-width="1.5"/>
+  <text x="650" y="272" text-anchor="middle" font-size="13" fill="#1f2937">断点续跑</text>
+  <text x="650" y="288" text-anchor="middle" font-size="11" fill="#4b5563">从"加热"继续</text>
+
+  <text x="770" y="281" font-size="22" fill="#3f8f5a">✓</text>
+</svg>
