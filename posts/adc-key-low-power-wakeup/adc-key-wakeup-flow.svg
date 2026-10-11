@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="260" viewBox="0 0 1100 260">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="260" fill="#ffffff"/>
+
+  <rect x="40" y="60" width="280" height="140" rx="12" fill="#eef4ff" stroke="#4a7fd4" stroke-width="2.5"/>
+  <text x="180" y="118" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="22" font-weight="700" fill="#1e3a8a">低功耗休眠</text>
+  <text x="180" y="154" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="15" fill="#334155">ADC 关掉</text>
+  <text x="180" y="180" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="15" fill="#334155">GPIO 盯着按键节点</text>
+
+  <line x1="336" y1="130" x2="404" y2="130" stroke="#334155" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="420" y="60" width="280" height="140" rx="12" fill="#ecfdf3" stroke="#3fa060" stroke-width="2.5"/>
+  <text x="560" y="118" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="22" font-weight="700" fill="#166534">IO 中断唤醒</text>
+  <text x="560" y="154" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="15" fill="#334155">任意键按下，打出下降沿</text>
+  <text x="560" y="180" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="15" fill="#334155">下降沿把芯片叫醒</text>
+
+  <line x1="716" y1="130" x2="784" y2="130" stroke="#334155" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="800" y="60" width="260" height="140" rx="12" fill="#fff7ed" stroke="#f6b86a" stroke-width="2.5"/>
+  <text x="930" y="118" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="22" font-weight="700" fill="#9a3412">扫描 ADC 按键</text>
+  <text x="930" y="154" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="15" fill="#334155">打开 ADC 采一次</text>
+  <text x="930" y="180" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="15" fill="#334155">按电压区间认键</text>
+</svg>

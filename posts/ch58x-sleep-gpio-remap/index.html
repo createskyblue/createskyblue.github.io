@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CH58x 睡眠中 PB22/PB23 按键唤醒需要打开 RB_PIN_INTX - CacheRivulet小记</title>
+  <meta name="description" content="RTC能醒按键不醒，从GPIO中断映射查起">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="中断">
+  <meta property="article:tag" content="寄存器映射">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-07-02">
+  <meta property="og:title" content="CH58x 睡眠中 PB22/PB23 按键唤醒需要打开 RB_PIN_INTX">
+  <meta property="og:description" content="RTC能醒按键不醒，从GPIO中断映射查起">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ch58x-sleep-gpio-remap/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ch58x-sleep-gpio-remap/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "CH58x 睡眠中 PB22/PB23 按键唤醒需要打开 RB_PIN_INTX",
+  "description": "RTC能醒按键不醒，从GPIO中断映射查起",
+  "datePublished": "2026-07-02",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ch58x-sleep-gpio-remap/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ch58x-sleep-gpio-remap/"
+  },
+  "keywords": "嵌入式, 低功耗, MCU, 中断, 寄存器映射, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">CH58x 睡眠中 PB22/PB23 按键唤醒需要打开 RB_PIN_INTX</h1>
+  <article class="article-body">
+<h1>CH58x 睡眠中 PB22/PB23 按键唤醒需要打开 RB_PIN_INTX</h1>
+<p>本文回答一个很具体的问题：CH58x/CH584F 进入睡眠后，RTC 到点能唤醒，PB22/PB23 上的 Boot 或 Reset 按键却没有反应，排查入口应该放在哪里。</p>
+<p>结论先放在前面：如果按键接在 PB22/PB23，睡眠唤醒依赖 GPIO 中断线时，需要先打开 <code>RB_PIN_INTX</code>，把 <code>INT24/INT25</code> 映射到 PB22/PB23。</p>
+<h2>现象</h2>
+<p>设备已经进入低功耗睡眠，串口没有持续打印，RTC 到点后可以醒来并继续运行。这个现象说明睡眠路径、RTC 唤醒源、RAM 保持这几项基本有效。</p>
+<p>异常点在按键：睡眠期间按 Boot/PB22 或 Reset/PB23 没有唤醒效果。代码里已经配置了 GPIO 输入、下降沿中断、GPIO 唤醒源，看起来像是 GPIO 唤醒没有生效。</p>
+<p>这里最容易误判的一点是：运行时能读到 PB22/PB23 电平变化，不代表它们已经接到了睡眠唤醒需要的中断线。</p>
+<h2>原因</h2>
+<p>CH58x 这类芯片的 GPIO 中断能力需要看中断线分配。PB22/PB23 和 PB8/PB9 共用 <code>INT24/INT25</code> 这组中断线，默认位置在 PB8/PB9。</p>
+<p>SDK 头文件里有两个关键信息：</p>
+<ul>
+<li><code>GPIOB_ITModeCfg()</code> 支持 PB0-PB15、PB22-PB23，并且 PB8/PB9 与 PB22/PB23 通过 <code>RB_PIN_INTX</code> 选择。</li>
+<li><code>RB_PIN_INTX</code> 的含义是：<code>0</code> 时 <code>INT24/25</code> 在 PB8/PB9，<code>1</code> 时 <code>INT24/25</code> 在 PB22/PB23。</li>
+</ul>
+<p>所以只写：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">GPIOB_ITModeCfg</span><span style="color:#D4D4D4">(GPIO_Pin_22, GPIO_ITMode_FallEdge);</span></span>
+<span class="line"><span style="color:#DCDCAA">GPIOB_ITModeCfg</span><span style="color:#D4D4D4">(GPIO_Pin_23, GPIO_ITMode_FallEdge);</span></span></code></pre><p>还不够。没有打开重映射时，睡眠唤醒事件仍然落在 PB8/PB9 这一侧。PB22/PB23 可以作为普通输入读电平，却不能按预期触发睡眠唤醒。</p>
+<h2>后果</h2>
+<p>这个故障会给调试带来一个假象：RTC 能醒，所以低功耗入口看起来没问题；GPIO 运行时能读，所以按键硬件看起来也没问题。</p>
+<p>实际缺口在“GPIO 引脚”和“唤醒中断线”之间。只查按键电路、上拉、下降沿、唤醒源开关，可能会绕过真正的配置项。</p>
+<h2>修复</h2>
+<p>按键初始化时，在配置 PB22/PB23 中断前打开 <code>RB_PIN_INTX</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">GPIOPinRemap</span><span style="color:#D4D4D4">(ENABLE, RB_PIN_INTX);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">GPIOB_ModeCfg</span><span style="color:#D4D4D4">(APP_BOARD_BUTTON_PIN, GPIO_ModeIN_PU);</span></span>
+<span class="line"><span style="color:#DCDCAA">GPIOB_ITModeCfg</span><span style="color:#D4D4D4">(APP_BOARD_BUTTON_PIN, GPIO_ITMode_FallEdge);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">GPIOB_ModeCfg</span><span style="color:#D4D4D4">(APP_BOARD_RESET_PIN, GPIO_ModeIN_PU);</span></span>
+<span class="line"><span style="color:#DCDCAA">GPIOB_ITModeCfg</span><span style="color:#D4D4D4">(APP_BOARD_RESET_PIN, GPIO_ITMode_FallEdge);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">PWR_PeriphWakeUpCfg</span><span style="color:#D4D4D4">(ENABLE,</span></span>
+<span class="line"><span style="color:#D4D4D4">                    RB_SLP_GPIO_WAKE | RB_GPIO_EDGE_WAKE | RB_SLP_RTC_WAKE,</span></span>
+<span class="line"><span style="color:#D4D4D4">                    Long_Delay);</span></span></code></pre><p>如果设备只要求 RAM 保持，睡眠入口可以保留 RAM 域，醒来后恢复时钟和必要外设：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#define</span><span style="color:#569CD6"> APP_BOARD_SLEEP_RETENTION_MASK (RB_PWR_RAM32K </span><span style="color:#D4D4D4">|</span><span style="color:#569CD6"> RB_PWR_RAM96K)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">LowPower_Sleep</span><span style="color:#D4D4D4">(APP_BOARD_SLEEP_RETENTION_MASK);</span></span></code></pre><p>在这次板级验证中，<code>LowPower_Sleep()</code> 这条路径可以同时保留 RTC 和 GPIO 唤醒。<code>LowPower_Sleep_WFE()</code> 曾经只证明 RTC 能醒，没有证明 PB22/PB23 GPIO 唤醒可用。</p>
+<h2>预防</h2>
+<p>低功耗按键设计时，不要只按 GPIO 编号分配引脚。需要同时确认这几项：</p>
+<ul>
+<li>目标引脚是否支持 GPIO 中断。</li>
+<li>该中断线是否和别的引脚复用。</li>
+<li>复用中断线是否需要 remap 或 alternate 配置。</li>
+<li>睡眠入口是否启用了 <code>RB_SLP_GPIO_WAKE</code> 和正确的边沿唤醒。</li>
+<li>验证时要分别测 RTC 唤醒、GPIO 唤醒、醒来后 RAM 状态。</li>
+</ul>
+<p>对 PB22/PB23 这类复用中断脚，运行时读电平只能证明输入功能有效，不能证明睡眠唤醒链路完整。RTC 能醒、按键不醒时，优先查中断线映射。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-02 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ch58x-sleep-gpio-remap');
+  }
+  </script>
+</body>
+</html>

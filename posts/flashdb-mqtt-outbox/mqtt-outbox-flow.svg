@@ -1,0 +1,62 @@
+<svg viewBox="0 0 1120 500" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;background:#f8fafc;border-radius:10px;">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#475569"/>
+    </marker>
+    <marker id="red-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <text x="560" y="38" text-anchor="middle" fill="#1e293b" font-size="20" font-weight="bold">FlashDB MQTT 待发送消息状态流</text>
+  <text x="560" y="66" text-anchor="middle" fill="#64748b" font-size="13">数据库只保存 WRITE 和 DELETED，等待 ACK 是处理过程</text>
+
+  <rect x="20" y="145" width="125" height="100" rx="10" fill="#e0e7ff" stroke="#6366f1" stroke-width="2"/>
+  <text x="82" y="181" text-anchor="middle" fill="#1e293b" font-size="16" font-weight="bold">业务消息</text>
+  <text x="82" y="207" text-anchor="middle" fill="#475569" font-size="13">产生待发数据</text>
+
+  <line x1="145" y1="195" x2="165" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="155" y="181" text-anchor="middle" fill="#64748b" font-size="11">落盘</text>
+
+  <rect x="165" y="145" width="125" height="100" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="227" y="181" text-anchor="middle" fill="#1e293b" font-size="16" font-weight="bold">WRITE</text>
+  <text x="227" y="207" text-anchor="middle" fill="#475569" font-size="13">记录未完成</text>
+
+  <line x1="290" y1="195" x2="310" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="310" y="145" width="125" height="100" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="372" y="181" text-anchor="middle" fill="#1e293b" font-size="16" font-weight="bold">读取队头</text>
+  <text x="372" y="207" text-anchor="middle" fill="#475569" font-size="13">找最旧记录</text>
+
+  <line x1="435" y1="195" x2="455" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="455" y="145" width="125" height="100" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="517" y="181" text-anchor="middle" fill="#1e293b" font-size="16" font-weight="bold">发送消息</text>
+  <text x="517" y="207" text-anchor="middle" fill="#475569" font-size="13">交给 MQTT</text>
+
+  <line x1="580" y1="195" x2="600" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="600" y="145" width="125" height="100" rx="10" fill="#fce7f3" stroke="#ec4899" stroke-width="2"/>
+  <text x="662" y="181" text-anchor="middle" fill="#1e293b" font-size="16" font-weight="bold">等待 ACK</text>
+  <text x="662" y="207" text-anchor="middle" fill="#475569" font-size="13">临时处理阶段</text>
+
+  <line x1="725" y1="195" x2="745" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="735" y="181" text-anchor="middle" fill="#64748b" font-size="11">ACK 到达</text>
+
+  <rect x="745" y="145" width="145" height="100" rx="10" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="817" y="181" text-anchor="middle" fill="#1e293b" font-size="15" font-weight="bold">标记删除队头</text>
+  <text x="817" y="207" text-anchor="middle" fill="#475569" font-size="13">独立删除操作</text>
+
+  <line x1="890" y1="195" x2="910" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="910" y="145" width="125" height="100" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="2"/>
+  <text x="972" y="181" text-anchor="middle" fill="#1e293b" font-size="16" font-weight="bold">DELETED</text>
+  <text x="972" y="207" text-anchor="middle" fill="#475569" font-size="13">记录已完成</text>
+
+  <path d="M972,245 L972,285 C972,305 372,305 372,245" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="820" y="292" text-anchor="middle" fill="#475569" font-size="13">删除后重新读取队头</text>
+
+  <path d="M662,245 C662,365 372,365 372,245" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#red-arrow)"/>
+  <text x="517" y="342" text-anchor="middle" fill="#b91c1c" font-size="14" font-weight="bold">等待 ACK 时掉电：WRITE 保留</text>
+  <text x="517" y="425" text-anchor="middle" fill="#b91c1c" font-size="14">重启后回到“读取队头”，再次发送这条消息</text>
+</svg>

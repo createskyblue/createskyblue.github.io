@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hampel Filter 算法原理与 C 语言实现 - CacheRivulet小记</title>
+  <meta name="description" content="Hampel滤波器用中位数识别尖刺，只替换离群点">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="Hampel Filter">
+  <meta property="article:tag" content="中值滤波">
+  <meta property="article:tag" content="异常检测">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="C语言">
+  <meta property="article:published_time" content="2026-05-31">
+  <meta property="og:title" content="Hampel Filter 算法原理与 C 语言实现">
+  <meta property="og:description" content="Hampel滤波器用中位数识别尖刺，只替换离群点">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/hampel-filter-algorithm/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/hampel-filter-algorithm/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Hampel Filter 算法原理与 C 语言实现",
+  "description": "Hampel滤波器用中位数识别尖刺，只替换离群点",
+  "datePublished": "2026-05-31",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/hampel-filter-algorithm/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/hampel-filter-algorithm/"
+  },
+  "keywords": "Hampel Filter, 中值滤波, 异常检测, 嵌入式, C语言"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Hampel Filter 算法原理与 C 语言实现</h1>
+  <article class="article-body">
+<h1>Hampel Filter 算法原理与 C 语言实现</h1>
+<p>Hampel Filter 是一种基于中值绝对偏差（Median Absolute Deviation, MAD）的鲁棒离群点检测算法。与均值滤波、高斯滤波不同，Hampel Filter 对脉冲噪声和尖刺异常值具有天然免疫力，适用于传感器信号预处理场景。</p>
+<h2>算法原理</h2>
+<h3>滑动窗口与中值</h3>
+<p>对于输入信号 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">x[n]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mclose">]</span></span></span></span></span>，取以当前样本为中心、半径为 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span></span> 的滑动窗口：</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>W</mi><mo>=</mo><mo stretchy="false">{</mo><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo>−</mo><mi>k</mi><mo stretchy="false">]</mo><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo>+</mo><mi>k</mi><mo stretchy="false">]</mo><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">W = \{ x[n-k], \ldots, x[n], \ldots, x[n+k] \}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord mathnormal">x</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mclose">]</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">x</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mclose">]</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">x</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mclose">]}</span></span></span></span></span></div>
+<p>窗口长度为 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>k</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">2k+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span>。计算窗口内所有样本的中值：</p>
+<div style="display: flex; align-items: flex-end; gap: 6px; padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow-x: auto; margin: 16px 0;">
+  <div style="text-align: center;">
+    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">x[0]</div>
+    <div style="width: 44px; height: 30px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px;">100</div>
+  </div>
+  <div style="text-align: center; border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6; border-right: 2px solid #3b82f6; border-radius: 4px 4px 0 0; padding-top: 2px; margin-top: 18px;">
+    <div style="font-size: 11px; color: #3b82f6; margin-bottom: 2px;">x[1]</div>
+    <div style="width: 44px; height: 32px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #1e40af; font-size: 12px;">102</div>
+  </div>
+  <div style="text-align: center; border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6; border-right: 2px solid #3b82f6; border-radius: 4px 4px 0 0; padding-top: 2px; margin-top: 18px;">
+    <div style="font-size: 11px; color: #3b82f6; margin-bottom: 2px;">x[2]</div>
+    <div style="width: 44px; height: 28px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #1e40af; font-size: 12px;">98</div>
+  </div>
+  <div style="text-align: center; border: 2px solid #f59e0b; border-radius: 4px; padding-top: 2px; margin-top: 18px; background: #fffbeb;">
+    <div style="font-size: 11px; color: #b45309; margin-bottom: 2px;">x[3] ←</div>
+    <div style="width: 44px; height: 31px; background: #fef3c7; border: 1px solid #fbbf24; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #92400e; font-size: 12px; font-weight: bold;">101</div>
+  </div>
+  <div style="text-align: center; border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6; border-right: 2px solid #3b82f6; border-radius: 4px 4px 0 0; padding-top: 2px; margin-top: 18px;">
+    <div style="font-size: 11px; color: #3b82f6; margin-bottom: 2px;">x[4]</div>
+    <div style="width: 44px; height: 80px; background: #fee2e2; border: 2px solid #ef4444; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #b91c1c; font-size: 12px;">500</div>
+  </div>
+  <div style="text-align: center; border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6; border-right: 2px solid #3b82f6; border-radius: 4px 4px 0 0; padding-top: 2px; margin-top: 18px;">
+    <div style="font-size: 11px; color: #3b82f6; margin-bottom: 2px;">x[5]</div>
+    <div style="width: 44px; height: 29px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #1e40af; font-size: 12px;">99</div>
+  </div>
+  <div style="text-align: center; border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6; border-right: 2px solid #3b82f6; border-radius: 4px 4px 0 0; padding-top: 2px; margin-top: 18px;">
+    <div style="font-size: 11px; color: #3b82f6; margin-bottom: 2px;">x[6]</div>
+    <div style="width: 44px; height: 33px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #1e40af; font-size: 12px;">103</div>
+  </div>
+  <div style="text-align: center;">
+    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">x[7]</div>
+    <div style="width: 44px; height: 30px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px;">100</div>
+  </div>
+</div>
+
+<div style="display: flex; gap: 16px; font-size: 13px; color: #64748b; margin: -8px 0 16px 4px;">
+  <span>⬜ 灰色：窗口外</span>
+  <span style="color: #3b82f6;">🟦 蓝色：窗口内</span>
+  <span style="color: #f59e0b;">🟧 橙色：当前样本</span>
+  <span style="color: #ef4444;">🟥 红色：异常值</span>
+</div>
+
+<p>窗口 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mn>102</mn><mo separator="true">,</mo><mn>98</mn><mo separator="true">,</mo><mn>101</mn><mo separator="true">,</mo><mn>500</mn><mo separator="true">,</mo><mn>99</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{102, 98, 101, 500, 99\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">102</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">98</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">101</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">500</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">99</span><span class="mclose">}</span></span></span></span></span> 排序后 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mn>98</mn><mo separator="true">,</mo><mn>99</mn><mo separator="true">,</mo><mn>101</mn><mo separator="true">,</mo><mn>102</mn><mo separator="true">,</mo><mn>500</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{98, 99, 101, 102, 500\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">98</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">99</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">101</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">102</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">500</span><span class="mclose">}</span></span></span></span></span>，中值 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>x</mi><mo>~</mo></mover><mo>=</mo><mn>101</mn></mrow><annotation encoding="application/x-tex">\tilde{x} = 101</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6679em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">x</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.2222em;"><span class="mord">~</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">101</span></span></span></span></span>。</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mover accent="true"><mi>x</mi><mo>~</mo></mover><mo>=</mo><mtext>median</mtext><mo stretchy="false">(</mo><mi>W</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\tilde{x} = \text{median}(W)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6679em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">x</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.2222em;"><span class="mord">~</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">median</span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="mclose">)</span></span></span></span></span></div>
+<h3>中值绝对偏差（MAD）</h3>
+<p>MAD 定义为窗口内各点与中值偏差的绝对值的中值：</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>MAD</mtext><mo>=</mo><mtext>median</mtext><mo stretchy="false">(</mo><mi mathvariant="normal">∣</mi><msub><mi>x</mi><mi>i</mi></msub><mo>−</mo><mover accent="true"><mi>x</mi><mo>~</mo></mover><mi mathvariant="normal">∣</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="1em"/><msub><mi>x</mi><mi>i</mi></msub><mo>∈</mo><mi>W</mi></mrow><annotation encoding="application/x-tex">\text{MAD} = \text{median}(|x_i - \tilde{x}|), \quad x_i \in W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">MAD</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">median</span></span><span class="mopen">(</span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">x</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.2222em;"><span class="mord">~</span></span></span></span></span></span></span><span class="mord">∣</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">W</span></span></span></span></span></div>
+<p>MAD 比标准差更鲁棒——单个异常值不会像对方差那样拉偏整个统计量。</p>
+<div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 16px 0; font-family: monospace; font-size: 14px;">
+  <div style="color: #475569; margin-bottom: 12px; font-weight: bold;">MAD 计算过程（以上述窗口为例）</div>
+  <table style="width: 100%; border-collapse: collapse; color: #334155;">
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 8px 12px; color: #94a3b8; white-space: nowrap;">① 窗口数据</td>
+      <td style="padding: 8px 12px; text-align: center;">102</td><td style="padding: 8px 12px; text-align: center;">98</td><td style="padding: 8px 12px; text-align: center;">101</td><td style="padding: 8px 12px; text-align: center; color: #dc2626; font-weight: bold;">500</td><td style="padding: 8px 12px; text-align: center;">99</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 8px 12px; color: #94a3b8; white-space: nowrap;">② 中值</td>
+      <td colspan="5" style="padding: 8px 12px; color: #b45309; font-weight: bold;">x̃ = 101</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 8px 12px; color: #94a3b8; white-space: nowrap;">③ 绝对偏差</td>
+      <td style="padding: 8px 12px; text-align: center;">1</td><td style="padding: 8px 12px; text-align: center;">3</td><td style="padding: 8px 12px; text-align: center;">0</td><td style="padding: 8px 12px; text-align: center; color: #dc2626; font-weight: bold;">399</td><td style="padding: 8px 12px; text-align: center;">2</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 8px 12px; color: #94a3b8; white-space: nowrap;">④ 排序偏差</td>
+      <td style="padding: 8px 12px; text-align: center;">0</td><td style="padding: 8px 12px; text-align: center;">1</td><td style="padding: 8px 12px; text-align: center; color: #b45309; font-weight: bold;">2</td><td style="padding: 8px 12px; text-align: center;">3</td><td style="padding: 8px 12px; text-align: center; color: #dc2626; font-weight: bold;">399</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px 12px; color: #94a3b8; white-space: nowrap;">⑤ MAD</td>
+      <td colspan="5" style="padding: 8px 12px; color: #059669; font-weight: bold;">MAD = 2</td>
+    </tr>
+  </table>
+  <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 13px;">
+    阈值 = 3 × 1.4826 × 2 = <span style="color: #059669; font-weight: bold;">8.9</span>　|　|x[4] - x̃| = |500 - 101| = <span style="color: #dc2626; font-weight: bold;">399</span>　→　399 > 8.9，判定为离群点
+  </div>
+</div>
+
+<h3>异常判定与替换</h3>
+<p>将 MAD 乘以缩放系数 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi></mrow><annotation encoding="application/x-tex">\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span></span>（通常取 1.4826，使 MAD 在高斯分布下与标准差一致），设定阈值 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span>（通常取 3）。<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi></mrow><annotation encoding="application/x-tex">\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span></span> 在此语境下是 MAD 的缩放因子，作用是把 MAD 校正到与标准差等价的尺度，使得阈值 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span> 可以直接沿用统计学中 &quot;<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3</mn><mi>σ</mi></mrow><annotation encoding="application/x-tex">3\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span></span> 准则&quot;的直觉——<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">t=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span></span> 对应约 99.7% 的高斯置信区间：</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>σ</mi><mtext>MAD</mtext></msub><mo>=</mo><mi>σ</mi><mo>⋅</mo><mtext>MAD</mtext></mrow><annotation encoding="application/x-tex">\sigma_{\text{MAD}} = \sigma \cdot \text{MAD}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">MAD</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.4445em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">MAD</span></span></span></span></span></span></div>
+<p>判定规则：</p>
+<ul>
+<li>若 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo><mo>−</mo><mover accent="true"><mi>x</mi><mo>~</mo></mover><mi mathvariant="normal">∣</mi><mo>&gt;</mo><mi>t</mi><mo>⋅</mo><msub><mi>σ</mi><mtext>MAD</mtext></msub></mrow><annotation encoding="application/x-tex">|x[n] - \tilde{x}| &gt; t \cdot \sigma_{\text{MAD}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal">x</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">x</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.2222em;"><span class="mord">~</span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">MAD</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>，则将 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">x[n]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mclose">]</span></span></span></span></span> 视为离群点，替换为中值 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>x</mi><mo>~</mo></mover></mrow><annotation encoding="application/x-tex">\tilde{x}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6679em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">x</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.2222em;"><span class="mord">~</span></span></span></span></span></span></span></span></span></span></span></li>
+<li>否则保留原始值 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">x[n]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mclose">]</span></span></span></span></span></li>
+</ul>
+<h2>C 语言实现</h2>
+<p>以下实现适用于嵌入式环境，无动态内存分配，使用固定大小缓冲区。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdint.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;string.h></span></span>
+<span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdlib.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/* 比较函数，用于 qsort */</span></span>
+<span class="line"><span style="color:#569CD6">static</span><span style="color:#569CD6"> int</span><span style="color:#DCDCAA"> cmp_int16</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">a</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">const</span><span style="color:#569CD6"> void</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">b</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    int16_t</span><span style="color:#D4D4D4"> va = *(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> int16_t</span><span style="color:#D4D4D4"> *)a;</span></span>
+<span class="line"><span style="color:#569CD6">    int16_t</span><span style="color:#D4D4D4"> vb = *(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> int16_t</span><span style="color:#D4D4D4"> *)b;</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> (va > vb) - (va &#x3C; vb);</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">/*</span></span>
+<span class="line"><span style="color:#6A9955"> * Hampel Filter - 基于中值绝对偏差的离群点检测与替换</span></span>
+<span class="line"><span style="color:#6A9955"> *</span></span>
+<span class="line"><span style="color:#6A9955"> * @param input:   输入信号数组</span></span>
+<span class="line"><span style="color:#6A9955"> * @param output:  输出信号数组（可与 input 相同，原地处理）</span></span>
+<span class="line"><span style="color:#6A9955"> * @param len:     信号长度</span></span>
+<span class="line"><span style="color:#6A9955"> * @param k:       窗口半径（窗口长度 = 2k+1）</span></span>
+<span class="line"><span style="color:#6A9955"> * @param t:       阈值系数（推荐 3.0）</span></span>
+<span class="line"><span style="color:#6A9955"> * @param sigma:   MAD 缩放系数（推荐 1.4826）</span></span>
+<span class="line"><span style="color:#6A9955"> */</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> hampel_filter</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">const</span><span style="color:#569CD6"> int16_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">int16_t</span><span style="color:#D4D4D4"> *</span><span style="color:#9CDCFE">output</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                   uint32_t</span><span style="color:#9CDCFE"> len</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">uint16_t</span><span style="color:#9CDCFE"> k</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#569CD6">                   float</span><span style="color:#9CDCFE"> t</span><span style="color:#D4D4D4">, </span><span style="color:#569CD6">float</span><span style="color:#9CDCFE"> sigma</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#569CD6"> uint16_t</span><span style="color:#D4D4D4"> win_size = </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * k + </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">    /* 临时缓冲区，存放窗口数据的副本 */</span></span>
+<span class="line"><span style="color:#569CD6">    int16_t</span><span style="color:#9CDCFE"> window</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4"> + </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">];</span><span style="color:#6A9955"> /* 最大支持 k=16，按需调整 */</span></span>
+<span class="line"><span style="color:#569CD6">    int16_t</span><span style="color:#9CDCFE"> abs_dev</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * </span><span style="color:#B5CEA8">16</span><span style="color:#D4D4D4"> + </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; len; i++) {</span></span>
+<span class="line"><span style="color:#6A9955">        /* 计算窗口边界，处理边界情况 */</span></span>
+<span class="line"><span style="color:#569CD6">        uint32_t</span><span style="color:#D4D4D4"> start = (i >= k) ? i - k : </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">        uint32_t</span><span style="color:#D4D4D4"> end = (i + k &#x3C; len) ? i + k : len - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">        uint16_t</span><span style="color:#D4D4D4"> actual_size = (</span><span style="color:#569CD6">uint16_t</span><span style="color:#D4D4D4">)(end - start + </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        /* 复制窗口数据 */</span></span>
+<span class="line"><span style="color:#C586C0">        for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">uint16_t</span><span style="color:#D4D4D4"> j = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; j &#x3C; actual_size; j++) {</span></span>
+<span class="line"><span style="color:#9CDCFE">            window</span><span style="color:#D4D4D4">[j] = </span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">[start + j];</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        /* 计算中值 */</span></span>
+<span class="line"><span style="color:#DCDCAA">        qsort</span><span style="color:#D4D4D4">(window, actual_size, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">int16_t</span><span style="color:#D4D4D4">), cmp_int16);</span></span>
+<span class="line"><span style="color:#569CD6">        int16_t</span><span style="color:#D4D4D4"> median = </span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">[actual_size / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        /* 计算各点与中值的绝对偏差 */</span></span>
+<span class="line"><span style="color:#C586C0">        for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">uint16_t</span><span style="color:#D4D4D4"> j = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; j &#x3C; actual_size; j++) {</span></span>
+<span class="line"><span style="color:#9CDCFE">            abs_dev</span><span style="color:#D4D4D4">[j] = (</span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">[j] > median) ?</span></span>
+<span class="line"><span style="color:#D4D4D4">                         (</span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">[j] - median) :</span></span>
+<span class="line"><span style="color:#D4D4D4">                         (median - </span><span style="color:#9CDCFE">window</span><span style="color:#D4D4D4">[j]);</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        /* 计算 MAD */</span></span>
+<span class="line"><span style="color:#DCDCAA">        qsort</span><span style="color:#D4D4D4">(abs_dev, actual_size, </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">int16_t</span><span style="color:#D4D4D4">), cmp_int16);</span></span>
+<span class="line"><span style="color:#569CD6">        int16_t</span><span style="color:#D4D4D4"> mad = </span><span style="color:#9CDCFE">abs_dev</span><span style="color:#D4D4D4">[actual_size / </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">        /* 异常判定 */</span></span>
+<span class="line"><span style="color:#569CD6">        float</span><span style="color:#D4D4D4"> threshold = t * sigma * (</span><span style="color:#569CD6">float</span><span style="color:#D4D4D4">)mad;</span></span>
+<span class="line"><span style="color:#569CD6">        int16_t</span><span style="color:#D4D4D4"> deviation = (</span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">[i] > median) ?</span></span>
+<span class="line"><span style="color:#D4D4D4">                            (</span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">[i] - median) :</span></span>
+<span class="line"><span style="color:#D4D4D4">                            (median - </span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">[i]);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> ((</span><span style="color:#569CD6">float</span><span style="color:#D4D4D4">)deviation > threshold) {</span></span>
+<span class="line"><span style="color:#9CDCFE">            output</span><span style="color:#D4D4D4">[i] = median;</span><span style="color:#6A9955">  /* 离群点，替换为中值 */</span></span>
+<span class="line"><span style="color:#D4D4D4">        } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#9CDCFE">            output</span><span style="color:#D4D4D4">[i] = </span><span style="color:#9CDCFE">input</span><span style="color:#D4D4D4">[i];</span><span style="color:#6A9955"> /* 正常点，保留原值 */</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h2>参数选择</h2>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>推荐值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span></span></td>
+<td>3~5</td>
+<td>窗口半径。越大越平滑，但响应越慢</td>
+</tr>
+<tr>
+<td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span></td>
+<td>3.0</td>
+<td>阈值系数。越大越宽松，只剔除极端异常</td>
+</tr>
+<tr>
+<td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi></mrow><annotation encoding="application/x-tex">\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span></span></td>
+<td>1.4826</td>
+<td>使 MAD 等效于高斯分布下的标准差</td>
+</tr>
+</tbody></table>
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi><mo>=</mo><mn>1.4826</mn></mrow><annotation encoding="application/x-tex">\sigma = 1.4826</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.4826</span></span></span></span></span> 的来源：对于标准正态分布，MAD 的期望值约为 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.6745</mn><mi>σ</mi></mrow><annotation encoding="application/x-tex">0.6745\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.6745</span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span></span>，取倒数 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mn>0.6745</mn><mo>≈</mo><mn>1.4826</mn></mrow><annotation encoding="application/x-tex">1/0.6745 \approx 1.4826</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/0.6745</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.4826</span></span></span></span></span> 作为缩放系数，使得 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>σ</mi><mtext>MAD</mtext></msub></mrow><annotation encoding="application/x-tex">\sigma_{\text{MAD}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">MAD</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> 与标准差 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi></mrow><annotation encoding="application/x-tex">\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span></span> 在高斯假设下等价。</p>
+<h2>使用示例</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">#include</span><span style="color:#CE9178"> &#x3C;stdio.h></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    int16_t</span><span style="color:#D4D4D4"> signal</span><span style="color:#569CD6">[]</span><span style="color:#D4D4D4"> = {</span><span style="color:#B5CEA8">100</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">102</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">98</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">101</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">500</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">99</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">103</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">100</span><span style="color:#D4D4D4">, -</span><span style="color:#B5CEA8">200</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">98</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> len = </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(signal) / </span><span style="color:#569CD6">sizeof</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">signal</span><span style="color:#D4D4D4">[</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">]);</span></span>
+<span class="line"><span style="color:#569CD6">    int16_t</span><span style="color:#9CDCFE"> filtered</span><span style="color:#D4D4D4">[len];</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    hampel_filter</span><span style="color:#D4D4D4">(signal, filtered, len,</span></span>
+<span class="line"><span style="color:#6A9955">                  /*k=*/</span><span style="color:#B5CEA8">3</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955"> /*t=*/</span><span style="color:#B5CEA8">3.0f</span><span style="color:#D4D4D4">,</span><span style="color:#6A9955"> /*sigma=*/</span><span style="color:#B5CEA8">1.4826f</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">    printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"原始信号</span><span style="color:#D7BA7D">\t</span><span style="color:#CE9178">滤波后</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">uint32_t</span><span style="color:#D4D4D4"> i = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; i &#x3C; len; i++) {</span></span>
+<span class="line"><span style="color:#DCDCAA">        printf</span><span style="color:#D4D4D4">(</span><span style="color:#CE9178">"</span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\t\t</span><span style="color:#9CDCFE">%d</span><span style="color:#D7BA7D">\n</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">signal</span><span style="color:#D4D4D4">[i], </span><span style="color:#9CDCFE">filtered</span><span style="color:#D4D4D4">[i]);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#B5CEA8"> 0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>输出：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>原始信号        滤波后</span></span>
+<span class="line"><span>100             100</span></span>
+<span class="line"><span>102             102</span></span>
+<span class="line"><span>98              98</span></span>
+<span class="line"><span>101             101</span></span>
+<span class="line"><span>500             101      ← 尖刺被替换为中值</span></span>
+<span class="line"><span>99              99</span></span>
+<span class="line"><span>103             103</span></span>
+<span class="line"><span>100             100</span></span>
+<span class="line"><span>-200            99       ← 尖刺被替换为中值</span></span>
+<span class="line"><span>98              98</span></span></code></pre><div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;">
+  <div style="padding: 16px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px;">
+    <div style="color: #e11d48; font-size: 13px; font-weight: bold; margin-bottom: 12px;">原始信号（含尖刺）</div>
+    <div style="display: flex; align-items: flex-end; gap: 3px; height: 120px;">
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:24px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">100</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:24px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">102</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:20px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">98</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:22px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">101</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:100px; background:#fee2e2; border:2px solid #ef4444; border-radius:2px;"></div><span style="font-size:10px; color:#dc2626; font-weight:bold; margin-top:4px;">500</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:20px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">99</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:26px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">103</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:24px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">100</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:2px; background:#fee2e2; border:2px solid #ef4444; border-radius:2px;"></div><span style="font-size:10px; color:#dc2626; font-weight:bold; margin-top:4px;">-200</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:20px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">98</span></div>
+    </div>
+  </div>
+  <div style="padding: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+    <div style="color: #16a34a; font-size: 13px; font-weight: bold; margin-bottom: 12px;">滤波后（尖刺被替换）</div>
+    <div style="display: flex; align-items: flex-end; gap: 3px; height: 120px;">
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:24px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">100</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:24px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">102</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:20px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">98</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:22px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">101</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:22px; background:#dcfce7; border:2px solid #22c55e; border-radius:2px;"></div><span style="font-size:10px; color: #16a34a; font-weight:bold; margin-top:4px;">101</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:20px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">99</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:26px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">103</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:24px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">100</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:20px; background:#dcfce7; border:2px solid #22c55e; border-radius:2px;"></div><span style="font-size:10px; color: #16a34a; font-weight:bold; margin-top:4px;">99</span></div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;"><div style="width:100%; height:20px; background:#cbd5e1; border-radius:2px;"></div><span style="font-size:10px; color:#64748b; margin-top:4px;">98</span></div>
+    </div>
+  </div>
+</div>
+
+<div style="display: flex; gap: 16px; font-size: 13px; color: #64748b; margin: -8px 0 16px 4px;">
+  <span>🟥 红色边框：被检测为离群点</span>
+  <span style="color: #16a34a;">🟩 绿色边框：替换后的中值</span>
+</div>
+
+<h2>嵌入式应用注意事项</h2>
+<ol>
+<li><p><strong>qsort 开销</strong>：每次窗口移动执行两次排序。若窗口较小（<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>≤</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">k \leq 5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8304em;vertical-align:-0.136em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5</span></span></span></span></span>，窗口 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≤</mo><mn>11</mn></mrow><annotation encoding="application/x-tex">\leq 11</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">11</span></span></span></span></span>），排序开销可接受。对于实时性要求高的场景，可用插入排序替代。</p>
+</li>
+<li><p><strong>整数溢出</strong>：MAD 计算中的绝对偏差使用 <code>int16_t</code>，若信号动态范围接近 <code>INT16_MAX</code>，需改用 <code>int32_t</code>。</p>
+</li>
+<li><p><strong>边界处理</strong>：代码中边界处窗口自动缩小。若需要严格等长窗口，可在信号两端做镜像填充或重复边界值。</p>
+</li>
+<li><p><strong>浮点依赖</strong>：阈值比较使用 <code>float</code>。若 MCU 无 FPU，可将 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi><mo>⋅</mo><mi>σ</mi></mrow><annotation encoding="application/x-tex">t \cdot \sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span></span> 合并为常数，乘法改用定点运算。</p>
+</li>
+</ol>
+<h2>适用场景</h2>
+<ul>
+<li>传感器数据预处理（温度、压力、心率等突变尖刺）</li>
+<li>工业控制系统中的信号清洗</li>
+<li>嵌入式系统中替代中值滤波器，增加自适应阈值能力</li>
+<li>任何需要保留信号边缘同时剔除脉冲干扰的场景</li>
+</ul>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-31 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=hampel-filter-algorithm');
+  }
+  </script>
+</body>
+</html>

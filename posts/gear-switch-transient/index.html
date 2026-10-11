@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>帧凑满一包 USB 是巧思，换档尖峰却没人处理 - CacheRivulet小记</title>
+  <meta name="description" content="自动换档靠 MOS 开关，米勒电容在切换瞬间注入电荷，上位机不丢弃尖峰就混进数据">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-08-11">
+  <meta property="og:title" content="帧凑满一包 USB 是巧思，换档尖峰却没人处理">
+  <meta property="og:description" content="自动换档靠 MOS 开关，米勒电容在切换瞬间注入电荷，上位机不丢弃尖峰就混进数据">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/gear-switch-transient/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/gear-switch-transient/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "帧凑满一包 USB 是巧思，换档尖峰却没人处理",
+  "description": "自动换档靠 MOS 开关，米勒电容在切换瞬间注入电荷，上位机不丢弃尖峰就混进数据",
+  "datePublished": "2026-08-11",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/gear-switch-transient/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/gear-switch-transient/"
+  },
+  "keywords": "嵌入式, 信号处理, 低功耗, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">帧凑满一包 USB 是巧思，换档尖峰却没人处理</h1>
+  <article class="article-body">
+<h1>帧凑满一包 USB 是巧思，换档尖峰却没人处理</h1>
+<p>某测量仪器的高速帧设计有个小巧思：帧长刚好凑满一个 USB 包。同一台仪器的自动换档却有个没处理干净的环节。换档瞬间 MOSFET 的米勒电容会往测量点注入电荷，产生尖峰，上位机又不丢弃这些采样。</p>
+<h2>一帧刚好凑满一个 USB 包</h2>
+<p>高速采样帧是 64 字节，正好等于 USB 全速单包上限。一帧就是一个 USB 包，不用拆包、不用重组。</p>
+<p><img src="/posts/gear-switch-transient/frame-usb-packet.svg" alt="帧 = USB 包"></p>
+<p>载荷 60 字节安排得严丝合缝：9 字节通道头 + 25 个采样（各 2 字节）+ 1 字节标志 = 60，一字节不剩。更巧的是 9 字节通道头 = 24 个电流采样 × 3 位通道号 = 72 位，位打包后恰好 9 字节。每个采样点独立标注所属档位。</p>
+<p>三个约束互相咬合：USB 包大小、采样数量、通道头位宽，选出的数字恰好都凑满。这是值得抄的设计。</p>
+<h2>换档瞬间的电荷注入</h2>
+<p>自动量程靠 MOS 开关切换分流电阻和增益。换档是硬件动作：一个 MOS 管导通、另一个关断，测量回路瞬间换挡。</p>
+<p>MOS 管栅极和漏极之间有寄生电容，也就是米勒电容。切换瞬间，栅极驱动电压快速跳变，通过米勒电容把电荷灌进漏极，也就是测量节点。对 µA、nA 级测量，这一点电荷就是很大的相对误差。开关本身的导通关断过渡还会让测量节点抖几个采样周期。</p>
+<p>换档瞬间产生的是物理必然的尖峰，不是测量噪声。</p>
+<p>实测抓帧能看到换档瞬间的完整过程：过渡帧里一部分采样还标旧档、一部分已经标新档（通道号混档）；换档后固件把电流采样置 0，持续几个采样周期，作为稳定期标记。稳定期结束，采样恢复正常。固件用零填充标记数据无效，没有停止采样，也没有重新编程 ADC。</p>
+<p><img src="/posts/gear-switch-transient/switch-transient.svg" alt="换档瞬态"></p>
+<h2>上位机只读档位，不处理过渡</h2>
+<p>上位机逐采样读通道号，按通道号套对应的校准系数，把当前档位显示出来。通道号一变，显示跟着变。</p>
+<p>固件给了零填充作为稳定期标记，上位机却不认。过渡帧、零采样都被当成正常数据照常处理。帧里唯一的标志字节只用于电压校准模式选择，跟换档无关。上位机既不知道换档发生的时间，也不在乎过渡采样脏不脏。</p>
+<h2>尖峰混进数据的后果</h2>
+<p>低功耗测量里，换档尖峰可能被当成真实的电流瞬态。设备唤醒脉冲本来就该是尖峰，真假混在一起，结论就错了。</p>
+<p>平均和滤波救不了尖峰：尖峰是有偏的，会把均值抬高，让功耗估算偏大。触发和告警可能被尖峰误触发，出现假告警。</p>
+<p>换档越频繁，污染越多。读数在量程边界附近跳动时最容易换档，那也正是数据最需要准确的时候。</p>
+<h2>处理办法</h2>
+<p>换档瞬态是物理必然，靠软件消化：</p>
+<ul>
+<li>固件侧：换档后置零标记稳定期（实测该仪器如此），上位机识别零点后丢弃。</li>
+<li>上位机侧：看到通道号变化，跳过过渡帧或过渡采样。</li>
+<li>显示侧：对尖峰做合理性校验，明显偏离相邻采样就剔除。</li>
+</ul>
+<p>帧设计能凑满一包 USB 是巧思，换档瞬态同样值得花心思。测量仪器最怕的，是假数据。</p>
+<h2>推断边界</h2>
+<p>以上换档行为来自实测抓帧，可信度较高。电压与电流各自独立采样的双 ADC 结构来自反编译代码的片段推断，具体寄存器映射和通道号未 100% 确认（固件用 HAL 抽象层藏了大量细节）。整套机制是逆向分析结果，不来自厂商文档，可能有错。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-11 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=gear-switch-transient');
+  }
+  </script>
+</body>
+</html>

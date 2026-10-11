@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>I2C 从机开发：事务流程、数据组织与耗时应答 - CacheRivulet小记</title>
+  <meta name="description" content="I2C从机采用寄存器或命令模型，耗时任务通过状态应答">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="I2C">
+  <meta property="article:published_time" content="2026-07-13">
+  <meta property="og:title" content="I2C 从机开发：事务流程、数据组织与耗时应答">
+  <meta property="og:description" content="I2C从机采用寄存器或命令模型，耗时任务通过状态应答">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/i2c-slave/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/i2c-slave/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "I2C 从机开发：事务流程、数据组织与耗时应答",
+  "description": "I2C从机采用寄存器或命令模型，耗时任务通过状态应答",
+  "datePublished": "2026-07-13",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/i2c-slave/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/i2c-slave/"
+  },
+  "keywords": "嵌入式, 通信协议, I2C"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">I2C 从机开发：事务流程、数据组织与耗时应答</h1>
+  <article class="article-body">
+<h1>I2C 从机开发：事务流程、数据组织与耗时应答</h1>
+<p>I2C 从机开发先掌握普通事务，再处理变长响应和耗时操作。</p>
+<h2>先记住四条规则</h2>
+<ul>
+<li>从机不能主动发起通信。</li>
+<li>主机决定读写方向、读取字节数和结束时机。</li>
+<li>写数据阶段由从机逐字节应答；读数据阶段由主机逐字节应答，最后一字节回 NACK。</li>
+<li>ACK 只表示地址或字节已接收，不代表业务完成。</li>
+</ul>
+<p>从机开发先关注三种事务：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>写：      START → 地址+W → 请求 → STOP</span></span>
+<span class="line"><span>读：      START → 地址+R → 响应 → STOP</span></span>
+<span class="line"><span>写后读：  START → 地址+W → 请求 → RESTART → 地址+R → 响应 → STOP</span></span></code></pre><h2>从请求到响应</h2>
+<p>I2C 只定义传输，不定义字节含义。从机软件可按一条链路组织：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>RX 回调 → 请求缓冲 → 业务执行 → 响应快照 → TX 回调</span></span></code></pre><p>回调负责搬运数据和记录事件，耗时业务放在回调外。TX 始终读取一份稳定快照。写后读可能紧接 RESTART，来不及完成的请求先返回 <code>BUSY</code>。</p>
+<h2>两种数据模型</h2>
+<p>I2C 从机主要使用寄存器模型和命令模型。命令通常采用二进制编码；文本命令属于自定义的应用层编码。</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>寄存器</th>
+<th>二进制命令</th>
+<th>文本命令（少见）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>模型</strong></td>
+<td>寄存器模型</td>
+<td>命令模型</td>
+<td>命令模型</td>
+</tr>
+<tr>
+<td><strong>开头</strong></td>
+<td>寄存器地址</td>
+<td>操作码</td>
+<td>命令词</td>
+</tr>
+<tr>
+<td><strong>长度</strong></td>
+<td>由寄存器定义</td>
+<td>定长或长度字段</td>
+<td>写入可分隔，读取须约定</td>
+</tr>
+<tr>
+<td><strong>特点</strong></td>
+<td>适合配置和状态</td>
+<td>紧凑、效率高</td>
+<td>可读、便于调试</td>
+</tr>
+</tbody></table>
+<p>寄存器可由软件虚拟，也可包含命令寄存器。设备可混合使用寄存器和二进制命令。文本命令多用于 MCU 间自定义通信、调试或复用 UART 命令行。移植到 UART 或 SPI 时，帧边界和读写方向仍需适配。</p>
+<h2>特殊情况一：变长读取</h2>
+<p>I2C 读阶段没有从机发出的结束标记。多数主机 API 要求调用前给定字节数，通用方案是两次应用层读取：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>读固定响应头 → 取得长度 N → 校验 N → 再读 N 字节</span></span></code></pre><p>寄存器模型可提供长度寄存器和数据区，命令模型可返回响应头和载荷。实现时还要保证：</p>
+<ul>
+<li>两次读取使用同一份响应快照；</li>
+<li>N 不超过协议上限和主机缓冲区；</li>
+<li>第二次读取完成前不复用旧缓冲。</li>
+</ul>
+<p>文本结束符只能标记内容结束，不能替主机结束 I2C 读取。</p>
+<p>少数控制器支持读到长度后在同一事务中继续收取，具体取决于硬件和驱动。</p>
+<h2>特殊情况二：耗时操作</h2>
+<p>Flash 擦写、采样或电机动作不能立即完成时，可从以下方式中选择：</p>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>含义</th>
+<th>适用场景</th>
+<th>限制</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>时钟拉伸</td>
+<td>从机拉低 SCL 暂停时钟</td>
+<td>很短且上限明确</td>
+<td>占用总线，可能超时</td>
+</tr>
+<tr>
+<td>状态轮询</td>
+<td>主机反复读取状态</td>
+<td>通用默认方案</td>
+<td>增加轮询事务</td>
+</tr>
+<tr>
+<td>地址 NACK</td>
+<td>从机忙时拒绝地址访问</td>
+<td>主从明确约定</td>
+<td>无法区分忙、掉电或缺失</td>
+</tr>
+<tr>
+<td>GPIO 通知</td>
+<td>完成后改变 GPIO 电平</td>
+<td>时间长或不确定</td>
+<td>多占一个引脚</td>
+</tr>
+</tbody></table>
+<p>状态通过寄存器、命令或响应头返回 <code>BUSY/DONE/ERROR</code>。耗时很长时可增加 GPIO 通知。</p>
+<h2>STM32 实现提醒</h2>
+<ul>
+<li>主机侧 <code>HAL_I2C_Mem_*</code> 对应寄存器访问，<code>HAL_I2C_Master_*</code> 收发原始数据；<code>MemAddress</code> 仍会在线路上传输。</li>
+<li>两个独立的阻塞式发送、接收通常产生 STOP。需要 RESTART 时使用对应系列的 Sequential/Seq 接口。</li>
+<li><code>HAL_I2C_SlaveRxCpltCallback</code> 通常只表示预设长度收满，不等于检测到 STOP 或 RESTART。</li>
+<li>用逻辑分析仪验证写、读、写后读和异常中断。</li>
+</ul>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-13 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=i2c-slave');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 290" width="960" height="290" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif">
+  <rect width="960" height="290" fill="#f8fafc"/>
+
+  <text x="40" y="30" font-size="16" fill="#1e293b" font-weight="bold">F3 变短 1/4 → 固定 64B 读窗口永久跨帧</text>
+
+  <!-- frames (continuous stream; F3 is only 3/4 long) -->
+  <g font-size="13" fill="#1e293b" text-anchor="middle" font-weight="bold">
+    <rect x="40"  y="104" width="178" height="64" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/><text x="129"  y="142">F1 · 64B</text>
+    <rect x="222" y="104" width="178" height="64" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/><text x="311"  y="142">F2 · 64B</text>
+    <rect x="404" y="104" width="133" height="64" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/><text x="470"  y="142">F3</text>
+    <rect x="540" y="104" width="178" height="64" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/><text x="629"  y="142">F4 · 64B</text>
+    <rect x="722" y="104" width="178" height="64" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/><text x="811"  y="142">F5 · 64B</text>
+  </g>
+
+  <!-- fixed 64B read windows (host grid, drawn only where it straddles) -->
+  <g font-size="12" text-anchor="middle">
+    <rect x="404" y="104" width="178" height="64" rx="10" fill="none" stroke="#EF4444" stroke-width="2" stroke-dasharray="6 4"/>
+    <rect x="586" y="104" width="178" height="64" rx="10" fill="none" stroke="#EF4444" stroke-width="2" stroke-dasharray="6 4"/>
+    <rect x="768" y="104" width="178" height="64" rx="10" fill="none" stroke="#EF4444" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="493" y="98"  fill="#EF4444">读 64B</text>
+    <text x="675" y="98"  fill="#EF4444">读 64B</text>
+    <text x="857" y="98"  fill="#EF4444">读 64B</text>
+  </g>
+
+  <!-- F3 short callout -->
+  <line x1="470" y1="168" x2="470" y2="186" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="470" y="200" font-size="12" fill="#EF4444" text-anchor="middle" font-weight="bold">这里丢字节</text>
+
+  <!-- aligned / straddle marks -->
+  <g font-size="15" text-anchor="middle" font-weight="bold">
+    <text x="129" y="232" fill="#1e293b">✓</text>
+    <text x="311" y="232" fill="#1e293b">✓</text>
+    <text x="493" y="232" fill="#EF4444">✗</text>
+    <text x="675" y="232" fill="#EF4444">✗</text>
+    <text x="857" y="232" fill="#EF4444">✗</text>
+  </g>
+
+  <text x="40" y="268" font-size="13" fill="#1e293b">读窗口固定在原网格：F3 一短，其后每个 64B 窗口都跨两帧，0x33 帧头落错位置，偏移无法找回 → 永久失步。</text>
+</svg>

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" font-family="'Microsoft YaHei', 'PingFang SC', sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#555555"></path>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="400" fill="#fafafa"></rect>
+
+  <!-- ================= FlashDB 列 ================= -->
+  <rect x="30" y="16" width="400" height="38" rx="6" fill="#dbe7ff"></rect>
+  <text x="230" y="41" text-anchor="middle" font-size="16" font-weight="bold" fill="#1a1a1a">FlashDB</text>
+
+  <rect x="30" y="72" width="400" height="42" rx="6" fill="#ffffff" stroke="#8aa7d8" stroke-width="1"></rect>
+  <text x="230" y="97" text-anchor="middle" font-size="13" fill="#1a1a1a">KVDB / TSDB 两套独立 API</text>
+
+  <line x1="230" y1="114" x2="230" y2="130" stroke="#555555" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+  <rect x="30" y="132" width="400" height="42" rx="6" fill="#ffffff" stroke="#8aa7d8" stroke-width="1"></rect>
+  <text x="230" y="157" text-anchor="middle" font-size="13" fill="#1a1a1a">FAL 抽象层（分区表）</text>
+
+  <line x1="230" y1="174" x2="230" y2="190" stroke="#555555" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+  <rect x="30" y="192" width="400" height="42" rx="6" fill="#ffffff" stroke="#8aa7d8" stroke-width="1"></rect>
+  <text x="230" y="217" text-anchor="middle" font-size="13" fill="#1a1a1a">裸 Flash：扇区日志 + 状态位翻转 + GC</text>
+
+  <line x1="230" y1="234" x2="230" y2="250" stroke="#555555" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+  <rect x="30" y="252" width="400" height="42" rx="6" fill="#fff4e0" stroke="#d8a84a" stroke-width="1"></rect>
+  <text x="230" y="277" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1a1a">RAM 约 1KB：状态靠扫描 Flash</text>
+
+  <!-- ================= loxdb 列 ================= -->
+  <rect x="470" y="16" width="400" height="38" rx="6" fill="#d9f2e3"></rect>
+  <text x="670" y="41" text-anchor="middle" font-size="16" font-weight="bold" fill="#1a1a1a">loxdb</text>
+
+  <rect x="470" y="72" width="400" height="42" rx="6" fill="#ffffff" stroke="#5aa97d" stroke-width="1"></rect>
+  <text x="670" y="97" text-anchor="middle" font-size="13" fill="#1a1a1a">统一 API：KV / TS / 关系型</text>
+
+  <line x1="670" y1="114" x2="670" y2="130" stroke="#555555" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+  <rect x="470" y="132" width="400" height="42" rx="6" fill="#ffffff" stroke="#5aa97d" stroke-width="1"></rect>
+  <text x="670" y="157" text-anchor="middle" font-size="13" fill="#1a1a1a">内存引擎：arena 预分配，运行期零分配</text>
+
+  <line x1="670" y1="174" x2="670" y2="190" stroke="#555555" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+  <rect x="470" y="192" width="400" height="42" rx="6" fill="#ffffff" stroke="#5aa97d" stroke-width="1"></rect>
+  <text x="670" y="217" text-anchor="middle" font-size="13" fill="#1a1a1a">WAL + 双 Bank 快照（断电恢复）</text>
+
+  <line x1="670" y1="234" x2="670" y2="250" stroke="#555555" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+  <rect x="470" y="252" width="400" height="42" rx="6" fill="#ffffff" stroke="#5aa97d" stroke-width="1"></rect>
+  <text x="670" y="277" text-anchor="middle" font-size="13" fill="#1a1a1a">存储后端可替换：RAM / FS / 裸 Flash</text>
+
+  <line x1="670" y1="294" x2="670" y2="310" stroke="#555555" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+  <rect x="470" y="312" width="400" height="42" rx="6" fill="#ffe0e0" stroke="#d8707a" stroke-width="1"></rect>
+  <text x="670" y="337" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1a1a">RAM 8.2KB 句柄 + 可配 arena（8~64KB）</text>
+
+  <!-- 底部说明 -->
+  <text x="450" y="378" text-anchor="middle" font-size="12" fill="#555555">左：状态写入 Flash、按需扫描；右：状态放进预分配 RAM，Flash 只做持久化快照</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="436" viewBox="0 0 760 436" font-family="system-ui, sans-serif">
+  <rect width="760" height="436" fill="#ffffff"/>
+  <defs>
+    <marker id="arrDark" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#1a1a1a"/>
+    </marker>
+    <marker id="arrBlue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrGrayR" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#6b7280"/>
+    </marker>
+    <marker id="arrGrayL" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto-start-reverse">
+      <path d="M0,0 L10,4 L0,8 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+
+  <!-- actors -->
+  <rect x="80" y="16" width="220" height="34" rx="6" fill="#e5e7eb" stroke="#9ca3af"/>
+  <text x="190" y="38" text-anchor="middle" font-size="14" fill="#1a1a1a">对等端 A（offer）</text>
+  <rect x="460" y="16" width="220" height="34" rx="6" fill="#e5e7eb" stroke="#9ca3af"/>
+  <text x="570" y="38" text-anchor="middle" font-size="14" fill="#1a1a1a">对等端 B（answer）</text>
+
+  <!-- lifelines -->
+  <line x1="190" y1="50" x2="190" y2="420" stroke="#9ca3af" stroke-dasharray="4 4"/>
+  <line x1="570" y1="50" x2="570" y2="420" stroke="#9ca3af" stroke-dasharray="4 4"/>
+
+  <!-- step 1 note on A -->
+  <rect x="52" y="74" width="296" height="46" rx="6" fill="#fef3c7" stroke="#d97706"/>
+  <text x="200" y="92" text-anchor="middle" font-size="12.5" fill="#1a1a1a">① createDataChannel + createOffer</text>
+  <text x="200" y="110" text-anchor="middle" font-size="12.5" fill="#1a1a1a">打印 offer token（SDP 已含全部 ICE 候选）</text>
+
+  <!-- arrow 1: A to B -->
+  <line x1="190" y1="152" x2="562" y2="152" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrDark)"/>
+  <text x="380" y="144" text-anchor="middle" font-size="12.5" fill="#1a1a1a">人工粘贴 offer token → setRemoteDescription</text>
+
+  <!-- step 2 note on B -->
+  <rect x="440" y="172" width="260" height="46" rx="6" fill="#fef3c7" stroke="#d97706"/>
+  <text x="570" y="190" text-anchor="middle" font-size="12.5" fill="#1a1a1a">② createAnswer + setLocalDescription</text>
+  <text x="570" y="208" text-anchor="middle" font-size="12.5" fill="#1a1a1a">打印 answer token 交回 A</text>
+
+  <!-- arrow 2: B to A -->
+  <line x1="570" y1="250" x2="198" y2="250" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrDark)"/>
+  <text x="380" y="242" text-anchor="middle" font-size="12.5" fill="#1a1a1a">人工粘贴 answer token → setRemoteDescription</text>
+
+  <!-- ICE arrow -->
+  <line x1="196" y1="288" x2="564" y2="288" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4" marker-start="url(#arrGrayL)" marker-end="url(#arrGrayR)"/>
+  <text x="380" y="280" text-anchor="middle" font-size="12.5" fill="#6b7280">ICE / DTLS / SCTP 自动打洞，DataChannel 就绪</text>
+
+  <!-- data phase -->
+  <line x1="190" y1="330" x2="562" y2="330" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrBlue)"/>
+  <text x="380" y="322" text-anchor="middle" font-size="12.5" fill="#2563eb">dc.send("任意文本")</text>
+  <line x1="570" y1="366" x2="198" y2="366" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrBlue)"/>
+  <text x="380" y="358" text-anchor="middle" font-size="12.5" fill="#2563eb">channel.send(msg) 原样回传（loop back）</text>
+
+  <text x="380" y="404" text-anchor="middle" font-size="12.5" fill="#6b7280">此后任意文本双向透传：发送方打字，接收方回传一份副本</text>
+</svg>

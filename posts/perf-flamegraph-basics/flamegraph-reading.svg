@@ -1,0 +1,38 @@
+<svg viewBox="0 0 860 430" width="860" height="430" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">
+  <!-- 背景 -->
+  <rect width="860" height="430" fill="#fafafa"/>
+  <rect x="120" y="250" width="520" height="128" fill="none" stroke="#cccccc" stroke-width="1"/>
+
+  <!-- 火焰塔：三层，底部是 main，往上逐层展开 -->
+  <rect x="120" y="330" width="520" height="34" fill="#7a7a7a"/>
+  <rect x="120" y="296" width="170" height="34" fill="#e8682c"/>
+  <rect x="290" y="296" width="180" height="34" fill="#f5a623"/>
+  <rect x="470" y="296" width="170" height="34" fill="#f7c948"/>
+  <rect x="120" y="262" width="160" height="34" fill="#ff4757"/>
+  <rect x="290" y="262" width="175" height="34" fill="#ff9f1c"/>
+  <rect x="470" y="262" width="165" height="34" fill="#ffd166"/>
+
+  <!-- 函数标签 -->
+  <text x="130" y="349" font-size="16" fill="#ffffff">main</text>
+  <text x="130" y="315" font-size="15" fill="#ffffff">part_matmul</text>
+  <text x="300" y="315" font-size="15" fill="#ffffff">part_qsort</text>
+  <text x="480" y="315" font-size="15" fill="#ffffff">part_fib</text>
+  <text x="128" y="281" font-size="15" fill="#ffffff">matmul</text>
+  <text x="298" y="281" font-size="15" fill="#ffffff">qsort_impl</text>
+  <text x="478" y="281" font-size="15" fill="#ffffff">fib</text>
+
+  <!-- 热点标注：指向最宽的叶子 -->
+  <line x1="200" y1="262" x2="200" y2="205" stroke="#ff4757" stroke-width="3"/>
+  <polygon points="200,199 193,212 207,212" fill="#ff4757"/>
+  <text x="214" y="218" font-size="16" fill="#333333">最宽的叶子 = 热点函数</text>
+
+  <!-- 纵轴：调用栈深度 -->
+  <line x1="95" y1="250" x2="95" y2="360" stroke="#666666" stroke-width="2"/>
+  <polygon points="95,367 88,355 102,355" fill="#666666"/>
+  <text x="35" y="310" font-size="16" fill="#333333" transform="rotate(-90 35 310)">纵轴 = 调用栈深度</text>
+
+  <!-- 横轴：CPU 时间占比 -->
+  <line x1="120" y1="396" x2="636" y2="396" stroke="#666666" stroke-width="2"/>
+  <polygon points="643,396 631,390 631,402" fill="#666666"/>
+  <text x="230" y="418" font-size="16" fill="#333333">横轴 = CPU 时间占比，越宽越热</text>
+</svg>

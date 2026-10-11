@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>湿度传感器焊接后读数偏差 机理分析和措施 - CacheRivulet小记</title>
+  <meta name="description" content="电容式聚合物湿敏传感器焊接后湿度偏差机理及恢复规范">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="传感器">
+  <meta property="article:tag" content="焊接工艺">
+  <meta property="article:tag" content="测量误差">
+  <meta property="article:tag" content="温湿度传感器">
+  <meta property="article:published_time" content="2026-10-08">
+  <meta property="og:title" content="湿度传感器焊接后读数偏差 机理分析和措施">
+  <meta property="og:description" content="电容式聚合物湿敏传感器焊接后湿度偏差机理及恢复规范">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/aht30-soldering-humidity-offset/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/aht30-soldering-humidity-offset/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "湿度传感器焊接后读数偏差\n机理分析和措施",
+  "description": "电容式聚合物湿敏传感器焊接后湿度偏差机理及恢复规范",
+  "datePublished": "2026-10-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/aht30-soldering-humidity-offset/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/aht30-soldering-humidity-offset/"
+  },
+  "keywords": "嵌入式, 传感器, 焊接工艺, 测量误差, 温湿度传感器"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">湿度传感器焊接后读数偏差 机理分析和措施</h1>
+  <article class="article-body">
+<h1>电容式聚合物湿敏传感器焊接后湿度偏差机理及恢复规范</h1>
+<h2>1. 现象概述</h2>
+<p>采用回流焊或手工焊接装配AHT系列、SHT系列等电容式聚合物湿敏传感器后，普遍存在温度测量正常、湿度测量值持续偏低的现象。该偏差随静置时间呈单向收敛趋势，易被误判为器件损坏或焊接缺陷，实则为此类传感器的固有特性。</p>
+<p><img src="/posts/aht30-soldering-humidity-offset/PixPin_2026-10-08_15-09-30.webp" alt="实拍对比"></p>
+<h2>2. 偏差机理分析</h2>
+<p>此类传感器基于电容检测原理，以聚合物薄膜作为感湿介质，通过薄膜吸附水分子后介电常数的变化实现湿度定量测量。焊接过程中的高温热冲击会使聚合物薄膜内部的结合水脱附，造成感湿膜脱水，导致湿度输出呈系统性负偏差；待薄膜重新吸附环境水汽、完成水合过程后，测量精度可恢复至出厂标定水平。</p>
+<h2>3. 精度恢复方法</h2>
+<p>焊接完成后，建议将被测电路板置于<strong>温度25℃、相对湿度75%RH</strong>的标准环境中静置<strong>24h</strong>，使感湿膜充分水合。
+静置期间的湿度输出存在稳定负偏移，仅可作为过程参考或进行粗略线性补偿，严禁用于产品校准与精度标定。</p>
+<p><img src="/posts/aht30-soldering-humidity-offset/PixPin_2026-10-08_15-14-38.webp" alt="AHT30说明书 恢复处理"></p>
+<h2>4. 工艺约束要求</h2>
+<ol>
+<li>严禁对传感器感应开窗区域使用洗板水、无水乙醇、助焊剂清洗剂等溶剂清洗。溶剂会对聚合物感湿膜造成不可逆污染，引发永久性测量漂移。</li>
+<li>若整板必须清洗，需预先对传感器感应区域做密封遮挡，完全避开感湿开孔部位。</li>
+<li>焊接过程中应控制峰值温度与高温持续时间，降低脱水程度，缩短恢复周期。</li>
+</ol>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-10-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=aht30-soldering-humidity-offset');
+  }
+  </script>
+</body>
+</html>

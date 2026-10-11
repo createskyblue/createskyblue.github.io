@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>砍掉色度低位肉眼几乎无感：一个可交互的 YUV 位掩码压缩实验页 - CacheRivulet小记</title>
+  <meta name="description" content="浏览器里开关 YUV 24 个位掩码，实时看图片被压缩，算清省了多少空间">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="前端">
+  <meta property="article:tag" content="JavaScript">
+  <meta property="article:tag" content="Canvas">
+  <meta property="article:tag" content="图像工具">
+  <meta property="article:published_time" content="2026-09-13">
+  <meta property="og:title" content="砍掉色度低位肉眼几乎无感：一个可交互的 YUV 位掩码压缩实验页">
+  <meta property="og:description" content="浏览器里开关 YUV 24 个位掩码，实时看图片被压缩，算清省了多少空间">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/yuv-bitmask-compress-lab/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/yuv-bitmask-compress-lab/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "砍掉色度低位肉眼几乎无感：一个可交互的 YUV 位掩码压缩实验页",
+  "description": "浏览器里开关 YUV 24 个位掩码，实时看图片被压缩，算清省了多少空间",
+  "datePublished": "2026-09-13",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/yuv-bitmask-compress-lab/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/yuv-bitmask-compress-lab/"
+  },
+  "keywords": "前端, JavaScript, Canvas, 图像工具"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">砍掉色度低位肉眼几乎无感：一个可交互的 YUV 位掩码压缩实验页</h1>
+  <article class="article-body">
+<h1>砍掉色度低位肉眼几乎无感：一个可交互的 YUV 位掩码压缩实验页</h1>
+<p>下面嵌入一个纯前端的 YUV 颜色空间小实验：页面把图片从 RGB 变换到 YUV（BT.601），每个像素拆成 Y 亮度、U/V 两个色度分量，各占 8bit。你可以逐位开关 3×8 共 24 个 bit 掩码，被关闭的位直接置零，等价于把该分量量化到更少的级数；页面随即重建压缩后图像，与原图并排对比，并给出压缩率、压缩前后大小、节省空间和 PSNR 画质评分。由于人眼对亮度敏感、对色度不敏感，优先砍 U/V 的低位往往看不出差别，却能省下大量存储空间。默认的 Y6/U4/V4 档把每像素 24bit 压到 14bit，实测节省约 42% 空间。页面内置一张默认图片（base64 内嵌），也可以拖入任意本地图片，全部计算在浏览器本地完成，不上传任何数据。</p>
+<iframe id="yuvLabFrame" data-auto-height="true" src="/posts/yuv-bitmask-compress-lab/yuv-lab.html" style="width:100%; height:1600px; border:1px solid #e2e8f0; border-radius:8px; margin:16px 0; display:block; background:#F5F7FA;" scrolling="no" loading="lazy" title="YUV 位掩码压缩交互实验"></iframe>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-13 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=yuv-bitmask-compress-lab');
+  }
+  </script>
+</body>
+</html>
