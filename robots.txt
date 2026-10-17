@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://createskyblue.github.io/sitemap.xml

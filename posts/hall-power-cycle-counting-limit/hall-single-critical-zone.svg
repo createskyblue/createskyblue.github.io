@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+  <defs>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1100" fill="#ffffff"/>
+  <text x="800" y="64" text-anchor="middle" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="42" font-weight="700" fill="#172033">单霍尔传感器的临界区域</text>
+
+  <!-- Detection zones along the path of the magnet. -->
+  <path d="M447.8 403.4 A430 430 0 0 1 585 277.6" fill="none" stroke="#e7ecef" stroke-width="92" stroke-linecap="butt"/>
+  <path d="M585 277.6 A430 430 0 0 1 688.7 234.7" fill="none" stroke="#f6b86a" stroke-width="92" stroke-linecap="butt"/>
+  <path d="M688.7 234.7 A430 430 0 0 1 911.3 234.7" fill="none" stroke="#9dd6a5" stroke-width="92" stroke-linecap="butt"/>
+  <path d="M911.3 234.7 A430 430 0 0 1 1015 277.6" fill="none" stroke="#f6b86a" stroke-width="92" stroke-linecap="butt"/>
+  <path d="M1015 277.6 A430 430 0 0 1 1152.2 403.4" fill="none" stroke="#e7ecef" stroke-width="92" stroke-linecap="butt"/>
+
+  <!-- Zone boundaries. -->
+  <g stroke="#64748b" stroke-width="2.5" stroke-dasharray="8 8" opacity="0.75">
+    <line x1="800" y1="650" x2="585" y2="277.6"/>
+    <line x1="800" y1="650" x2="688.7" y2="234.7"/>
+    <line x1="800" y1="650" x2="911.3" y2="234.7"/>
+    <line x1="800" y1="650" x2="1015" y2="277.6"/>
+  </g>
+
+  <!-- Wheel and rotation direction. -->
+  <circle cx="800" cy="650" r="300" fill="#f8fafc" stroke="#334155" stroke-width="6"/>
+  <circle cx="800" cy="650" r="8" fill="#334155"/>
+  <path d="M1018 805 A270 270 0 0 1 910 895" fill="none" stroke="#334155" stroke-width="5" marker-end="url(#arrow)"/>
+  <text x="1088" y="850" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="28" fill="#334155">旋转方向</text>
+
+  <!-- Hall sensor. -->
+  <g>
+    <rect x="748" y="98" width="104" height="62" rx="8" fill="#263238"/>
+    <rect x="766" y="160" width="12" height="28" fill="#263238"/>
+    <rect x="794" y="160" width="12" height="28" fill="#263238"/>
+    <rect x="822" y="160" width="12" height="28" fill="#263238"/>
+    <line x1="800" y1="188" x2="800" y2="650" stroke="#64748b" stroke-width="2.5" stroke-dasharray="9 9"/>
+    <text x="880" y="140" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="30" font-weight="600" fill="#263238">霍尔传感器</text>
+  </g>
+
+  <!-- Labels on the sensing zones. -->
+  <g font-family="Microsoft YaHei, Noto Sans SC, sans-serif" fill="#172033" text-anchor="middle">
+    <text x="800" y="220" font-size="27" font-weight="700">稳定激活区</text>
+    <text x="800" y="253" font-size="24">（低电平）</text>
+    <text x="635" y="284" font-size="27" font-weight="700">临界区</text>
+    <text x="965" y="284" font-size="27" font-weight="700">临界区</text>
+    <text x="448" y="362" font-size="25" font-weight="700">稳态区</text>
+    <text x="448" y="394" font-size="22">（高电平）</text>
+    <text x="1152" y="362" font-size="25" font-weight="700">稳态区</text>
+    <text x="1152" y="394" font-size="22">（高电平）</text>
+  </g>
+
+  <!-- Magnet stopped in the left critical zone. -->
+  <circle cx="688" cy="372" r="21" fill="#e53935" stroke="#9f1515" stroke-width="5"/>
+  <line x1="670" y1="390" x2="520" y2="760" stroke="#e53935" stroke-width="4"/>
+  <rect x="92" y="760" width="540" height="154" rx="12" fill="#fff7ed" stroke="#f6b86a" stroke-width="4"/>
+  <circle cx="132" cy="808" r="13" fill="#e53935"/>
+  <text x="165" y="818" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="30" font-weight="700" fill="#7c2d12">磁铁停在临界区</text>
+  <text x="132" y="869" font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="27" fill="#7c2d12">断电重启后可能读成 0 或 1</text>
+
+  <!-- Compact legend. -->
+  <g font-family="Microsoft YaHei, Noto Sans SC, sans-serif" font-size="25" fill="#334155">
+    <rect x="790" y="966" width="44" height="28" fill="#9dd6a5" stroke="#6aa873"/>
+    <text x="848" y="990">稳定激活区</text>
+    <rect x="1040" y="966" width="44" height="28" fill="#f6b86a" stroke="#c9812a"/>
+    <text x="1098" y="990">临界区</text>
+    <rect x="1225" y="966" width="44" height="28" fill="#e7ecef" stroke="#9aa6ad"/>
+    <text x="1283" y="990">稳态区</text>
+  </g>
+</svg>

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A* 在栅格地图上搜索低代价路径的工程解释 - CacheRivulet小记</title>
+  <meta name="description" content="A*栅格路径规划可视化">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="A*">
+  <meta property="article:tag" content="路径规划">
+  <meta property="article:tag" content="栅格地图">
+  <meta property="article:tag" content="机器人导航">
+  <meta property="article:tag" content="算法">
+  <meta property="article:published_time" content="2026-05-31">
+  <meta property="og:title" content="A* 在栅格地图上搜索低代价路径的工程解释">
+  <meta property="og:description" content="A*栅格路径规划可视化">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/astar-grid-path-planning-svg/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/astar-grid-path-planning-svg/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "A* 在栅格地图上搜索低代价路径的工程解释",
+  "description": "A*栅格路径规划可视化",
+  "datePublished": "2026-05-31",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/astar-grid-path-planning-svg/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/astar-grid-path-planning-svg/"
+  },
+  "keywords": "A*, 路径规划, 栅格地图, 机器人导航, 算法"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">A* 在栅格地图上搜索低代价路径的工程解释</h1>
+  <article class="article-body">
+<h1>A* 在栅格地图上搜索低代价路径的工程解释</h1>
+<p>A* 是机器人路径规划里最常见的搜索算法之一。它解决的问题很具体：给定一张栅格地图、一个起点、一个终点和一组障碍物，搜索一条从起点到终点的低代价可行路径。</p>
+<p>在室内导航项目里，A* 通常不直接运行在高精度传感器地图上。SLAM 可能维护 2cm 分辨率地图，但规划常用 5cm、10cm 或更粗的栅格。原因很直接：格子越多，搜索空间越大，open set、closed set、父节点数组和代价数组都会占用更多 RAM。</p>
+<h2>A* 要解决的问题</h2>
+<p>先把环境离散成网格。每个格子有状态：</p>
+<ul>
+<li>可通行</li>
+<li>障碍</li>
+<li>未知</li>
+<li>高代价区域</li>
+</ul>
+<p>然后给定起点 <code>S</code> 和终点 <code>G</code>，A* 在网格上扩展节点，直到找到一条通向目标的路径。</p>
+<p>下面的 SVG 使用固定 <code>10x10</code> 网格运行 8 连通 A* 后绘制。示例参数如下：</p>
+<ul>
+<li>起点：<code>(1, 8)</code>。</li>
+<li>目标：<code>(8, 1)</code>。</li>
+<li>障碍：<code>(4,1)..(4,6)</code>，<code>(6,4)</code>，<code>(7,4)</code>，<code>(8,4)</code>。</li>
+<li>移动代价：正交 <code>10</code>，对角 <code>14</code>。</li>
+<li>约束：对角移动禁止穿角。</li>
+<li>启发函数：Octile 距离。</li>
+</ul>
+<div style="margin:16px 0; padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+<svg viewBox="0 0 420 260" width="100%" role="img" aria-label="A* grid map example">
+  <rect x="0" y="0" width="420" height="260" fill="#f8fafc"/>
+  <g transform="translate(20,20)">
+    <rect x="0" y="0" width="220" height="220" fill="#ffffff" stroke="#cbd5e1"/>
+    <g stroke="#e2e8f0" stroke-width="1">
+      <path d="M22 0v220 M44 0v220 M66 0v220 M88 0v220 M110 0v220 M132 0v220 M154 0v220 M176 0v220 M198 0v220"/>
+      <path d="M0 22h220 M0 44h220 M0 66h220 M0 88h220 M0 110h220 M0 132h220 M0 154h220 M0 176h220 M0 198h220"/>
+    </g>
+    <g fill="#94a3b8">
+      <rect x="88" y="22" width="22" height="22"/>
+      <rect x="88" y="44" width="22" height="22"/>
+      <rect x="88" y="66" width="22" height="22"/>
+      <rect x="88" y="88" width="22" height="22"/>
+      <rect x="88" y="110" width="22" height="22"/>
+      <rect x="88" y="132" width="22" height="22"/>
+      <rect x="132" y="88" width="22" height="22"/>
+      <rect x="154" y="88" width="22" height="22"/>
+      <rect x="176" y="88" width="22" height="22"/>
+    </g>
+    <rect x="22" y="176" width="22" height="22" fill="#dcfce7" stroke="#22c55e"/>
+    <text x="33" y="191" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">S</text>
+    <rect x="176" y="22" width="22" height="22" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="187" y="37" text-anchor="middle" font-size="12" fill="#1d4ed8" font-weight="700">G</text>
+    <polyline points="33,187 55,165 77,165 99,165 121,165 121,143 121,121 121,99 121,77 143,55 165,33 187,33" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(270,46)" font-size="14" fill="#334155">
+    <rect x="0" y="0" width="20" height="20" fill="#dcfce7" stroke="#22c55e"/><text x="32" y="15">起点</text>
+    <rect x="0" y="36" width="20" height="20" fill="#dbeafe" stroke="#2563eb"/><text x="32" y="51">目标</text>
+    <rect x="0" y="72" width="20" height="20" fill="#94a3b8"/><text x="32" y="87">障碍</text>
+    <line x1="0" y1="118" x2="22" y2="118" stroke="#ef4444" stroke-width="4" stroke-linecap="round"/><text x="32" y="123">搜索出的路径</text>
+  </g>
+</svg>
+</div>
+
+<p>这个图里，灰色格子是障碍。红线来自 A* 回溯出的父节点链：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>(1,8) -> (2,7) -> (3,7) -> (4,7) -> (5,7) -> (5,6)</span></span>
+<span class="line"><span>      -> (5,5) -> (5,4) -> (5,3) -> (6,2) -> (7,1) -> (8,1)</span></span></code></pre><p>这条路径没有进入障碍格，也没有通过对角移动穿过障碍角点。</p>
+<h2>三个代价：g、h、f</h2>
+<p>A* 的核心公式只有一个：</p>
+<div class="math-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>f</mi><mo stretchy="false">(</mo><mi>n</mi><mo stretchy="false">)</mo><mo>=</mo><mi>g</mi><mo stretchy="false">(</mo><mi>n</mi><mo stretchy="false">)</mo><mo>+</mo><mi>h</mi><mo stretchy="false">(</mo><mi>n</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f(n) = g(n) + h(n)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mclose">)</span></span></span></span></span></div>
+<p>含义如下：</p>
+<table>
+<thead>
+<tr>
+<th>符号</th>
+<th>含义</th>
+<th>工程解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>g(n)</code></td>
+<td>从起点走到当前格子的已知代价</td>
+<td>已经花掉的成本</td>
+</tr>
+<tr>
+<td><code>h(n)</code></td>
+<td>从当前格子到目标的估计代价</td>
+<td>还要花多少成本</td>
+</tr>
+<tr>
+<td><code>f(n)</code></td>
+<td>总估计代价</td>
+<td>用来决定下一步扩展谁</td>
+</tr>
+</tbody></table>
+<p>A* 每次从 open set 里取出 <code>f</code> 最小的格子扩展。<code>g</code> 让搜索不乱跑，<code>h</code> 让搜索朝目标靠近。</p>
+<div style="margin:16px 0; padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+<svg viewBox="0 0 620 170" width="100%" role="img" aria-label="A star cost formula visualization">
+  <rect x="0" y="0" width="620" height="170" fill="#f8fafc"/>
+  <g transform="translate(24,34)">
+    <rect x="0" y="0" width="150" height="90" rx="8" fill="#ffffff" stroke="#dcfce7"/>
+    <text x="75" y="34" text-anchor="middle" font-size="24" fill="#166534" font-weight="700">g(n)</text>
+    <text x="75" y="62" text-anchor="middle" font-size="13" fill="#475569">起点到当前格</text>
+  </g>
+  <text x="205" y="88" text-anchor="middle" font-size="30" fill="#64748b">+</text>
+  <g transform="translate(234,34)">
+    <rect x="0" y="0" width="150" height="90" rx="8" fill="#ffffff" stroke="#dbeafe"/>
+    <text x="75" y="34" text-anchor="middle" font-size="24" fill="#1d4ed8" font-weight="700">h(n)</text>
+    <text x="75" y="62" text-anchor="middle" font-size="13" fill="#475569">当前格到目标估计</text>
+  </g>
+  <text x="415" y="88" text-anchor="middle" font-size="30" fill="#64748b">=</text>
+  <g transform="translate(444,34)">
+    <rect x="0" y="0" width="150" height="90" rx="8" fill="#ffffff" stroke="#fef08a"/>
+    <text x="75" y="34" text-anchor="middle" font-size="24" fill="#854d0e" font-weight="700">f(n)</text>
+    <text x="75" y="62" text-anchor="middle" font-size="13" fill="#475569">扩展优先级</text>
+  </g>
+</svg>
+</div>
+
+<p><code>h(n)</code> 叫启发函数。它不能随便写。常见选择：</p>
+<ul>
+<li>4 连通网格：曼哈顿距离。</li>
+<li>8 连通网格：Octile 距离。</li>
+<li>任意方向连续空间：欧氏距离。</li>
+</ul>
+<p>在 8 连通栅格里，正交移动代价常设为 <code>10</code>，对角移动代价常设为 <code>14</code>，因为 <code>14</code> 近似 <code>10 * sqrt(2)</code>。这样可以用整数代价避免浮点。</p>
+<h2>open set 和 closed set</h2>
+<p>A* 维护两类集合。</p>
+<ul>
+<li>open set：已经发现，但还没有扩展的格子。</li>
+<li>closed set：已经扩展过，不需要重复处理的格子。</li>
+</ul>
+<p>每一轮循环：</p>
+<ol>
+<li>从 open set 取出 <code>f</code> 最小的格子。</li>
+<li>把它放入 closed set。</li>
+<li>检查它的相邻格子。</li>
+<li>如果相邻格子可通行，计算新的 <code>g</code>、<code>h</code>、<code>f</code>。</li>
+<li>如果这条路更便宜，更新该格子的父节点。</li>
+<li>到达目标后，从目标格沿父节点回溯出路径。</li>
+</ol>
+<div style="margin:16px 0; padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+<svg viewBox="0 0 520 250" width="100%" role="img" aria-label="A star open and closed set">
+  <rect x="0" y="0" width="520" height="250" fill="#f8fafc"/>
+  <g transform="translate(28,18)">
+    <rect x="0" y="0" width="220" height="220" fill="#ffffff" stroke="#cbd5e1"/>
+    <g stroke="#e2e8f0" stroke-width="1">
+      <path d="M22 0v220 M44 0v220 M66 0v220 M88 0v220 M110 0v220 M132 0v220 M154 0v220 M176 0v220 M198 0v220"/>
+      <path d="M0 22h220 M0 44h220 M0 66h220 M0 88h220 M0 110h220 M0 132h220 M0 154h220 M0 176h220 M0 198h220"/>
+    </g>
+    <g fill="#94a3b8">
+      <rect x="88" y="44" width="22" height="22"/>
+      <rect x="88" y="66" width="22" height="22"/>
+      <rect x="88" y="88" width="22" height="22"/>
+      <rect x="88" y="110" width="22" height="22"/>
+      <rect x="110" y="110" width="22" height="22"/>
+      <rect x="132" y="110" width="22" height="22"/>
+    </g>
+    <g fill="#bfdbfe">
+      <rect x="22" y="154" width="22" height="22"/>
+      <rect x="44" y="154" width="22" height="22"/>
+      <rect x="66" y="132" width="22" height="22"/>
+      <rect x="66" y="110" width="22" height="22"/>
+      <rect x="66" y="88" width="22" height="22"/>
+      <rect x="88" y="132" width="22" height="22"/>
+    </g>
+    <g fill="#fef9c3">
+      <rect x="44" y="132" width="22" height="22"/>
+      <rect x="44" y="176" width="22" height="22"/>
+      <rect x="66" y="154" width="22" height="22"/>
+      <rect x="110" y="132" width="22" height="22"/>
+      <rect x="66" y="66" width="22" height="22"/>
+    </g>
+    <rect x="22" y="176" width="22" height="22" fill="#dcfce7" stroke="#22c55e"/>
+    <text x="33" y="191" text-anchor="middle" font-size="12" fill="#166534" font-weight="700">S</text>
+    <rect x="176" y="22" width="22" height="22" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="187" y="37" text-anchor="middle" font-size="12" fill="#1d4ed8" font-weight="700">G</text>
+  </g>
+  <g transform="translate(300,58)" font-size="14" fill="#334155">
+    <rect x="0" y="0" width="20" height="20" fill="#bfdbfe"/><text x="32" y="15">closed set：已经扩展</text>
+    <rect x="0" y="40" width="20" height="20" fill="#fef9c3"/><text x="32" y="55">open set：候选边界</text>
+    <rect x="0" y="80" width="20" height="20" fill="#94a3b8"/><text x="32" y="95">障碍格</text>
+    <rect x="0" y="120" width="20" height="20" fill="#ffffff" stroke="#cbd5e1"/><text x="32" y="135">尚未访问</text>
+  </g>
+</svg>
+</div>
+
+<p>open set 通常用最小堆实现。每次取 <code>f</code> 最小节点的复杂度是 <code>O(log N)</code>，比每轮扫描整个数组更适合大地图。</p>
+<h2>4 连通和 8 连通</h2>
+<p>4 连通只能上下左右移动。8 连通允许对角移动。</p>
+<table>
+<thead>
+<tr>
+<th>连通方式</th>
+<th>可移动方向</th>
+<th>适合场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>4 连通</td>
+<td>上、下、左、右</td>
+<td>机器人不能斜穿格子，路径更保守</td>
+</tr>
+<tr>
+<td>8 连通</td>
+<td>上、下、左、右、四个对角</td>
+<td>路径更短，更接近真实移动</td>
+</tr>
+</tbody></table>
+<p>8 连通要处理一个额外问题：对角线穿角。如果两个正交相邻格子都是障碍，机器人不能从它们之间斜穿过去。工程实现通常会禁止这种对角移动。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>障碍  可走</span></span>
+<span class="line"><span>可走  当前</span></span></code></pre><p>从“当前”斜走到左上角时，左侧和上侧至少要有足够通道，否则会擦过障碍角。</p>
+<h2>障碍膨胀和代价地图</h2>
+<p>真实机器人有尺寸。即使某个格子没有障碍，贴着障碍边走也可能碰撞。因此规划前通常会做障碍膨胀。</p>
+<p>障碍膨胀的做法是：把障碍周围若干格标成高代价区域。离障碍越近，代价越高。</p>
+<div style="margin:16px 0; padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+<svg viewBox="0 0 520 250" width="100%" role="img" aria-label="Obstacle inflation cost map">
+  <rect x="0" y="0" width="520" height="250" fill="#f8fafc"/>
+  <g transform="translate(28,18)">
+    <rect x="0" y="0" width="220" height="220" fill="#ffffff" stroke="#cbd5e1"/>
+    <g stroke="#e2e8f0" stroke-width="1">
+      <path d="M22 0v220 M44 0v220 M66 0v220 M88 0v220 M110 0v220 M132 0v220 M154 0v220 M176 0v220 M198 0v220"/>
+      <path d="M0 22h220 M0 44h220 M0 66h220 M0 88h220 M0 110h220 M0 132h220 M0 154h220 M0 176h220 M0 198h220"/>
+    </g>
+    <g fill="#fef9c3">
+      <rect x="66" y="66" width="22" height="22"/>
+      <rect x="88" y="66" width="22" height="22"/>
+      <rect x="110" y="66" width="22" height="22"/>
+      <rect x="66" y="88" width="22" height="22"/>
+      <rect x="110" y="88" width="22" height="22"/>
+      <rect x="66" y="110" width="22" height="22"/>
+      <rect x="88" y="110" width="22" height="22"/>
+      <rect x="110" y="110" width="22" height="22"/>
+    </g>
+    <g fill="#fee2e2">
+      <rect x="88" y="88" width="22" height="22"/>
+    </g>
+    <rect x="88" y="88" width="22" height="22" fill="#64748b"/>
+    <g fill="#dcfce7">
+      <rect x="22" y="176" width="22" height="22"/>
+      <rect x="44" y="176" width="22" height="22"/>
+      <rect x="66" y="176" width="22" height="22"/>
+      <rect x="88" y="176" width="22" height="22"/>
+      <rect x="110" y="176" width="22" height="22"/>
+      <rect x="132" y="154" width="22" height="22"/>
+      <rect x="154" y="132" width="22" height="22"/>
+    </g>
+  </g>
+  <g transform="translate(300,54)" font-size="14" fill="#334155">
+    <rect x="0" y="0" width="20" height="20" fill="#64748b"/><text x="32" y="15">障碍：不可通行</text>
+    <rect x="0" y="40" width="20" height="20" fill="#fee2e2"/><text x="32" y="55">硬膨胀：极高代价</text>
+    <rect x="0" y="80" width="20" height="20" fill="#fef9c3"/><text x="32" y="95">软膨胀：增加代价</text>
+    <rect x="0" y="120" width="20" height="20" fill="#dcfce7"/><text x="32" y="135">规划路径更倾向远离障碍</text>
+  </g>
+</svg>
+</div>
+
+<p>代价地图会进入 <code>g(n)</code>。路径如果靠近障碍，虽然几何距离短，但总代价可能更高。这样 A* 会倾向于选择更安全的路线。</p>
+<h2>A* 的基本伪代码</h2>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">open_set.</span><span style="color:#DCDCAA">push</span><span style="color:#D4D4D4">(start);</span></span>
+<span class="line"><span style="color:#9CDCFE">g</span><span style="color:#D4D4D4">[start] = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#9CDCFE">parent</span><span style="color:#D4D4D4">[start] = none;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">while</span><span style="color:#D4D4D4"> (!open_set.</span><span style="color:#DCDCAA">empty</span><span style="color:#D4D4D4">()) {</span></span>
+<span class="line"><span style="color:#D4D4D4">    current = </span><span style="color:#9CDCFE">open_set</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">pop_min_f</span><span style="color:#D4D4D4">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (current == goal) {</span></span>
+<span class="line"><span style="color:#C586C0">        return</span><span style="color:#DCDCAA"> rebuild_path</span><span style="color:#D4D4D4">(parent, goal);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#9CDCFE">    closed</span><span style="color:#D4D4D4">[current] = </span><span style="color:#569CD6">true</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    for</span><span style="color:#D4D4D4"> each neighbor of current {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (neighbor is obstacle || </span><span style="color:#9CDCFE">closed</span><span style="color:#D4D4D4">[neighbor]) {</span></span>
+<span class="line"><span style="color:#C586C0">            continue</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D4D4D4">        tentative_g = </span><span style="color:#9CDCFE">g</span><span style="color:#D4D4D4">[current] + </span><span style="color:#DCDCAA">move_cost</span><span style="color:#D4D4D4">(current, neighbor) + </span><span style="color:#DCDCAA">cell_cost</span><span style="color:#D4D4D4">(neighbor);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (neighbor not in open_set || tentative_g &#x3C; </span><span style="color:#9CDCFE">g</span><span style="color:#D4D4D4">[neighbor]) {</span></span>
+<span class="line"><span style="color:#9CDCFE">            parent</span><span style="color:#D4D4D4">[neighbor] = current;</span></span>
+<span class="line"><span style="color:#9CDCFE">            g</span><span style="color:#D4D4D4">[neighbor] = tentative_g;</span></span>
+<span class="line"><span style="color:#9CDCFE">            h</span><span style="color:#D4D4D4">[neighbor] = </span><span style="color:#DCDCAA">heuristic</span><span style="color:#D4D4D4">(neighbor, goal);</span></span>
+<span class="line"><span style="color:#9CDCFE">            f</span><span style="color:#D4D4D4">[neighbor] = </span><span style="color:#9CDCFE">g</span><span style="color:#D4D4D4">[neighbor] + </span><span style="color:#9CDCFE">h</span><span style="color:#D4D4D4">[neighbor];</span></span>
+<span class="line"><span style="color:#9CDCFE">            open_set</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">push_or_update</span><span style="color:#D4D4D4">(neighbor, </span><span style="color:#9CDCFE">f</span><span style="color:#D4D4D4">[neighbor]);</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">return</span><span style="color:#D4D4D4"> no_path;</span></span></code></pre><p>工程实现里还会额外处理：</p>
+<ul>
+<li>起点或终点落在障碍上。</li>
+<li>目标附近容差，不要求精确到某个格子。</li>
+<li>open set 容量上限。</li>
+<li>路径数组长度上限。</li>
+<li>旧路径亲和度，减少重规划抖动。</li>
+<li>未知区是否允许通行。</li>
+</ul>
+<h2>在嵌入式导航里的取舍</h2>
+<p>嵌入式项目里，A* 的关键约束是内存和时间预算。</p>
+<p>以 40 x 40 规划图为例，只有 1600 个格子。可以为每个格子准备：</p>
+<ul>
+<li><code>g_cost</code></li>
+<li><code>parent</code></li>
+<li><code>state</code></li>
+<li><code>heap_index</code></li>
+<li><code>cell_cost</code></li>
+</ul>
+<p>这些数组可以静态分配，避免动态内存。</p>
+<p>如果直接在 200 x 200 地图上搜索，节点数量变成 40000。RAM、open set 和最坏搜索时间都会明显上升。NoeticMaze 这类 MCU 项目通常会保留一张高精度 SLAM 图，再降采样出低分辨率规划图。</p>
+<h2>A* 的边界</h2>
+<p>A* 只负责在当前代价地图上搜索路径。</p>
+<p>它不负责：</p>
+<ul>
+<li>感知障碍。</li>
+<li>估计机器人位置。</li>
+<li>控制电机。</li>
+<li>修正地图漂移。</li>
+<li>预测动态障碍物。</li>
+</ul>
+<p>它依赖上游模块提供正确地图，依赖下游控制器跟踪路径。地图错了，A* 会在错误地图上认真搜索；控制器跟踪不好，路径再合理也无法稳定执行。</p>
+<h2>总结</h2>
+<p>A* 的核心可以压缩成一句话：每次扩展 <code>f(n)=g(n)+h(n)</code> 最小的候选格子，并用父节点记录最便宜的来路。</p>
+<p>在机器人导航里，真正需要工程化处理的是栅格分辨率、代价地图、障碍膨胀、open set 数据结构、路径平滑和重规划稳定性。算法本身不复杂，复杂的是把它放进有限 RAM、有限 CPU 和真实底盘误差里运行。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-05-31 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=astar-grid-path-planning-svg');
+  }
+  </script>
+</body>
+</html>

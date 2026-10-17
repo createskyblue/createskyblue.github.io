@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=286, height=482, initial-scale=1.0, user-scalable=no">
+<title>手环表盘 · 段码屏+点阵 复古</title>
+<style>
+  :root{
+    --on:  #2eff2e;          /* 唯一点亮色：纯绿 */
+    --ghost: rgba(46,255,46,.14);   /* 未点亮的幽灵轮廓（暗绿） */
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  body{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:transparent;
+  }
+
+  .watchface{
+    width:286px;
+    height:482px;
+    position:relative;
+    overflow:hidden;
+    border-radius:48px;
+    background:#070b06;          /* 屏幕底色 RGB(7,11,6) */
+    border:1px solid #0a120c;
+  }
+
+  /* ===== 心率部件（顶部左上）：心形矢量图标 + 3位心率数（红色） ===== */
+  .hr{
+    position:relative;
+    height:54px;
+  }
+  .hr-heart{
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    width:62px;                 /* 约占两位数码管宽度 */
+    height:54px;
+  }
+  .hr-box{
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    left:0;
+    display:flex;
+    align-items:center;
+  }
+  .hr-num{
+    display:flex;
+    align-items:center;
+    gap:3px;
+    --dot:6px;                  /* 与时间/日期点阵同尺寸 */
+    --gap:1px;
+  }
+  /* 心率为红色的点阵（覆盖全局绿色） */
+  .hr-num .px.on{
+    background:#ff2e2e;
+    box-shadow:0 0 5px rgba(255,46,46,.7);
+  }
+  .hr-num .px.off{
+    background:#2a110d;
+  }
+
+  .stack{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;      /* 子行拉满全宽，便于内部左对齐 */
+    justify-content:flex-end; /* 内容下沉靠底 */
+    padding-bottom:74px;      /* 底部留白（微微上移一点） */
+    gap:30px;
+  }
+
+  /* ===== 点阵数字：单色 on=纯绿 / off=暗 ===== */
+  .digit{
+    display:grid;
+    grid-template-columns:repeat(5, var(--dot));
+    grid-auto-rows:var(--dot);
+    gap:var(--gap);
+  }
+  .px{
+    width:var(--dot);
+    height:var(--dot);
+    border-radius:50%;
+  }
+  .px.on{ background:var(--on); }
+  .px.off{ background:#0b1d10; }
+
+  /* ===== 第 1 行：星期 = 段码屏固定图标（绿色圆角矩形 + 文字镂空，当前点亮） ===== */
+  /* ===== 星期：保持居中 ===== */
+  .wrow{
+    display:flex;
+    justify-content:center;
+    gap:4px;
+  }
+  .wd{
+    width:34px;
+    height:40px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:8px;
+    background:#0b1d10;                  /* 未点亮：暗色 */
+    border:1px solid #0b1d10;            /* 边框与背景同色（无明显描边） */
+  }
+  .wd .n{
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    font-size:19px;
+    font-weight:700;
+    color:#0a1710;                       /* 文字也同色（不可见/极暗） */
+  }
+  /* 当前星期：绿色圆角矩形，文字被剪掉（镂空出屏幕底色） */
+  .wd.on{
+    background:var(--on);                /* 绿色圆角矩形 */
+    border-color:var(--on);
+  }
+  .wd.on .n{
+    color:#070b06;                       /* 镂空：露出屏幕底色 */
+  }
+
+  /* ===== 第 2 行：月 / 日（点阵，含斜杠；左对齐，与时间同尺寸） ===== */
+  .date{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;   /* 左对齐 */
+    gap:5px;
+    padding-left:18px;
+    --dot:6px;
+    --gap:1px;
+  }
+
+  /* ===== 第 3 行：时 : 分 : 秒（点阵；左对齐） ===== */
+  .time{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;   /* 左对齐 */
+    gap:5px;
+    padding-left:18px;
+    --dot:6px;
+    --gap:1px;
+  }
+  .colon{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:calc(var(--gap) + 4px);
+    margin:0 2px;
+  }
+  .colon i{
+    width:var(--dot);
+    height:var(--dot);
+    border-radius:50%;
+    background:var(--on);
+  }
+</style>
+</head>
+<body>
+  <div class="watchface">
+    <div class="stack">
+      <!-- 心率（时间上方，间距与时间/日期一致） -->
+      <div class="hr">
+        <svg class="hr-heart" viewBox="0 0 24 22"><path id="heartPath" fill="#ff2e2e"/></svg>
+        <div class="hr-box"><div class="hr-num" id="hr"></div></div>
+      </div>
+      <div class="time" id="time"></div>
+      <div class="date" id="date"></div>
+      <div class="wrow" id="wrow"></div>
+    </div>
+  </div>
+
+<script>
+  const FONT = {
+    "0":["01110","10001","10001","10001","10001","10001","01110"],
+    "1":["00100","01100","00100","00100","00100","00100","01110"],
+    "2":["01110","10001","00001","00010","00100","01000","11111"],
+    "3":["11111","00010","00100","00010","00001","10001","01110"],
+    "4":["00010","00110","01010","10010","11111","00010","00010"],
+    "5":["11111","10000","11110","00001","00001","10001","01110"],
+    "6":["00110","01000","10000","11110","10001","10001","01110"],
+    "7":["11111","00001","00010","00100","01000","01000","01000"],
+    "8":["01110","10001","10001","01110","10001","10001","01110"],
+    "9":["01110","10001","10001","01111","00001","00010","01100"],
+    "/":["00000","00000","00000","01110","00000","00000","00000"]
+  };
+
+  // 星期图标：中文 一 二 三 四 五 六 日（周一~周日）
+  const DAYCN = ['一','二','三','四','五','六','日'];
+
+  function digitHTML(ch){
+    const rows = FONT[ch];
+    let cells = '';
+    for(let r=0;r<7;r++){
+      const row = rows ? rows[r] : '00000';
+      for(let c=0;c<5;c++){
+        cells += '<span class="px '+(row[c]==='1'?'on':'off')+'"></span>';
+      }
+    }
+    return '<span class="digit">'+cells+'</span>';
+  }
+
+  function setNum(elm, str){
+    let html = '';
+    for(const ch of str) html += digitHTML(ch);
+    elm.innerHTML = html;
+  }
+
+  function colonHTML(){
+    return '<span class="colon"><i></i><i></i></span>';
+  }
+
+  function pad(n){ return n<10 ? '0'+n : ''+n; }
+
+  function renderWeek(todayIndex){   // 0=周一 ... 6=周日
+    let html = '';
+    for(let i=0;i<7;i++){
+      const on = (i === todayIndex);
+      html += '<div class="wd'+(on?' on':'')+'"><span class="n">'+DAYCN[i]+'</span></div>';
+    }
+    document.getElementById('wrow').innerHTML = html;
+  }
+
+  // 将心形居中于小时两位数字，心率第一位对齐分钟左边一位
+  function positionHR(){
+    const time=document.getElementById('time');
+    const hr=document.querySelector('.hr');
+    const heart=document.querySelector('.hr-heart');
+    const box=document.querySelector('.hr-box');
+    if(!time||!hr||!heart||!box) return;
+    const k=time.children;
+    if(k.length<4) return;
+    const hrL=hr.getBoundingClientRect().left;
+    const d0=k[0].getBoundingClientRect();
+    const d1=k[1].getBoundingClientRect();
+    const d3=k[3].getBoundingClientRect();
+    const hourCx=((d0.left+d1.right)/2) - hrL;   // 小时两位数字中心
+    const mTensX=d3.left - hrL;                  // 分钟左边一位的起点
+    const hw=heart.getBoundingClientRect().width;
+    heart.style.left=(hourCx - hw/2)+'px';
+    box.style.left=mTensX+'px';
+  }
+
+  // 用数学公式（心形参数方程）生成心形 SVG 路径，并对底部尖角做圆角处理
+  function buildHeart(radius){
+    const W=24, H=22, N=220;
+    // 底部平圆程度：越大约平（控制点压得越低）
+    const flat = (radius==null? 0.5 : radius);
+    const raw=[];
+    for(let i=0;i<=N;i++){
+      const t=(i/N)*2*Math.PI;
+      const x=16*Math.pow(Math.sin(t),3);
+      const y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);
+      raw.push([x,y]);
+    }
+    let iv=0; for(let i=0;i<=N;i++) if(raw[i][1]<raw[iv][1]) iv=i;   // 底部尖点
+    const xs=raw.map(p=>p[0]), ys=raw.map(p=>p[1]);
+    const xmin=Math.min(...xs), xmax=Math.max(...xs);
+    const ymin=Math.min(...ys), ymax=Math.max(...ys);
+    const sc=Math.min(W/(xmax-xmin), H/(ymax-ymin));
+    const ox=(W-(xmax-xmin)*sc)/2 - xmin*sc;
+    const oy=(H-(ymax-ymin)*sc)/2 + ymax*sc;   // 翻转 Y
+    const P=raw.map(p=>[p[0]*sc+ox, -p[1]*sc+oy]);
+    // 底部左右各取一点，用压平的二次/三次曲线连成圆润底 U（彻底去掉尖点）
+    const k=6;                                  // 底部左右各取多远的点
+    const Li=Math.max(1, iv-k), Ri=Math.min(N-1, iv+k);
+    const L=P[Li], R=P[Ri];
+    const bottomY=P[iv][1];
+    const span=R[0]-L[0];
+    const c1=[L[0]+span*0.35, bottomY+ (bottomY-L[1])*flat];
+    const c2=[L[0]+span*0.65, bottomY+ (bottomY-R[1])*flat];
+    let d='M'+P[0][0].toFixed(2)+' '+P[0][1].toFixed(2);
+    for(let i=1;i<=N;i++){
+      if(i===Li){
+        d+='L'+L[0].toFixed(2)+' '+L[1].toFixed(2);
+        d+='C'+c1[0].toFixed(2)+' '+c1[1].toFixed(2)+' '+c2[0].toFixed(2)+' '+c2[1].toFixed(2)+' '+R[0].toFixed(2)+' '+R[1].toFixed(2);
+        i=Ri;                                    // 跳过底部中间点
+      } else {
+        d+='L'+P[i][0].toFixed(2)+' '+P[i][1].toFixed(2);
+      }
+    }
+    d+='Z';
+    const el=document.getElementById('heartPath');
+    if(el) el.setAttribute('d', d);
+  }
+
+  function render(){
+    const d = new Date();
+    const dow = d.getDay();                     // 0=日 ... 6=六
+    const todayIndex = (dow + 6) % 7;           // 0=周一 ... 6=周日
+
+    renderWeek(todayIndex);
+    setNum(document.getElementById('date'), pad(d.getMonth()+1) + '/' + pad(d.getDate()));
+
+    const t = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    let tm = '';
+    for(const ch of t) tm += (ch === ':') ? colonHTML() : digitHTML(ch);
+    document.getElementById('time').innerHTML = tm;
+
+    positionHR();
+  }
+
+  function renderHR(){
+    const min=60, max=140;
+    const v=Math.floor(Math.random()*(max-min+1))+min;
+    const el=document.getElementById('hr');
+    if(el) setNum(el, String(v).padStart(3,'0'));
+  }
+
+  render();
+  setInterval(render, 1000);
+  renderHR();
+  setInterval(renderHR, 1000);
+  buildHeart();
+  window.addEventListener('load', positionHR);
+</script>
+</body>
+</html>
