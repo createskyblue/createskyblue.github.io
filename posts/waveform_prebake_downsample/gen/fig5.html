@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px}
+  body{padding:56px;background:#fff;color:#16202f;display:flex;flex-direction:column;
+       font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;
+       position:relative}
+  h1{font-size:36px;font-weight:600;letter-spacing:-.4px}
+  .sub{margin-top:14px;font-size:21px;color:#66768c}
+  .steps{position:absolute;right:56px;top:54px;display:flex;gap:9px;font-size:17px;color:#bdc6d3}
+  .steps b{color:#16202f;font-weight:600}
+
+  .legend{margin-top:26px;display:flex;align-items:center;gap:24px;font-size:18px;color:#66768c}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .ln{width:30px;height:3px;border-radius:2px;background:#16202f}
+  .legend .sw{width:16px;height:16px;border-radius:4px}
+  svg{display:block}
+  .tail{margin-top:auto;font-size:19px;color:#66768c}
+</style>
+</head>
+<body>
+  <h1>边界附近不来回切</h1>
+  <div class="sub">上行越过 8 点/像素才切下一档，回落跌破 6.4 才退回。</div>
+  <div class="steps"><span>切片</span><span>·</span><span>算桶</span><span>·</span><span>落盘</span><span>·</span><b>渲染</b></div>
+
+  <div class="legend">
+    <div class="item"><span class="ln"></span><span>倍率 R</span></div>
+    <div class="item"><span class="sw" style="background:#e9f0f9;border:1.4px solid #2b6cb0"></span><span>实时聚合</span></div>
+    <div class="item"><span class="sw" style="background:#eff8f5;border:1.4px solid #3f9d88"></span><span>K2</span></div>
+    <div class="item"><span class="sw" style="background:#e6f4ef;border:1.4px solid #1b6b58"></span><span>K3</span></div>
+    <div class="item"><span class="sw" style="background:#fbf1e2;border:1.4px solid #a5621c"></span><span>K4</span></div>
+    <div class="item"><span class="sw" style="background:#f1ecf8;border:1.4px solid #6b4f9e"></span><span>K5</span></div>
+  </div>
+
+  <svg id="chart" width="968" height="742" viewBox="0 0 968 742" xmlns="http://www.w3.org/2000/svg"></svg>
+
+  <div class="tail">阈值取 2 的整数次幂，和桶的粒度对齐；上下行相差 20%，避免来回切档。</div>
+
+<script>
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  var svg = document.getElementById('chart');
+  function el(tag, a, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in a) e.setAttribute(k, a[k]);
+    if (text != null) e.textContent = text;
+    svg.appendChild(e);
+    return e;
+  }
+
+  var X0 = 96, X1 = 872, YA0 = 40, YA1 = 470;
+  var YB = { 0: 700, 1: 664, 2: 628, 3: 592, 4: 556 };
+  var UP = [4, 8, 16, 32], DOWN = [null, 3.2, 6.4, 12.8, 25.6];
+  var ST = [
+    { name: '实时聚合', col: '#2b6cb0', band: '#e9f0f9' },
+    { name: 'K2', col: '#3f9d88', band: '#eff8f5' },
+    { name: 'K3', col: '#1b6b58', band: '#e6f4ef' },
+    { name: 'K4', col: '#a5621c', band: '#fbf1e2' },
+    { name: 'K5', col: '#6b4f9e', band: '#f1ecf8' }
+  ];
+
+  function X(t) { return X0 + (X1 - X0) * t / 100; }
+  function Y(r) { return YA1 - (Math.log2(r) - 1) / 5 * (YA1 - YA0); }
+
+  function ratio(t) {
+    if (t < 18) return Math.pow(2, 1.32 + (Math.log2(9) - 1.32) * t / 18);
+    if (t < 34) return Math.pow(2, Math.log2(8.2) + 0.075 * Math.sin(2 * Math.PI * (t - 18) / 2.4));
+    if (t < 52) return Math.pow(2, Math.log2(8.7) + (Math.log2(40) - Math.log2(8.7)) * (t - 34) / 18);
+    if (t < 62) return 40;
+    if (t < 84) return Math.pow(2, Math.log2(40) + (1.32 - Math.log2(40)) * (t - 62) / 22);
+    return Math.pow(2, 1.32 - 0.32 * (t - 84) / 16);
+  }
+
+  var runs = [], lv = 0, cur = null, start = 0;
+  for (var t = 0; t <= 100.0001; t += 0.05) {
+    var r = ratio(t);
+    while (lv < 4 && r >= UP[lv]) lv++;
+    while (lv > 0 && r < DOWN[lv]) lv--;
+    if (cur === null) cur = lv;
+    else if (lv !== cur) { runs.push([start, t, cur]); start = t; cur = lv; }
+  }
+  runs.push([start, 100, cur]);
+
+  runs.forEach(function (rn) {
+    el('rect', { x: X(rn[0]), y: YA0, width: X(rn[1]) - X(rn[0]), height: YA1 - YA0,
+                 fill: ST[rn[2]].band, opacity: '.9' });
+  });
+
+  [2, 4, 8, 16, 32, 64].forEach(function (r) {
+    var y = Y(r);
+    el('line', { x1: X0, y1: y, x2: X1, y2: y, stroke: '#e7edf6', 'stroke-width': 1.2 });
+    el('text', { x: X0 - 16, y: y + 6, 'text-anchor': 'end', 'font-size': 18, fill: '#8d99a9' }, r);
+  });
+  el('text', { x: X0 - 4, y: YA0 - 16, 'font-size': 18, fill: '#7b8798' }, 'R（点/像素）');
+  el('line', { x1: X0, y1: YA0 - 8, x2: X0, y2: YA1, stroke: '#c9d4e3', 'stroke-width': 1.4 });
+  el('line', { x1: X0, y1: YA1, x2: X1, y2: YA1, stroke: '#c9d4e3', 'stroke-width': 1.4 });
+
+  [12.8, 25.6].forEach(function (r) {
+    el('line', { x1: X0, y1: Y(r), x2: X1, y2: Y(r), stroke: '#c8b4b2',
+                 'stroke-width': 1.2, 'stroke-dasharray': '6 6' });
+  });
+  [3.2].forEach(function (r) {
+    el('line', { x1: X0, y1: Y(r), x2: X1, y2: Y(r), stroke: '#c8b4b2',
+                 'stroke-width': 1.2, 'stroke-dasharray': '6 6' });
+  });
+  [4].forEach(function (r) {
+    el('line', { x1: X0, y1: Y(r), x2: X1, y2: Y(r), stroke: '#b9c6d8',
+                 'stroke-width': 1.2, 'stroke-dasharray': '7 7' });
+  });
+  [6.4].forEach(function (r) {
+    el('line', { x1: X0, y1: Y(r), x2: X1, y2: Y(r), stroke: '#b23c36',
+                 'stroke-width': 1.6, 'stroke-dasharray': '8 5' });
+  });
+  [8].forEach(function (r) {
+    el('line', { x1: X0, y1: Y(r), x2: X1, y2: Y(r), stroke: '#b23c36',
+                 'stroke-width': 1.8, 'stroke-dasharray': '10 6' });
+  });
+  [16, 32].forEach(function (r) {
+    el('line', { x1: X0, y1: Y(r), x2: X1, y2: Y(r), stroke: '#b9c6d8',
+                 'stroke-width': 1.2, 'stroke-dasharray': '7 7' });
+  });
+
+  var pts = [];
+  for (var tt = 0; tt <= 100.0001; tt += 0.25) pts.push(X(tt).toFixed(1) + ',' + Y(ratio(tt)).toFixed(1));
+  el('polyline', { points: pts.join(' '), fill: 'none', stroke: '#16202f',
+                   'stroke-width': 3.4, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+
+  [[4, '上切 4', '#8d99a9', 400], [3.2, '下切 3.2', '#8d99a9', 400],
+   [8, '上切 8', '#b23c36', 600], [6.4, '下切 6.4', '#b23c36', 600],
+   [16, '上切 16', '#8d99a9', 400], [12.8, '下切 12.8', '#8d99a9', 400],
+   [32, '上切 32', '#8d99a9', 400], [25.6, '下切 25.6', '#8d99a9', 400]].forEach(function (g) {
+    el('text', { x: X1 + 16, y: Y(g[0]) + 6, 'font-size': 17, fill: g[2], 'font-weight': g[3] }, g[1]);
+  });
+
+  var jx = X(26), jy = Y(8);
+  el('text', { x: jx - 40, y: 400, 'font-size': 21, fill: '#16202f', 'font-weight': 600 }, '在 8 附近抖动');
+  el('text', { x: jx - 40, y: 432, 'font-size': 18, fill: '#66768c' }, '跌破 6.4 才退回，档位不跳');
+  el('line', { x1: jx, y1: jy + 12, x2: jx, y2: 386, stroke: '#b8c4d6',
+               'stroke-width': 1.2, 'stroke-dasharray': '6 6' });
+  el('circle', { cx: jx, cy: jy, r: 5, fill: '#b23c36', stroke: '#fff', 'stroke-width': 2 });
+
+  ST.forEach(function (s, i) {
+    el('line', { x1: X0, y1: YB[i], x2: X1, y2: YB[i], stroke: '#eff3f9', 'stroke-width': 1.2 });
+    el('text', { x: X0 - 16, y: YB[i] + 6, 'text-anchor': 'end', 'font-size': 18,
+                 fill: s.col, 'font-weight': 600 }, s.name);
+  });
+  var prev = null;
+  runs.forEach(function (rn) {
+    var y = YB[rn[2]];
+    el('line', { x1: X(rn[0]), y1: y, x2: X(rn[1]), y2: y, stroke: ST[rn[2]].col,
+                 'stroke-width': 6, 'stroke-linecap': 'round' });
+    if (prev !== null) {
+      el('line', { x1: X(rn[0]), y1: prev, x2: X(rn[0]), y2: y, stroke: '#c9d4e3', 'stroke-width': 1.6 });
+      el('circle', { cx: X(rn[0]), cy: y, r: 4.5, fill: '#fff', stroke: ST[rn[2]].col, 'stroke-width': 2.2 });
+    }
+    prev = y;
+  });
+  el('text', { x: (X0 + X1) / 2, y: 732, 'text-anchor': 'middle', 'font-size': 18, fill: '#8d99a9' }, '缩放时间（示意）');
+})();
+</script>
+</body>
+</html>

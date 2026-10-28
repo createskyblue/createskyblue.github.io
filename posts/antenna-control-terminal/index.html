@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RETAP 手持天线控制终端项目复盘 - CacheRivulet小记</title>
+  <meta name="description" content="RETAP手持终端：尾号扫描树、动态菜单">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:tag" content="RTOS">
+  <meta property="article:tag" content="单片机">
+  <meta property="article:published_time" content="2026-07-03">
+  <meta property="og:title" content="RETAP 手持天线控制终端项目复盘">
+  <meta property="og:description" content="RETAP手持终端：尾号扫描树、动态菜单">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/antenna-control-terminal/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/antenna-control-terminal/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "RETAP 手持天线控制终端项目复盘",
+  "description": "RETAP手持终端：尾号扫描树、动态菜单",
+  "datePublished": "2026-07-03",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/antenna-control-terminal/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/antenna-control-terminal/"
+  },
+  "keywords": "嵌入式, MCU, 通信协议, 系统设计, RTOS, 单片机"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">RETAP 手持天线控制终端项目复盘</h1>
+  <article class="article-body">
+<h1>RETAP 手持天线控制终端</h1>
+<p><strong>项目背景</strong>：基站远程电调天线（RET）通过 Iuant/RETAP 标准接口与协议维护。本项目实现一台手持终端，把 RETAP 协议栈与现场维护动作下沉到设备本地，让技师在塔上或机房用屏幕和按键即可完成天线扫描、校准、调倾角、读取信息、下发配置与固件，无需连接基站主设备或电脑。</p>
+<p><strong>职责</strong>：独立设计并实现硬件、MCU 固件与 RETAP 协议栈对接。</p>
+<p><strong>核心技术</strong></p>
+<ul>
+<li><strong>十进制尾号扫描树</strong>：针对总线挂接多台、地址全未知且不可预置清单的设备，设计基于序列号尾号逐位细分的自动发现机制：将尾号建模为逐位展开的树形结构，先以最高位粗探、唯一命中即分配短地址并移出集合；多台冲突则补下一位继续收窄，无响应分支直接剪枝。以最小探测代价将模糊设备集合精确切分为单台并完成寻址，避免对空分支徒耗总线帧。</li>
+<li><strong>RETAP 协议分层</strong>：拆成传输层（帧封装、校验、超时）与应用层（扫描、地址分配、校准、倾角、信息等）；UI 只调用应用层，新增能力只扩应用层，传输层守超时与校验。</li>
+<li><strong>运行时数据驱动菜单</strong>：菜单不写死，由设备描述与文件列表动态生成；四类控件（列表、跳转、动作、数值条），渲染与执行分离，确认键按节点类型分流。</li>
+<li><strong>USB 双模式</strong>：检测到接入即进入 Mass Storage，电脑把终端当 U 盘读写存储卡；退出后回控制模式，文件维护不依赖烧录器。</li>
+<li><strong>RTOS 多任务</strong>：按键、LCD、LED/蜂鸣、电池采样、USB 检测、协议操作分任务并发；单色屏无灰度，用棋盘格抽稀加反色弹窗做状态分层。</li>
+<li><strong>多语言</strong>：中英文共用同一套菜单层级与动作，仅替换文本资源。</li>
+</ul>
+<p><strong>界面总览</strong></p>
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+  <tbody>
+    <tr>
+      <td colspan="2" style="padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; line-height: 1.7;">
+        <strong>脱敏说明：</strong>本文只保留软件交互、仿真界面和公开标准对接层面的内容。文章不包含客户信息、真实设备型号、私有字段、具体协议帧内容、具体固件文件和源代码实现细节。
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/antenna-list.webp" alt="天线列表" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">天线列表</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/main-menu.webp" alt="主菜单" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">主菜单</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/calibration-confirm.webp" alt="校准确认" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">校准确认</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/calibration-success.webp" alt="校准成功" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">校准成功</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/tilt-setting.webp" alt="设置倾角" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">设置倾角</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/tilt-input-value.webp" alt="倾角输入数值" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">倾角输入数值</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/tilt-confirm-dialog.webp" alt="倾角确认弹窗" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">倾角确认弹窗</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/tilt-success-sim.webp" alt="倾角设置成功" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">倾角设置成功</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/antenna-info-top.webp" alt="天线信息顶部" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">天线信息顶部</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/antenna-info-bottom.webp" alt="天线信息底部" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">天线信息底部</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/config-file-list.webp" alt="配置文件列表" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">配置文件列表</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/firmware-file-list.webp" alt="固件更新列表" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">固件更新列表</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/other-settings.webp" alt="其他设置" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">其他设置</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/output-voltage.webp" alt="输出电压设置" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">输出电压设置</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/language-setting.webp" alt="语言设置" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">语言设置</div>
+      </td>
+      <td style="width: 50%; padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/main-menu-en-sim.webp" alt="英文主菜单" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">英文主菜单</div>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" style="padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; background: #f8fafc;">
+        <img src="/posts/antenna-control-terminal/img/sim/antenna-info-en.webp" alt="英文天线信息界面" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+        <div style="margin-top: 8px; color: #334155; font-size: 14px; text-align: center;">英文天线信息界面</div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-03 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=antenna-control-terminal');
+  }
+  </script>
+</body>
+</html>

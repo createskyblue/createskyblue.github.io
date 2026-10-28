@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <radialGradient id="accent" cx="0.84" cy="0.78" r="0.62">
+      <stop offset="0" stop-color="#f43f5e" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#f43f5e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="line" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ef4444"/>
+      <stop offset="0.55" stop-color="#f43f5e"/>
+      <stop offset="1" stop-color="#fb923c"/>
+    </linearGradient>
+    <filter id="halo" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <rect width="1200" height="900" fill="url(#accent)"/>
+
+  <g stroke="#ffffff" stroke-opacity="0.04" stroke-width="1">
+    <line x1="0" y1="150" x2="1200" y2="150"/>
+    <line x1="0" y1="300" x2="1200" y2="300"/>
+    <line x1="0" y1="450" x2="1200" y2="450"/>
+    <line x1="0" y1="600" x2="1200" y2="600"/>
+    <line x1="0" y1="750" x2="1200" y2="750"/>
+    <line x1="300" y1="0" x2="300" y2="900"/>
+    <line x1="600" y1="0" x2="600" y2="900"/>
+    <line x1="900" y1="0" x2="900" y2="900"/>
+  </g>
+
+  <text x="90" y="250" font-size="160" font-weight="bold" fill="#f1f5f9" font-family="Segoe UI, Arial, sans-serif">内存泄漏</text>
+  <text x="90" y="470" font-size="160" font-weight="bold" fill="#f1f5f9" font-family="Segoe UI, Arial, sans-serif">分析</text>
+
+  <polyline fill="none" stroke="url(#line)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" filter="url(#halo)"
+    points="140,782 195,698 250,742 305,658 360,702 415,618 470,662 525,578 580,622 635,538 690,582 745,498 800,542 855,458 910,502 965,418 1020,462"/>
+
+  <polyline fill="none" stroke="url(#line)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+    points="140,782 195,698 250,742 305,658 360,702 415,618 470,662 525,578 580,622 635,538 690,582 745,498 800,542 855,458 910,502 965,418 1020,462"/>
+
+  <circle cx="1020" cy="462" r="20" fill="#fb923c" opacity="0.3" filter="url(#halo)"/>
+  <circle cx="1020" cy="462" r="11" fill="#fb923c"/>
+  <circle cx="1020" cy="462" r="4" fill="#fff7ed"/>
+</svg>

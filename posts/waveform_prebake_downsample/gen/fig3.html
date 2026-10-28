@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px;position:relative}
+  body{padding:56px;background:#fff;color:#16202f;display:flex;flex-direction:column;
+       font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:36px;font-weight:600;letter-spacing:-.4px}
+  .sub{margin-top:14px;font-size:21px;color:#66768c}
+
+  .rows{margin-top:46px;flex:1;display:flex;flex-direction:column;gap:16px}
+  .lrow{flex:1;display:flex;align-items:center;gap:26px;min-height:0}
+  .lv{width:140px;align-self:stretch;border-radius:16px;background:#fdf3e3;border:1.8px solid #d99a54;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .lv strong{font-size:28px;font-weight:600;color:#8a5a1e}
+  .lv em{font-style:normal;font-size:16px;color:#a5804f}
+  .lv.more{background:#fcfcfe;border:1.6px dashed #e2d8c6}
+  .lv.more strong{color:#a5804f;letter-spacing:2px}
+  .lv.more em{color:#a5804f}
+  .lv.raw{background:#dbe8f9;border-color:#4a7fc1}
+  .lv.raw strong{color:#1f5c9e}
+  .lv.raw em{color:#4a7fc1}
+    .ratio{width:196px;font-size:22px;font-weight:500}
+  .ratio i{display:block;margin-top:8px;font-style:normal;font-size:18px;font-weight:400;
+           color:#7b8798}
+  .strip{flex:1;display:flex;align-items:center;justify-content:space-between;height:100%}
+  .strip i{border-radius:50%;background:#d99a54;flex:0 0 auto}
+  .s1 i{width:18px;height:18px}
+  .s2 i{width:14px;height:14px}
+  .s3 i{width:12px;height:12px}
+  .rawline{flex:1;height:70px;display:flex;align-items:center}
+  .rawline svg{width:100%;height:70px}
+  .fit{width:120px;text-align:right;font-size:19px;color:#66768c;flex:0 0 auto}
+
+  .skip{flex:.72;display:flex;flex-direction:column;justify-content:center;gap:8px;
+        border:1.5px dashed #e2e8f2;border-radius:16px;background:#fafbfd;padding-left:30px}
+  .skip b{font-size:22px;font-weight:600;color:#5d6c80}
+  .skip span{font-size:18px;color:#7b8798}
+
+  .footer{margin-top:34px;display:flex;flex-direction:column;gap:8px;font-size:21px;color:#7b8798}
+  .steps{position:absolute;right:56px;top:54px;display:flex;gap:9px;font-size:17px;
+         color:#bdc6d3;font-weight:400}
+  .steps b{color:#16202f;font-weight:600}
+</style>
+</head>
+<body>
+  <h1>层级越高，桶越粗，内存越少</h1>
+  <div class="steps"><span>切片</span><span>·</span><b>算桶</b><span>·</span><span>落盘</span><span>·</span><span>渲染</span></div>
+  <div class="sub">同一段时间，保留的点越少，一层画得越宽，占的内存也越少。</div>
+
+  <div class="rows">
+    <div class="lrow" style="flex:.46">
+      <div class="lv more"><strong>⋯</strong></div>
+      <div class="ratio">更高层，N = 2ⁱ<i>数据量更小</i></div>
+      <div class="strip"></div>
+      <div class="fit"></div>
+    </div>
+
+    <div class="lrow">
+      <div class="lv"><strong>K5</strong><em>2⁵ = 32 点</em></div>
+      <div class="ratio">每 32 点 1 桶<i>数据量为 K0 的 1/32</i></div>
+      <div class="strip s1">
+        <i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="fit">整段概览</div>
+    </div>
+
+    <div class="lrow">
+      <div class="lv"><strong>K4</strong><em>2⁴ = 16 点</em></div>
+      <div class="ratio">每 16 点 1 桶<i>数据量为 K0 的 1/16</i></div>
+      <div class="strip s2">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="fit">更宽视图</div>
+    </div>
+
+    <div class="lrow">
+      <div class="lv"><strong>K3</strong><em>2³ = 8 点</em></div>
+      <div class="ratio">每 8 点 1 桶<i>数据量为 K0 的 1/8</i></div>
+      <div class="strip s3">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="fit">中等跨度</div>
+    </div>
+
+    <div class="lrow">
+      <div class="lv" style="background:#eff8f5;border-color:#9fd0c4"><strong style="color:#3f9d88">K2</strong><em style="color:#6aa899">2² = 4 点</em></div>
+      <div class="ratio">每 4 点 1 桶<i>数据量为 K0 的 1/4</i></div>
+      <div class="strip s3">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="fit">较窄跨度</div>
+    </div>
+
+    <div class="skip">
+      <b>K1 跳过</b>
+      <span>最低倍率存下来不划算，窄视图直接实时算。</span>
+    </div>
+
+    <div class="lrow">
+      <div class="lv raw"><strong>K0</strong><em>原始</em></div>
+      <div class="ratio">采样点全留<i>数据量 100%</i></div>
+      <div class="rawline"><svg id="raw"></svg></div>
+      <div class="fit">窄视图用</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>层级上界由最大视口跨度决定，不写死。</div>
+    <div>每升一层，代表点和数据量都减半。</div>
+  </div>
+
+<script>
+(function () {
+  var seed = 2027;
+  var rnd = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  var pts = [], y = 35;
+  for (var k = 0; k <= 160; k++) {
+    y += (rnd() - 0.5) * 22;
+    y = Math.max(6, Math.min(64, y));
+    pts.push((k / 160 * 900).toFixed(1) + ',' + y.toFixed(1));
+  }
+  var svg = document.getElementById('raw');
+  svg.setAttribute('viewBox', '0 0 900 70');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML = '<polyline points="' + pts.join(' ') +
+    '" fill="none" stroke="#2b6cb0" stroke-width="2.4" stroke-linejoin="round"/>';
+})();
+</script>
+</body>
+</html>

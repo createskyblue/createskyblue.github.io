@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STM32 虚拟串口固定发 64 字节，电脑端能正好收到 64 字节吗 - CacheRivulet小记</title>
+  <meta name="description" content="">
+  <meta name="author" content="匿名">
+  <meta name="robots" content="index, follow">
+  
+  
+  <meta property="og:title" content="STM32 虚拟串口固定发 64 字节，电脑端能正好收到 64 字节吗">
+  <meta property="og:description" content="">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/stm32-cdc-64byte-packet-boundary/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/stm32-cdc-64byte-packet-boundary/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "STM32 虚拟串口固定发 64 字节，电脑端能正好收到 64 字节吗",
+  "description": "",
+  "datePublished": "",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "匿名",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/stm32-cdc-64byte-packet-boundary/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/stm32-cdc-64byte-packet-boundary/"
+  }
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">STM32 虚拟串口固定发 64 字节，电脑端能正好收到 64 字节吗</h1>
+  <article class="article-body">
+<h1>STM32 虚拟串口固定发 64 字节，电脑端能正好收到 64 字节吗</h1>
+<p><strong>结论</strong>：不能保证。CDC 是字节流，不是消息流，它不保证一次给你 64 字节，可能粘包，也可能分包。但它反过来也不会随机吞掉其中某几个字节。</p>
+<p>三层各一句话：</p>
+<ul>
+<li><strong>USB 总线</strong>：全速批量一包最大 64 字节，带 CRC 校验和重传。STM32 连续发的 64 字节，若出错也是整 64 字节一起丢，不会只少几个字节，因为坏包不会被部分交付。</li>
+<li><strong>驱动</strong>：CDC 把 USB 管道伪装成传统串口，传统串口没有包的概念，驱动把字节拼进内核缓冲区、抹平包边界，攒满一批或收短包（含 ZLP）才上抛，一次给多少由驱动决定，可能粘连也可能拆开。</li>
+<li><strong>应用</strong>：串口 API 语义是&quot;返回当前已到的若干字节&quot;，没有&quot;按包读&quot;的接口，换驱动、加 HUB、过隔离器，行为都可能变。</li>
+</ul>
+<p>所以：USB 不会随机吃掉某几个字节，除非你的软件自己没处理好；但 CDC 也不保证原样一次性给你 64 字节。指望它每次精确 64 字节是靠不住的，对齐只是现象，不是契约。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于  · 匿名</span>
+    <address class="post-author-contact">作者：匿名 · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=stm32-cdc-64byte-packet-boundary');
+  }
+  </script>
+</body>
+</html>

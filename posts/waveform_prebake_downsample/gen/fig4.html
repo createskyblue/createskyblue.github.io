@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px;position:relative}
+  body{padding:56px;background:#fff;color:#16202f;display:flex;flex-direction:column;
+       font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:36px;font-weight:600;letter-spacing:-.4px}
+  .sub{margin-top:14px;font-size:21px;color:#66768c}
+  .steps{position:absolute;right:56px;top:54px;display:flex;gap:9px;font-size:17px;
+         color:#bdc6d3;font-weight:400}
+  .steps b{color:#16202f;font-weight:600}
+
+  .head{margin-top:44px;display:flex;align-items:flex-end;font-size:17px;color:#8d99a9}
+  .rows{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;align-items:center;height:88px}
+  .lv{width:176px;height:88px;border-radius:14px;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:2px}
+  .lv b{font-size:22px;font-weight:600}
+  .lv em{font-style:normal;font-size:14px;color:#7b8798}
+  .c2{width:224px;font-size:20px;padding-left:12px}
+  .c3{width:228px;font-size:20px;color:#3d4d61}
+  .c4{width:220px;font-size:20px;font-weight:500}
+  .c5{width:104px;font-size:20px;font-weight:600;text-align:right}
+
+  .tail{margin-top:auto;border-radius:16px;background:#fafbfd;border:1px solid #e9eef6;
+        padding:20px 26px;display:flex;flex-direction:column;gap:9px}
+  .tail p{font-size:18.5px;color:#66768c;display:flex;align-items:center;gap:10px}
+  .tail .hat{width:16px;height:16px;border-radius:3px;flex:0 0 auto;
+             background:repeating-linear-gradient(45deg,#e9b7b2 0 3px,#fdf0ef 3px 6px)}
+</style>
+</head>
+<body>
+  <h1>缩到多宽，就用哪一层</h1>
+  <div class="sub">以 100 kHz 采样、1600 px 屏宽为例。数据总量暴涨，但换成对应的层，要扫的点几乎不变。</div>
+  <div class="steps"><span>切片</span><span>·</span><span>算桶</span><span>·</span><span>落盘</span><span>·</span><b>渲染</b></div>
+
+  <div class="head">
+    <span style="width:176px">用哪一层</span>
+    <span class="c2">视口跨度</span>
+    <span class="c3">数据总量</span>
+    <span class="c4">这一次要扫多少点</span>
+    <span class="c5">省下</span>
+  </div>
+
+  <div class="rows">
+    <div class="row">
+      <div class="lv" style="background:#e9f0f9"><b style="color:#2b6cb0">实时聚合</b><em>读原始点，不省</em></div>
+      <div class="c2">1 – 64 毫秒</div>
+      <div class="c3">100 – 6.4 千</div>
+      <div class="c4">100 – 6.4 千</div>
+      <div class="c5" style="color:#8d99a9">—</div>
+    </div>
+    <div class="row">
+      <div class="lv" style="background:#eff8f5"><b style="color:#3f9d88">K2</b><em>每 4 点 1 桶</em></div>
+      <div class="c2">64 – 128 毫秒</div>
+      <div class="c3">6.4 千 – 1.3 万</div>
+      <div class="c4">1.6 千 – 3.2 千</div>
+      <div class="c5" style="color:#3f9d88">4 倍</div>
+    </div>
+    <div class="row">
+      <div class="lv" style="background:#e6f4ef"><b style="color:#1b6b58">K3</b><em>每 8 点 1 桶</em></div>
+      <div class="c2">128 – 256 毫秒</div>
+      <div class="c3">1.3 万 – 2.6 万</div>
+      <div class="c4">1.6 千 – 3.2 千</div>
+      <div class="c5" style="color:#1b6b58">8 倍</div>
+    </div>
+    <div class="row">
+      <div class="lv" style="background:#fbf1e2"><b style="color:#a5621c">K4</b><em>每 16 点 1 桶</em></div>
+      <div class="c2">256 – 512 毫秒</div>
+      <div class="c3">2.6 万 – 5.1 万</div>
+      <div class="c4">1.6 千 – 3.2 千</div>
+      <div class="c5" style="color:#a5621c">16 倍</div>
+    </div>
+    <div class="row">
+      <div class="lv" style="background:#f1ecf8"><b style="color:#6b4f9e">K5</b><em>每 32 点 1 桶</em></div>
+      <div class="c2">512 毫秒 – 1.02 秒</div>
+      <div class="c3">5.1 万 – 10 万</div>
+      <div class="c4">1.6 千 – 3.2 千</div>
+      <div class="c5" style="color:#6b4f9e">32 倍</div>
+    </div>
+    <div class="row">
+      <div class="lv" style="background:#f4f5f7"><b style="color:#8b96a6">K6 及以上</b><em>继续往上加</em></div>
+      <div class="c2">1.02 秒 – 1 小时</div>
+      <div class="c3">10 万 – 3.6 亿</div>
+      <div class="c4">1.6 千 – 3.2 千</div>
+      <div class="c5" style="color:#8b96a6">64 倍起</div>
+    </div>
+  </div>
+
+  <div class="tail">
+    <p>看 1 秒：要扫 10 万原始点；换 K5 只扫 3125 个桶，省 32 倍。</p>
+    <p>实时聚合一屏也只画 1600 列，但每列要把覆盖的原始点全扫一遍，跨度一大就扫不动。</p>
+    <p><span class="hat"></span>边界留滞回：上行到 8 点/像素才切下一档，回落到 6.4 才退回。</p>
+  </div>
+</body>
+</html>

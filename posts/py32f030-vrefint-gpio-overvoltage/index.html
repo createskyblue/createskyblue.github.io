@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PY32F030 VREFINT 读到 4095 时检查 5 V 信号接入的 GPIO - CacheRivulet小记</title>
+  <meta name="description" content="外部电路上电后，MCU 内部基准读数突然满量程">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="ADC">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-07-26">
+  <meta property="og:title" content="PY32F030 VREFINT 读到 4095 时检查 5 V 信号接入的 GPIO">
+  <meta property="og:description" content="外部电路上电后，MCU 内部基准读数突然满量程">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/py32f030-vrefint-gpio-overvoltage/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/py32f030-vrefint-gpio-overvoltage/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "PY32F030 VREFINT 读到 4095 时检查 5 V 信号接入的 GPIO",
+  "description": "外部电路上电后，MCU 内部基准读数突然满量程",
+  "datePublished": "2026-07-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/py32f030-vrefint-gpio-overvoltage/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/py32f030-vrefint-gpio-overvoltage/"
+  },
+  "keywords": "嵌入式, MCU, ADC, 故障诊断, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">PY32F030 VREFINT 读到 4095 时检查 5 V 信号接入的 GPIO</h1>
+  <article class="article-body">
+<h1>PY32F030 VREFINT 读到 4095 时检查 5 V 信号接入的 GPIO</h1>
+<blockquote>
+<p><strong>结论：</strong> 本板开启外部 DCDC 后，5 V 电源域的输出信号进入工作在 3.3 V 电源域的 MCU，相关 GPIO 出现高于 VDD 的电压，VREFINT 随即饱和到 <code>4095</code>。关闭 DCDC 后，GPIO 电压恢复，VREFINT 也立即恢复正常。</p>
+</blockquote>
+<h2>供电结构与异常现象</h2>
+<p>业务操作需要开启外部 DCDC，由 DCDC 输出 5 V，为其他电路供电。MCU 仍由 3.3 V 供电，但 5 V 电源域中的部分输出信号会接入 MCU GPIO。</p>
+<p>DCDC 关闭时，VREFINT 原始值约为 <code>1470</code>，反推 VDD 约为 <code>3.3 V</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>[VREF] raw=1476 vdd_mv=3330</span></span></code></pre><p>DCDC 开启后，连续两次转换都到满量程：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>[VREF] raw=4095 first_raw=4095 vdd_mv=1200</span></span></code></pre><h2>DCDC 开关的单变量验证</h2>
+<p>每次只改变一个硬件状态：</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th align="right">VREFINT 原始值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GPIO 时钟和输出初始化</td>
+<td align="right">约 <code>1470</code></td>
+</tr>
+<tr>
+<td>DCDC 使能脚配置为输出</td>
+<td align="right">约 <code>1470</code></td>
+</tr>
+<tr>
+<td>DCDC 开启</td>
+<td align="right"><code>4095</code></td>
+</tr>
+<tr>
+<td>DCDC 关闭</td>
+<td align="right">立即恢复到约 <code>1470</code></td>
+</tr>
+</tbody></table>
+<p>DCDC 使能脚完成 GPIO 初始化时，VREFINT 仍然正常。异常只在 DCDC 实际输出 5 V 后出现。ADC 重置和 VREFINT 通道重建也没有改变这一对应关系，因此排查方向需要从 ADC 配置转向 5 V 电源域与 MCU 之间的信号连接。</p>
+<h2>5 V 信号跨电源域的触发链路</h2>
+<p>示波器确认了以下触发链路：</p>
+<ol>
+<li>开启外部 DCDC，5 V 电源域开始工作。</li>
+<li>该电源域中的部分电路向 MCU 输出信号。</li>
+<li>相关 GPIO 电压高于 MCU 的 3.3 V VDD。</li>
+<li>VREFINT 固定为 <code>4095</code>。</li>
+</ol>
+<p>关闭 DCDC 后，GPIO 过压消失，VREFINT 无需重建 ADC 或重启 MCU 便立即恢复。现有证据可以确认 GPIO 过压与 VREFINT 异常同步出现，但没有直接证明具体的片内耦合路径。</p>
+<h2>ADC 结果的失效边界</h2>
+<p>异常日志中的 <code>1200 mV</code> 是由满量程读数反推得到的错误结果。VREFINT 已经读到 <code>4095</code> 时，基于该值计算的 VDD、电池电压或阈值判断都不能继续使用。</p>
+<h2>跨电源域信号的排查顺序</h2>
+<p>再次遇到 VREFINT 满量程时：</p>
+<ol>
+<li>测量 MCU 的真实 VDD。</li>
+<li>检查外部电源域与 MCU 之间的全部信号线。</li>
+<li>测量相关 GPIO，找出电压高于 MCU VDD 的引脚。</li>
+<li>关闭对应外设供电，观察 GPIO 电压与 VREFINT 是否同时恢复。</li>
+</ol>
+<p>确认触发关系后，再根据接口类型处理电平兼容问题。具体电路改法取决于信号方向、速度和驱动方式，本文不展开。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=py32f030-vrefint-gpio-overvoltage');
+  }
+  </script>
+</body>
+</html>

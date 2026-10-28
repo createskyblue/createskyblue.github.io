@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VS Code 连接 pyOCD 后未停在 main 的排查与修复 - CacheRivulet小记</title>
+  <meta name="description" content="VS Code远程调试启动后未停在main">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="故障诊断">
+  <meta property="article:tag" content="VSCode">
+  <meta property="article:tag" content="Air001">
+  <meta property="article:published_time" content="2026-07-15">
+  <meta property="og:title" content="VS Code 连接 pyOCD 后未停在 main 的排查与修复">
+  <meta property="og:description" content="VS Code远程调试启动后未停在main">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/vscode-cppdbg-pyocd-main-breakpoint/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/vscode-cppdbg-pyocd-main-breakpoint/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "VS Code 连接 pyOCD 后未停在 main 的排查与修复",
+  "description": "VS Code远程调试启动后未停在main",
+  "datePublished": "2026-07-15",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/vscode-cppdbg-pyocd-main-breakpoint/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/vscode-cppdbg-pyocd-main-breakpoint/"
+  },
+  "keywords": "嵌入式, 工程调试, 故障诊断, VSCode, Air001"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">VS Code 连接 pyOCD 后未停在 main 的排查与修复</h1>
+  <article class="article-body">
+<h1>VS Code 连接 pyOCD 后未停在 main 的排查与修复</h1>
+<p>在 Air001 项目中，F5 本应依次完成固件烧录、启动 pyOCD GDB server、加载 ELF 符号、复位芯片，并停在 <code>main</code> 的第一条可执行语句。工程使用 VS Code C/C++ 扩展提供的 <code>cppdbg</code> 和 <code>arm-none-eabi-gdb</code>。</p>
+<p>实际调试先后出现两个现象：手工添加 <code>main</code> 断点时报“没有符号表”；符号错误消失后，启动位置又落在 <code>HAL_GetTick()</code> 或主循环。本文说明这两个时序问题，并给出经过硬件验证的最小配置。</p>
+<p><strong>修复结论：</strong> 在 <code>postRemoteConnectCommands</code> 中先执行 <code>monitor reset halt</code>，再执行 <code>-exec-continue</code>。前一条命令复位并暂停芯片，后一条命令让芯片继续运行到已经创建好的 <code>main</code> 断点。</p>
+<h2>调试目标与故障现象</h2>
+<p>调试环境为 Air001、pyOCD 0.44.1、Debug ELF（<code>-O0 -g3</code>）和 VS Code <code>cppdbg</code>。预期链路可以压缩成一行：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>烧录 ELF → 启动 GDB server → 加载符号 → reset halt → 运行到 main</span></span></code></pre><p>第一个故障来自 <code>setupCommands</code>。其中的 <code>-break-insert main</code> 早于 ELF 符号加载，GDB 无法解析 <code>main</code>。</p>
+<p>第二个故障发生在远程连接阶段。符号和断点都已存在，芯片却没有继续运行到入口断点，VS Code 显示了连接瞬间的随机 PC。</p>
+<h2>main 入口与第 277 行</h2>
+<p>文章中的“第 277 行”只对应当时的 <code>Src/main.c</code>：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#B5CEA8">275</span><span style="color:#569CD6">  int</span><span style="color:#DCDCAA"> main</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#B5CEA8">276</span><span style="color:#D4D4D4">  {</span></span>
+<span class="line"><span style="color:#B5CEA8">277</span><span style="color:#DCDCAA">    HAL_Init</span><span style="color:#D4D4D4">();</span></span></code></pre><p>第 275 行是函数声明，第 276 行是左花括号，第 277 行是第一条可执行 C 语句。编译器会在函数入口生成保存寄存器、调整栈指针等序言指令。GDB 的源码级 <code>break main</code> 通常绑定到序言之后第一条带有源码行号的指令，因此停在第 277 行。</p>
+<p>停在第 277 行时，<code>HAL_Init()</code> 尚未执行。这个行号会随源码增删发生变化，真正的判断标准是“停在 <code>main</code> 的第一条可执行语句”。如果需要观察函数序言，应使用指令级断点，例如 <code>break *main</code>。</p>
+<h2>分层排查与启动时序根因</h2>
+<p>排查按三层进行：</p>
+<ol>
+<li><code>nm</code> 和 <code>objdump</code> 确认 ELF 中存在 <code>main</code>，DWARF 行号可以映射到第 277 行。</li>
+<li>原生 GDB 执行 <code>monitor reset halt</code>、<code>tbreak main</code> 和 <code>continue</code>，硬件稳定停在第 277 行。</li>
+<li>微软 <code>OpenDebugAD7/cppdbg</code> 使用相同 ELF 和探针时，首个停止位置落在其他函数。</li>
+</ol>
+<p>前两层正常，问题范围由此收敛到 <code>cppdbg</code> 的启动阶段。MI engine 日志给出了关键顺序：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>-break-insert -f main</span></span>
+<span class="line"><span>-target-select remote localhost:3333</span></span>
+<span class="line"><span>*stopped,frame={func="HAL_GetTick",line="315"}</span></span>
+<span class="line"><span>-interpreter-exec console "monitor reset halt"</span></span></code></pre><p><code>target-select remote</code> 连接正在运行的目标后，pyOCD 会暂停内核并返回当前 PC。本次 PC 位于 <code>HAL_GetTick()</code> 第 315 行。<code>cppdbg</code> 将它记录为启动阶段的初始停止事件，随后没有执行原计划放在 <code>launchCompleteCommand</code> 中的继续命令。</p>
+<p><code>monitor reset halt</code> 完成复位后，内核仍处于暂停状态。入口断点已经创建，但 CPU 没有运行到该地址，所以 VS Code 最终显示了远程连接产生的初始停止位置。</p>
+<p>符号表报错属于另一个时序点：<code>setupCommands</code> 早于默认的 <code>-file-exec-and-symbols</code>。删除其中依赖符号的 <code>-break-insert main</code> 即可，<code>program</code> 字段会让 <code>cppdbg</code> 在后续阶段加载 ELF。</p>
+<h2>-exec-continue 的作用与修复条件</h2>
+<p><code>-exec-continue</code> 是 GDB/MI 命令，等价于 GDB 控制台中的 <code>continue</code> 或 <code>c</code>。MI 是调试器提供给 IDE 使用的机器接口，命令前的 <code>-</code> 表示这是 MI 命令。</p>
+<p>这条命令只负责让当前暂停的目标恢复执行。各步骤的职责如下：</p>
+<ul>
+<li><code>program</code> 加载 ELF 符号。</li>
+<li><code>cppdbg</code> 创建 <code>main</code> 入口断点。</li>
+<li><code>monitor reset halt</code> 复位并暂停芯片。</li>
+<li><code>-exec-continue</code> 让芯片从暂停位置继续运行。</li>
+</ul>
+<p>断点只是一个触发条件。只有程序计数器 PC 运行到断点地址，GDB 才会再次收到停止事件。本案的有效时序为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>reset halt → -exec-continue → PC 到达 main → 入口断点命中</span></span></code></pre><p>因此，<code>-exec-continue</code> 能修复本案的前提是 ELF 已加载、<code>main</code> 断点已创建、远程目标已连接。它需要放在 <code>postRemoteConnectCommands</code> 中，紧跟 <code>monitor reset halt</code>。放在 <code>setupCommands</code> 中会再次遇到符号尚未加载和目标尚未连接的问题。</p>
+<h2>最小 VS Code 配置</h2>
+<p><code>tasks.json</code> 直接调用 pyOCD 烧录固件。烧录进程结束后会释放探针。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "version"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"2.0.0"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "tasks"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">    {</span></span>
+<span class="line"><span style="color:#9CDCFE">      "label"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"Flash Air001"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"process"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "command"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"pyocd"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "args"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#CE9178">        "load"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">        "${workspaceFolder}/build/Project.elf"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">        "-t"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#CE9178">        "Air001"</span></span>
+<span class="line"><span style="color:#D4D4D4">      ]</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  ]</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>launch.json</code> 由 <code>cppdbg</code> 启动 pyOCD GDB server。示例假设 <code>pyocd</code> 已加入 VS Code 进程的 PATH。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "version"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"0.2.0"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "configurations"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">    {</span></span>
+<span class="line"><span style="color:#9CDCFE">      "name"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"Air001: GDB Flash &#x26; Debug"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "type"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"cppdbg"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "request"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"launch"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "preLaunchTask"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"Flash Air001"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "program"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"${workspaceFolder}/build/Project.elf"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "cwd"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"${workspaceFolder}"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "MIMode"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"gdb"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "miDebuggerPath"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"arm-none-eabi-gdb"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "miDebuggerServerAddress"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"localhost:3333"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "debugServerPath"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"pyocd"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "debugServerArgs"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"gdbserver --port 3333 --target Air001"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "serverStarted"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"GDB server listening on port 3333"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "filterStderr"</span><span style="color:#D4D4D4">: </span><span style="color:#569CD6">true</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "stopAtEntry"</span><span style="color:#D4D4D4">: </span><span style="color:#569CD6">true</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "launchCompleteCommand"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"exec-continue"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">      "postRemoteConnectCommands"</span><span style="color:#D4D4D4">: [</span></span>
+<span class="line"><span style="color:#D4D4D4">        {</span></span>
+<span class="line"><span style="color:#9CDCFE">          "text"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"-interpreter-exec console </span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">monitor reset halt</span><span style="color:#D7BA7D">\"</span><span style="color:#CE9178">"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">          "ignoreFailures"</span><span style="color:#D4D4D4">: </span><span style="color:#569CD6">false</span></span>
+<span class="line"><span style="color:#D4D4D4">        },</span></span>
+<span class="line"><span style="color:#D4D4D4">        {</span></span>
+<span class="line"><span style="color:#9CDCFE">          "text"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"-exec-continue"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">          "ignoreFailures"</span><span style="color:#D4D4D4">: </span><span style="color:#569CD6">false</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#D4D4D4">      ]</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">  ]</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>pyOCD 未加入 PATH 时，将 <code>debugServerPath</code> 改为本机 <code>pyocd.exe</code> 的完整路径。</p>
+<h2>验证结果与适用边界</h2>
+<p>重新构建并烧录后，使用与 VS Code 相同的 <code>OpenDebugAD7/cppdbg</code> 配置启动调试，首帧为：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#9CDCFE">  "function"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"main()"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "line"</span><span style="color:#D4D4D4">: </span><span style="color:#B5CEA8">277</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "pc"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"0x08002B30"</span><span style="color:#D4D4D4">,</span></span>
+<span class="line"><span style="color:#9CDCFE">  "file"</span><span style="color:#D4D4D4">: </span><span style="color:#CE9178">"Src/main.c"</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>硬件验证和实际 F5 启动均确认调试器会停在 <code>main</code> 的第一条可执行语句。本文只验证启动阶段的烧录、server 启动、符号加载、复位和入口停靠。普通断点、观察点、重启和多次连续会话仍需单独测试。</p>
+<p>这次排查的核心方法是先用原生 GDB 证明底层链路可用，再检查 IDE 调试适配器的首个 <code>*stopped</code> 事件。远程调试停在随机位置时，应先确认 CPU 是否真的执行过“继续运行”这一步。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-15 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=vscode-cppdbg-pyocd-main-breakpoint');
+  }
+  </script>
+</body>
+</html>
