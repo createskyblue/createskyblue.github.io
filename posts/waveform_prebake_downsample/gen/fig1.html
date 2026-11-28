@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px;position:relative}
+  body{padding:56px;background:#fff;color:#16202f;display:flex;flex-direction:column;
+       font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:36px;font-weight:600;letter-spacing:-.4px}
+  .sub{margin-top:14px;font-size:21px;color:#66768c}
+
+  .row{margin-top:56px;position:relative}
+  .rowhead{display:flex;gap:16px;align-items:baseline;margin-bottom:24px}
+  .rowhead .lbl{font-size:21px;font-weight:600;color:#b23c36}
+  .rowhead .res{font-size:19px;color:#7b8798}
+
+  .timeline{position:relative;display:flex;gap:12px;height:233px}
+  .shard{flex:1;border-radius:14px;background:#f8fafd;border:1.5px solid #e3eaf3;
+         display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+  .shard.on{background:#dbe8f9;border:2.4px solid #4a7fc1}
+  .wave{width:80%;height:96px}
+  .shard span{font-size:20px;color:#8d99a9}
+  .shard.on span{color:#3d6fa8}
+
+  .frame{position:absolute;top:-10px;height:253px;border:2.4px dashed #b23c36;
+         border-radius:16px;background:rgba(178,60,54,.07)}
+  .fa{left:268px;width:245px}
+  .fb{left:775px;width:150px}
+
+  .legend{margin-top:46px;display:flex;align-items:center;gap:10px;font-size:19px;color:#66768c}
+  .legend .sw{width:16px;height:16px;border-radius:4px;background:#f8fafd;border:1.5px solid #e3eaf3}
+  .legend .sw.on{background:#dbe8f9;border:2px solid #4a7fc1}
+  .legend span:nth-of-type(2){margin-right:28px}
+  .footer{margin-top:auto;display:flex;flex-direction:column;gap:10px;font-size:22px;color:#66768c}
+  .steps{position:absolute;right:56px;top:54px;display:flex;gap:9px;font-size:17px;
+         color:#bdc6d3;font-weight:400}
+  .steps b{color:#16202f;font-weight:600}
+</style>
+</head>
+<body>
+  <h1>把时间轴切成等长的分片</h1>
+  <div class="steps"><b>切片</b><span>·</span><span>算桶</span><span>·</span><span>落盘</span><span>·</span><span>渲染</span></div>
+  <div class="sub">一片就是一个读写单位，视口读数按片算。</div>
+
+  <div class="row">
+    <div class="rowhead">
+      <span class="lbl">视口 A：跨着两片</span>
+      <span class="res">要读 2 片</span>
+    </div>
+    <div class="timeline">
+      <div class="shard"><svg class="wave" data-on="0"></svg><span>分片 1</span></div>
+      <div class="shard on"><svg class="wave" data-on="1"></svg><span>分片 2</span></div>
+      <div class="shard on"><svg class="wave" data-on="1"></svg><span>分片 3</span></div>
+      <div class="shard"><svg class="wave" data-on="0"></svg><span>分片 4</span></div>
+      <div class="frame fa"></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="rowhead">
+      <span class="lbl">视口 B：落在一片里</span>
+      <span class="res">只读 1 片</span>
+    </div>
+    <div class="timeline">
+      <div class="shard"><svg class="wave" data-on="0"></svg></div>
+      <div class="shard"><svg class="wave" data-on="0"></svg></div>
+      <div class="shard"><svg class="wave" data-on="0"></svg></div>
+      <div class="shard on"><svg class="wave" data-on="1"></svg></div>
+      <div class="frame fb"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="sw on"></span><span>已读：整片读进来</span>
+    <span class="sw"></span><span>未读：不参与 IO</span>
+  </div>
+
+  <div class="footer">
+    <div>视口不必和分片对齐，跨到哪片就要读整片。</div>
+    <div>视口外的分片不参与 IO，也不占内存。</div>
+  </div>
+
+<script>
+document.querySelectorAll('.wave').forEach(function (svg, i) {
+  var seed = i * 977 + 41;
+  var rnd = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  var pts = [], y = 48;
+  for (var k = 0; k <= 22; k++) {
+    y += (rnd() - 0.5) * 46;
+    y = Math.max(10, Math.min(86, y));
+    pts.push((k / 22 * 200).toFixed(1) + ',' + y.toFixed(1));
+  }
+  var on = svg.dataset.on === '1';
+  svg.setAttribute('viewBox', '0 0 200 96');
+  svg.innerHTML = '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' +
+    (on ? '#2b6cb0' : '#ccd6e4') + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>';
+});
+</script>
+</body>
+</html>

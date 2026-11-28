@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>封装了 EMK850+ 功耗分析仪 MCP，AI可自主调用仪器 - CacheRivulet小记</title>
+  <meta name="description" content="原厂只有 Windows 上位机：逆向串口协议，把功耗分析仪做成 MCP 服务器接入 AI 自动化">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="数据采集">
+  <meta property="article:tag" content="通信协议">
+  <meta property="article:tag" content="MCP">
+  <meta property="article:tag" content="Python">
+  <meta property="article:published_time" content="2026-08-10">
+  <meta property="og:title" content="封装了 EMK850+ 功耗分析仪 MCP，AI可自主调用仪器">
+  <meta property="og:description" content="原厂只有 Windows 上位机：逆向串口协议，把功耗分析仪做成 MCP 服务器接入 AI 自动化">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/emk850-mcp-server/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/emk850-mcp-server/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "封装了 EMK850+ 功耗分析仪 MCP，AI可自主调用仪器",
+  "description": "原厂只有 Windows 上位机：逆向串口协议，把功耗分析仪做成 MCP 服务器接入 AI 自动化",
+  "datePublished": "2026-08-10",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/emk850-mcp-server/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/emk850-mcp-server/"
+  },
+  "keywords": "嵌入式, 低功耗, 数据采集, 通信协议, MCP, Python"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">封装了 EMK850+ 功耗分析仪 MCP，AI可自主调用仪器</h1>
+  <article class="article-body">
+<h1>把 EMK850+ 功耗分析仪改造成 AI 可调度的自动化测量节点</h1>
+<h2>项目背景</h2>
+<p>低功耗调试离不开 µA 级电流测量。英加 EMK850+ 只有 Windows 上位机，没有对外接口，功耗数据进不了脚本，批量测试、回归测量、AI 辅助优化全部做不通。</p>
+<p>本项目独立逆向其串口协议，用 Python 实现命令行工具与 MCP/REST 服务器，把测量与供电控制变成 HTTP 接口，脚本、CI、AI 客户端可直接调度，形成采集、控制、优化闭环。</p>
+<p>「闭源仪器协议逆向 + MCP 服务化」这套做法，可复用到任何只有上位机的台式仪器。</p>
+<h2>核心工作</h2>
+<ol>
+<li><strong>串口协议逆向</strong>：原厂上位机是 .NET 程序，用 ILSpy 反编译直接拿到完整通信协议，帧结构、命令表、换算公式整理成协议文档。</li>
+<li><strong>AI 辅助实现</strong>：定义协议规范与验收标准，驱动、CLI 与服务器代码借助 AI 工具生成，帧行为逐项与真机实测比对校验。</li>
+<li><strong>流式帧同步</strong>：USB CDC 流式传输不保证按包交付，解析采用逐字节流式帧同步状态机，拆包、粘包、错位下稳定出帧。</li>
+<li><strong>MCP/REST 服务化</strong>：单进程同时提供 REST 与 MCP（Streamable HTTP）接口，覆盖测量、采样、供电控制，Claude、Cursor 通过工具发现自动接入。</li>
+<li><strong>断电复位唤醒</strong>：可编程电源断电重启，唤醒深度休眠后调试器断连的 MCU。</li>
+</ol>
+<h2>设备效果</h2>
+<p><img src="/posts/emk850-mcp-server/emk850_photo.webp" alt="EMK850+ 低功耗分析仪"></p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#DCDCAA">python</span><span style="color:#CE9178"> emk850_analyzer.py</span><span style="color:#CE9178"> power</span><span style="color:#CE9178"> COM19</span></span></code></pre><pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>电压: 4.202 V   电流: 6.940 uA   功耗: 29.20 uW</span></span></code></pre><h2>项目边界</h2>
+<ul>
+<li>协议为独立分析归纳，与厂商无关，固件升级可能失配</li>
+<li>断电通过设 0mV 间接实现，实测测量端仍有约 2.6V，是否真正断电需万用表确认</li>
+<li>串口独占，不能与原厂上位机同时使用；空载清零需断开所有负载</li>
+</ul>
+<p>GitHub 仓库：<a href="https://github.com/createskyblue/Yingjia_EMK850_low-power_analyzer_MCP" target="_blank" rel="noopener noreferrer">Yingjia_EMK850_low-power_analyzer_MCP</a> · <a href="https://github.com/createskyblue/Yingjia_EMK850_low-power_analyzer_MCP/blob/main/docs/EMK850_PROTOCOL.md" target="_blank" rel="noopener noreferrer">协议文档 EMK850_PROTOCOL.md</a></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-10 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=emk850-mcp-server');
+  }
+  </script>
+</body>
+</html>

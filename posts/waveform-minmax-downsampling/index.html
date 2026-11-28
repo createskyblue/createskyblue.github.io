@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网页波形降采样要同时保留极值和边沿 - CacheRivulet小记</title>
+  <meta name="description" content="示波器波形图MinMax降采样">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="波形渲染">
+  <meta property="article:tag" content="降采样">
+  <meta property="article:tag" content="Canvas">
+  <meta property="article:tag" content="JavaScript">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:published_time" content="2026-06-07">
+  <meta property="og:title" content="网页波形降采样要同时保留极值和边沿">
+  <meta property="og:description" content="示波器波形图MinMax降采样">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/waveform-minmax-downsampling/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/waveform-minmax-downsampling/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "网页波形降采样要同时保留极值和边沿",
+  "description": "示波器波形图MinMax降采样",
+  "datePublished": "2026-06-07",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/waveform-minmax-downsampling/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/waveform-minmax-downsampling/"
+  },
+  "keywords": "波形渲染, 降采样, Canvas, JavaScript, 信号处理"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">网页波形降采样要同时保留极值和边沿</h1>
+  <article class="article-body">
+<h1>网页波形降采样要同时保留极值和边沿</h1>
+<h2>问题从哪里来</h2>
+<p>我在做一个信号处理实验室的 Web 工具，需要用 Canvas 在浏览器里画波形图。右侧面板每个示波器窗口大概 400 像素宽，但信号数据动辄几万到几十万个采样点。</p>
+<p>一个像素要代表几百个数据点——这时候，怎么画？</p>
+<p><img src="/posts/waveform-minmax-downsampling/PixPin_2026-06-07_13-52-51.webp" alt="信号处理实验室的波形渲染：左侧显示了多种滤波后的信号波形，右侧示波器区域展示了 min-max 降采样后的实际效果"></p>
+<h2>最朴素的做法：每隔 N 个点取一个</h2>
+<p>不行的。想象一段信号：99.9% 的采样点都在 0 附近，只有 1 个尖峰冲到 10V。每隔 N 点采样，有 99.9% 概率正好跳过那个尖峰。屏幕上看起来就是一条平平的线，用户完全不知道那里有个 10V 的脉冲。</p>
+<p>这个问题不是边缘情况——是高频信号的普遍现象。</p>
+<h2>一个像素 = 一个竖线，线涵盖 min 到 max</h2>
+<p>标准做法叫 min-max 降采样：</p>
+<ol>
+<li>把数据按像素宽度切成一段一段</li>
+<li>每一段找最小值和最大值</li>
+<li>在这一列的像素位置上，从 min 画一条竖线到 max</li>
+</ol>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#C586C0">for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">let</span><span style="color:#9CDCFE"> px</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#9CDCFE">canvasWidth</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4">++) {</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> chunkStart</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">floor</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4"> + (</span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> / </span><span style="color:#9CDCFE">canvasWidth</span><span style="color:#D4D4D4">) * (</span><span style="color:#9CDCFE">iEnd</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> chunkEnd</span><span style="color:#D4D4D4">   = </span><span style="color:#9CDCFE">Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">floor</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4"> + ((</span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> + </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) / </span><span style="color:#9CDCFE">canvasWidth</span><span style="color:#D4D4D4">) * (</span><span style="color:#9CDCFE">iEnd</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#569CD6">  let</span><span style="color:#9CDCFE"> chunkMin</span><span style="color:#D4D4D4"> = </span><span style="color:#569CD6">Infinity</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">chunkMax</span><span style="color:#D4D4D4"> = -</span><span style="color:#569CD6">Infinity</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">  for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">let</span><span style="color:#9CDCFE"> j</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">chunkStart</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">j</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#9CDCFE">chunkEnd</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">j</span><span style="color:#D4D4D4">++) {</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4FC1FF"> v</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">[</span><span style="color:#9CDCFE">j</span><span style="color:#D4D4D4">];</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">v</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#9CDCFE">chunkMin</span><span style="color:#D4D4D4">) </span><span style="color:#9CDCFE">chunkMin</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">v</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">v</span><span style="color:#D4D4D4"> > </span><span style="color:#9CDCFE">chunkMax</span><span style="color:#D4D4D4">) </span><span style="color:#9CDCFE">chunkMax</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">v</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> yMin</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">height</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">pad</span><span style="color:#D4D4D4"> - ((</span><span style="color:#9CDCFE">chunkMax</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">globalMin</span><span style="color:#D4D4D4">) / </span><span style="color:#9CDCFE">range</span><span style="color:#D4D4D4">) * (</span><span style="color:#9CDCFE">height</span><span style="color:#D4D4D4"> - </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * </span><span style="color:#9CDCFE">pad</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">  const</span><span style="color:#4FC1FF"> yMax</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">height</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">pad</span><span style="color:#D4D4D4"> - ((</span><span style="color:#9CDCFE">chunkMin</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">globalMin</span><span style="color:#D4D4D4">) / </span><span style="color:#9CDCFE">range</span><span style="color:#D4D4D4">) * (</span><span style="color:#9CDCFE">height</span><span style="color:#D4D4D4"> - </span><span style="color:#B5CEA8">2</span><span style="color:#D4D4D4"> * </span><span style="color:#9CDCFE">pad</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#9CDCFE">  ctx</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">fillRect</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">yMin</span><span style="color:#D4D4D4">, </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">max</span><span style="color:#D4D4D4">(</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">yMax</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">yMin</span><span style="color:#D4D4D4">));</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>这样，只要尖峰落在这个像素列对应的数据段里，它就一定会出现在画布上——因为 <code>chunkMax</code> 一定 &gt;= 尖峰值。无论缩多小，尖峰永远不会丢。</p>
+<h2>第二个坑：方波的上升沿、下降沿去哪了</h2>
+<p>min-max 解决尖峰之后，很快发现了另一个问题：画矩形波的时候，眼看高电平和低电平都能显示，但上升沿和下降沿经常消失。</p>
+<p>原因很简单：上升沿通常只有 1~2 个采样点，恰好处于两个相邻像素列的分界线上。左侧像素列的 chunk 结束于分界线前一格，右侧像素列的 chunk 从分界线开始——上升沿那 1 个点正好在缝隙里。</p>
+<p>修起来非常廉价——让相邻像素列的 chunk 重叠 1 个采样点：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> chunkStart</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> === </span><span style="color:#B5CEA8">0</span></span>
+<span class="line"><span style="color:#D4D4D4">  ? </span><span style="color:#9CDCFE">Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">floor</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4"> + (</span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> / </span><span style="color:#9CDCFE">dw</span><span style="color:#D4D4D4">) * (</span><span style="color:#9CDCFE">iEnd</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4">))</span></span>
+<span class="line"><span style="color:#D4D4D4">  : </span><span style="color:#9CDCFE">Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">floor</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4"> + (</span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> / </span><span style="color:#9CDCFE">dw</span><span style="color:#D4D4D4">) * (</span><span style="color:#9CDCFE">iEnd</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4">)) - </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">;  </span><span style="color:#6A9955">// 向前重叠 1 个采样</span></span></code></pre><pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>之前: [0..9] [10..19] [20..29]   ← 9-10、19-20 之间的边沿可能掉进缝隙</span></span>
+<span class="line"><span>现在: [0..9] [9..19]  [19..29]   ← 每个边界点被左右两个像素列共同覆盖</span></span></code></pre><p>增加的运算量可以忽略不计——多看了不到 1% 的数据点。</p>
+<h2>放大时的策略：别画竖线了，画连线</h2>
+<p>min-max 竖线在缩小时表现完美，但放大到接近原始采样率时，一个像素列只覆盖 1~2 个甚至 0 个采样点。这时候画竖线看起来会有颗粒感。</p>
+<p>做一个简单的分支：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">const</span><span style="color:#4FC1FF"> pointsPerPixel</span><span style="color:#D4D4D4"> = (</span><span style="color:#9CDCFE">iEnd</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4">) / </span><span style="color:#9CDCFE">canvasWidth</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">pointsPerPixel</span><span style="color:#D4D4D4"> &#x3C;= </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#6A9955">  // 放大：逐像素线性插值，平滑连线</span></span>
+<span class="line"><span style="color:#C586C0">  for</span><span style="color:#D4D4D4"> (</span><span style="color:#569CD6">let</span><span style="color:#9CDCFE"> px</span><span style="color:#D4D4D4"> = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#9CDCFE">dw</span><span style="color:#D4D4D4">; </span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4">++) {</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4FC1FF"> dataIdx</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4"> + (</span><span style="color:#9CDCFE">px</span><span style="color:#D4D4D4"> / </span><span style="color:#9CDCFE">dw</span><span style="color:#D4D4D4">) * (</span><span style="color:#9CDCFE">iEnd</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">iStart</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4FC1FF"> idx</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">Math</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">floor</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">dataIdx</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4FC1FF"> frac</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">dataIdx</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">idx</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4FC1FF"> v</span><span style="color:#D4D4D4"> = </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">[</span><span style="color:#9CDCFE">idx</span><span style="color:#D4D4D4">] * (</span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">frac</span><span style="color:#D4D4D4">) + </span><span style="color:#9CDCFE">data</span><span style="color:#D4D4D4">[</span><span style="color:#9CDCFE">idx</span><span style="color:#D4D4D4"> + </span><span style="color:#B5CEA8">1</span><span style="color:#D4D4D4">] * </span><span style="color:#9CDCFE">frac</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#6A9955">    // ... 连线</span></span>
+<span class="line"><span style="color:#D4D4D4">  }</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#6A9955">  // 缩小：min-max 竖线</span></span>
+<span class="line"><span style="color:#6A9955">  // ...</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><code>pointsPerPixel</code> 是每个像素对应的数据点数。等于 1 就是刚好 1:1；小于 1 说明是放大状态，采样点比像素还稀疏，用线性插值能给出最流畅的显示；大于 1 进入缩小状态，走 min-max 保极值。</p>
+<h2>这套方案的特点</h2>
+<ul>
+<li><strong>实现简单</strong>：核心逻辑不到 50 行，没有额外依赖</li>
+<li><strong>性能稳定</strong>：渲染开销完全由像素宽度决定，与数据量无关。百万点数据在 400px 宽的 canvas 上，每秒刷几十帧无压力</li>
+<li><strong>不会丢极值</strong>：缩到多小都保证尖峰可见</li>
+<li><strong>不会丢边沿</strong>：1-sample overlap 确保边界点的连续性</li>
+<li><strong>放大也精细</strong>：自适应切换到线性插值，不破坏近距离观察的体验</li>
+</ul>
+<p>这个方案既可以独立用于 Canvas 2D 直绘，也可以迁移到 WebGL 做纹理采样，或做成图片服务端的降采样管道。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-07 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=waveform-minmax-downsampling');
+  }
+  </script>
+</body>
+</html>

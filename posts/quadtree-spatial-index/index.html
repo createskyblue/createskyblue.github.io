@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>画布框选节点变慢时可以用四叉树先筛掉无关区域 - CacheRivulet小记</title>
+  <meta name="description" content="四叉树降低画布框选全量遍历">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="四叉树">
+  <meta property="article:tag" content="空间索引">
+  <meta property="article:tag" content="碰撞检测">
+  <meta property="article:tag" content="算法优化">
+  <meta property="article:tag" content="信号处理实验室">
+  <meta property="article:published_time" content="2026-06-08">
+  <meta property="og:title" content="画布框选节点变慢时可以用四叉树先筛掉无关区域">
+  <meta property="og:description" content="四叉树降低画布框选全量遍历">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/quadtree-spatial-index/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/quadtree-spatial-index/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "画布框选节点变慢时可以用四叉树先筛掉无关区域",
+  "description": "四叉树降低画布框选全量遍历",
+  "datePublished": "2026-06-08",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/quadtree-spatial-index/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/quadtree-spatial-index/"
+  },
+  "keywords": "四叉树, 空间索引, 碰撞检测, 算法优化, 信号处理实验室"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">画布框选节点变慢时可以用四叉树先筛掉无关区域</h1>
+  <article class="article-body">
+<h1>画布框选节点变慢时可以用四叉树先筛掉无关区域</h1>
+<h2>从画布框选说起</h2>
+<p>画布应用常见一个交互：用户拖拽鼠标拉出矩形选框，把框住的节点全部选中。最直接的实现是遍历所有节点，逐个判断矩形是否相交：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#569CD6">function</span><span style="color:#DCDCAA"> getNodesInSelection</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">selectRect</span><span style="color:#D4D4D4">) {</span></span>
+<span class="line"><span style="color:#C586C0">  return</span><span style="color:#9CDCFE"> nodes</span><span style="color:#D4D4D4">.</span><span style="color:#DCDCAA">filter</span><span style="color:#D4D4D4">(</span><span style="color:#9CDCFE">node</span><span style="color:#569CD6"> =></span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    const</span><span style="color:#4FC1FF"> r</span><span style="color:#D4D4D4"> = { </span><span style="color:#9CDCFE">x:</span><span style="color:#9CDCFE"> node</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">y:</span><span style="color:#9CDCFE"> node</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">y</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">w:</span><span style="color:#9CDCFE"> node</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">el</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">offsetWidth</span><span style="color:#D4D4D4">, </span><span style="color:#9CDCFE">h:</span><span style="color:#9CDCFE"> node</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">el</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">offsetHeight</span><span style="color:#D4D4D4"> };</span></span>
+<span class="line"><span style="color:#C586C0">    return</span><span style="color:#D4D4D4"> !(</span><span style="color:#9CDCFE">r</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">r</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">w</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#9CDCFE">selectRect</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4"> || </span><span style="color:#9CDCFE">r</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4"> > </span><span style="color:#9CDCFE">selectRect</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">x</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">selectRect</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">w</span></span>
+<span class="line"><span style="color:#D4D4D4">          || </span><span style="color:#9CDCFE">r</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">y</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">r</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">h</span><span style="color:#D4D4D4"> &#x3C; </span><span style="color:#9CDCFE">selectRect</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">y</span><span style="color:#D4D4D4"> || </span><span style="color:#9CDCFE">r</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">y</span><span style="color:#D4D4D4"> > </span><span style="color:#9CDCFE">selectRect</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">y</span><span style="color:#D4D4D4"> + </span><span style="color:#9CDCFE">selectRect</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">h</span><span style="color:#D4D4D4">);</span></span>
+<span class="line"><span style="color:#D4D4D4">  });</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>每次 mousemove 都跑一遍。节点数量只有几十到上百个时，这种全量遍历通常够用。</p>
+<p>节点数量继续增长后，问题会变成：选框只覆盖画布一小块区域，代码却仍然检查所有节点。</p>
+<p>O(n) 遍历的痛点不在于单个判断慢，而在于<strong>绝大部分判断是浪费的</strong>。鼠标框选了画布左上角 3 个节点，代码仍然老老实实地和右下角 497 个节点逐一比对。</p>
+<h2>空间索引的思路：把位置当索引用</h2>
+<p>数据库用 B-tree 索引避免全表扫描，空间索引也用于减少全量扫描。它的索引键是 (x, y) 坐标。</p>
+<p>核心策略只有一句话：<strong>先把&quot;哪些节点可能在选框里&quot;算出来，只对候选节点做精确判断。</strong></p>
+<p>这就是&quot;粗筛 → 精筛&quot;两阶段机制：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>原始数据 ──[粗筛]──→ 候选集 ──[精筛]──→ 结果</span></span>
+<span class="line"><span> (n个)   空间索引    (k~m个)  AABB判断   (k个)</span></span></code></pre><p>粗筛用空间结构快速淘汰整片不相关的区域，留下少量候选。精筛用精确的矩形相交判断收尾。精筛的复杂度是 O(m)，m 远小于 n。</p>
+<h2>四叉树的结构</h2>
+<p>四叉树（Quadtree）是最直观的空间索引之一。把画布递归四等分，直到每个格子里节点数小于某个阈值（通常 4~8 个）：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>画布 800×600，共 18 个节点</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>┌──────────┬──────────┐</span></span>
+<span class="line"><span>│ ··       │   ·      │</span></span>
+<span class="line"><span>│   NW  ·  │  NE   ·  │</span></span>
+<span class="line"><span>│          │     ··   │</span></span>
+<span class="line"><span>├──────────┴──────────┤</span></span>
+<span class="line"><span>│    ·    │      ·    │</span></span>
+<span class="line"><span>│  SW  ·  │   SE ··   │</span></span>
+<span class="line"><span>│  ·      │     ·  ·  │</span></span>
+<span class="line"><span>└─────────┴───────────┘</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>四叉树:</span></span>
+<span class="line"><span>              root (800×600)</span></span>
+<span class="line"><span>      ┌────────┼────────┬────────┐</span></span>
+<span class="line"><span>     NW      NE       SW       SE</span></span>
+<span class="line"><span>  (400×300) (400×300)(400×300)(400×300)</span></span>
+<span class="line"><span>  [5个节点] [4个节点] [3个节点] [6个节点]</span></span></code></pre><p>每个节点存 4 样东西：</p>
+<ul>
+<li>四个子象限的引用（NW / NE / SW / SE）</li>
+<li>自己的空间边界</li>
+<li>落在这个区域内的对象列表（仅叶子节点存储）</li>
+</ul>
+<p>当某个象限里节点超过阈值，就继续分裂。直到每个叶子格子里节点数 ≤ 阈值。</p>
+<h2>查询过程</h2>
+<p>框选一个矩形后，从根开始递归：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>query(rect, node):</span></span>
+<span class="line"><span>  if node.bounds 与 rect 完全不相交 → return []  // 整块跳过</span></span>
+<span class="line"><span>  if node 是叶子:</span></span>
+<span class="line"><span>    return node.items.filter(item → AABB相交(item, rect))</span></span>
+<span class="line"><span>  // 否则递归查四个子节点</span></span>
+<span class="line"><span>  result = []</span></span>
+<span class="line"><span>  for child in [node.NW, node.NE, node.SW, node.SE]:</span></span>
+<span class="line"><span>    result.push(...query(rect, child))</span></span>
+<span class="line"><span>  return result</span></span></code></pre><p>关键在第一条分支。当某个象限的边界和选框完全不重叠时，这个象限及其所有子节点<strong>一次性全部跳过</strong>，回到用户之前的话——&quot;只需要搜索涉及区域里面的节点就可以了&quot;。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>选框在 NE 角:</span></span>
+<span class="line"><span>┌──────────┬──────────┐</span></span>
+<span class="line"><span>│  ✗跳过   │  ✓进入   │</span></span>
+<span class="line"><span>│   NW     │  NE ··   │</span></span>
+<span class="line"><span>│          ├──────────┤</span></span>
+<span class="line"><span>│          │     ✗    │</span></span>
+<span class="line"><span>│          │     SE   │</span></span>
+<span class="line"><span>│          │   (跳过)  │</span></span>
+<span class="line"><span>└──────────┴──────────┘</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>SW 完全在选框外 → 整棵 SW 子树淘汰，0 次 AABB 判断</span></span>
+<span class="line"><span>NE 与选框重叠 → 进入 NE，对其中 4 个节点做 AABB</span></span></code></pre><h2>复杂度分析</h2>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>全量遍历</th>
+<th>四叉树</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>建树</td>
+<td>O(1)</td>
+<td>O(n log n)</td>
+</tr>
+<tr>
+<td>单次查询</td>
+<td>O(n)</td>
+<td>O(log n + k)</td>
+</tr>
+<tr>
+<td>插入/移动</td>
+<td>O(1)</td>
+<td>O(log n)</td>
+</tr>
+</tbody></table>
+<p>查询复杂度中，log n 来自树的层数（逐层定位到相关叶子），k 是结果集中的节点数（精筛阶段无法避免）。只要 k ≪ n，加速就是数量级的。</p>
+<p>具体到数字：500 个节点，选框选中 3 个。</p>
+<ul>
+<li>全量遍历：判断 500 次</li>
+<li>四叉树（深度 4 层，选中的叶子格子里 8 个节点）：访问约 12~20 个树节点 + 8 次 AABB → 约 20 次判断</li>
+</ul>
+<h2>什么时候不该用</h2>
+<p>四叉树有自己的成本：</p>
+<p><strong>构建成本</strong>。每次插入、删除、移动节点都要更新树。如果节点频繁拖拽（信号处理实验室正是这样），移动操作要重新定位节点所在的格子。</p>
+<p><strong>JS 对象分配开销</strong>。四叉树在 JavaScript 中靠递归和对象属性访问实现。当节点数在 200 以下时，一次 for 循环 + 矩形判断可能比递归查询四叉树更快——函数调用和属性查找的开销反而成了瓶颈。</p>
+<p><strong>交叉点大约在 500~1000 个对象</strong>。低于这个数，粗暴遍历就是最优解。这就是信号处理实验室没有引入四叉树的理由：流程图的节点数几乎不可能超过 200。</p>
+<h2>不止于四叉树</h2>
+<p>四叉树只是空间索引家族的一员。相似的思路还有：</p>
+<ul>
+<li><strong>R-tree</strong>：为磁盘存储优化，数据库的空间索引首选。每个节点存一个最小包围矩形，节点之间可以有重叠。</li>
+<li><strong>网格索引</strong>：把空间切成等大的格子。实现比四叉树更简单，但浪费内存在空旷区域。</li>
+<li><strong>KD-tree</strong>：每次只沿一个维度切分，交替使用 x 和 y 轴。适合最近邻搜索。</li>
+</ul>
+<p>它们共享同一个设计哲学：<strong>用空间换时间，用结构换遍历</strong>。预先花一点代价把对象按位置组织好，查询时就能跳过绝大部分无关对象。</p>
+<h2>总结</h2>
+<p>分级筛选的思路不限于空间索引。数据库的 B-tree、搜索引擎的倒排索引、布隆过滤器，本质上都是&quot;粗筛 → 精筛&quot;——先用廉价操作淘汰掉大部分数据，再用精确操作收尾。</p>
+<p>下次写全量遍历的时候可以问自己一句：我要处理的对象里，有多少是真正有关的？</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-08 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=quadtree-spatial-index');
+  }
+  </script>
+</body>
+</html>

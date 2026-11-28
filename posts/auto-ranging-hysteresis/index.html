@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>升档降档共用一条阈值，中间再没留死区 - CacheRivulet小记</title>
+  <meta name="description" content="自动量程在阈值附近来回横跳">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="系统设计">
+  <meta property="article:tag" content="数据采集">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:published_time" content="2026-08-10">
+  <meta property="og:title" content="升档降档共用一条阈值，中间再没留死区">
+  <meta property="og:description" content="自动量程在阈值附近来回横跳">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/auto-ranging-hysteresis/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/auto-ranging-hysteresis/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "升档降档共用一条阈值，中间再没留死区",
+  "description": "自动量程在阈值附近来回横跳",
+  "datePublished": "2026-08-10",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/auto-ranging-hysteresis/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/auto-ranging-hysteresis/"
+  },
+  "keywords": "嵌入式, 系统设计, 数据采集, 工程调试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">升档降档共用一条阈值，中间再没留死区</h1>
+  <article class="article-body">
+<h1>升档降档共用一条阈值，中间再没留死区</h1>
+<p>自动量程就是迟滞触发：读数太高升档，太低降档。升档和降档如果画在同一条线上，读数在阈值附近晃一下，两个档位就会来回横跳。显示难看，噪声被放大，换档瞬态还可能把电路推自激。</p>
+<p>办法也只有这一条：升档线和降档线分开，中间留下死区。</p>
+<ul>
+<li>升档线靠近满量程，比如 95%。当前档快饱和了再换。</li>
+<li>降档线靠近见底，比如 10%。当前档灵敏度过剩了再换。</li>
+<li>死区必须大于噪声带。噪声是 ±2%，死区就得远大于 4%，否则一次尖峰照样来回踩线。</li>
+</ul>
+<p><img src="/posts/auto-ranging-hysteresis/hysteresis-deadzone.svg" alt="滞回死区"></p>
+<p>量程如果是十倍程，滞回还会再被拉开一截。旧档 95% 升上去，同一物理量在新档只剩 9.5%；要降回来，还得跌到新档 10% 以下，相当于旧档的 1%。物理量要变两个数量级才会反向换档。</p>
+<p>换档后再空几个采样不评估，挡住电路建立期的毛刺就够了。参数不用精调，先让死区盖住噪声，横跳自己会停。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-10 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=auto-ranging-hysteresis');
+  }
+  </script>
+</body>
+</html>

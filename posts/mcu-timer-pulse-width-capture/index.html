@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCU 定时器脉宽捕获：双边沿读引脚与 PWM 输入模式 - CacheRivulet小记</title>
+  <meta name="description" content="定时器双边沿捕获测量脉宽">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="定时器">
+  <meta property="article:tag" content="脉宽判定">
+  <meta property="article:tag" content="STM32">
+  <meta property="article:tag" content="中断">
+  <meta property="article:published_time" content="2026-07-07">
+  <meta property="og:title" content="MCU 定时器脉宽捕获：双边沿读引脚与 PWM 输入模式">
+  <meta property="og:description" content="定时器双边沿捕获测量脉宽">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/mcu-timer-pulse-width-capture/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/mcu-timer-pulse-width-capture/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "MCU 定时器脉宽捕获：双边沿读引脚与 PWM 输入模式",
+  "description": "定时器双边沿捕获测量脉宽",
+  "datePublished": "2026-07-07",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/mcu-timer-pulse-width-capture/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/mcu-timer-pulse-width-capture/"
+  },
+  "keywords": "嵌入式, MCU, 定时器, 脉宽判定, STM32, 中断"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">MCU 定时器脉宽捕获：双边沿读引脚与 PWM 输入模式</h1>
+  <article class="article-body">
+<h1>MCU 定时器脉宽捕获：双边沿读引脚与 PWM 输入模式</h1>
+<p>使用定时器测量外部信号的脉宽是嵌入式开发中的常见需求。以下场景都会遇到：</p>
+<ul>
+<li>超声波测距，需要测量 Echo 引脚的高电平宽度</li>
+<li>红外遥控解码，需要区分引导码、数据 0 和数据 1 的脉冲长度</li>
+<li>PPM 信号解析，多路 PWM 的上升沿间隔编码了通道值</li>
+<li>旋转编码器速度测量，两个脉冲之间的时间间隔对应转速</li>
+</ul>
+<p>这篇文章整理三种基于定时器捕获通道的脉宽测量方法，并讨论一个问题：硬件能自动过滤不合格的脉宽吗？哪些必须在软件里做？</p>
+<h2>PY32F002A 的定时器资源</h2>
+<p>先看一眼手里的硬件。PY32F002A（TSSOP-20 封装）有 2 个定时器：</p>
+<table>
+<thead>
+<tr>
+<th>定时器</th>
+<th>类型</th>
+<th>捕获通道</th>
+<th>能测脉宽?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>TIM1</td>
+<td>高级定时器</td>
+<td>4 个（CH1~CH4）</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>TIM16</td>
+<td>通用定时器</td>
+<td>0 个——没有 CCMR、CCER、CCR</td>
+<td>❌ 只能做定时中断</td>
+</tr>
+</tbody></table>
+<p><strong>只有 TIM1 能做输入捕获。</strong> 不过它有 4 个通道，每个通道是完全独立的硬件：独立的 CCR 寄存器、独立的输入滤波器（ICxF）、独立的预分频器（ICxPSC）、独立的中断标志。唯一共享的是一颗 16 位计数器 CNT。</p>
+<h2>硬件滤波：能做的和不能做的</h2>
+<p>每个捕获通道都有一个 4 位数字滤波器（ICxF）和一个 2 位事件预分频器（ICxPSC），在信号进入边沿检测之前工作。</p>
+<h3>数字滤波器去毛刺</h3>
+<p>滤波器用 fDTS（死区时间采样时钟，等于 CK_INT 或其 2/4 分频）对输入信号连续采样 N 次。只有 N 次采样结果一致，信号电平才被传递到边沿检测电路。</p>
+<table>
+<thead>
+<tr>
+<th>ICxF</th>
+<th>fDTS</th>
+<th>N</th>
+<th>48MHz 下的最小脉冲</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0x0</td>
+<td>无滤波</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>0x3</td>
+<td>fCK_INT</td>
+<td>8</td>
+<td>167 ns</td>
+</tr>
+<tr>
+<td>0x7</td>
+<td>fCK_INT/4</td>
+<td>8</td>
+<td>667 ns</td>
+</tr>
+<tr>
+<td>0xB</td>
+<td>fCK_INT/16</td>
+<td>8</td>
+<td>2.67 μs</td>
+</tr>
+<tr>
+<td>0xF</td>
+<td>fCK_INT/32</td>
+<td>8</td>
+<td>5.33 μs</td>
+</tr>
+</tbody></table>
+<p>宽度小于上述值的毛刺会被硬件自动吞掉，不会触发捕获。这是<strong>纯硬件行为</strong>，你的 ISR 根本感知不到这些毛刺。</p>
+<h3>事件预分频器跳脉冲</h3>
+<p>ICxPSC 让捕获通道每 N 个边沿才响应一次：</p>
+<table>
+<thead>
+<tr>
+<th>ICPSC</th>
+<th>效果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DIV1</td>
+<td>每个边沿都捕获</td>
+</tr>
+<tr>
+<td>DIV2</td>
+<td>每 2 个边沿捕获 1 次</td>
+</tr>
+<tr>
+<td>DIV4</td>
+<td>每 4 个边沿捕获 1 次</td>
+</tr>
+<tr>
+<td>DIV8</td>
+<td>每 8 个边沿捕获 1 次</td>
+</tr>
+</tbody></table>
+<p>预分频器适合周期性信号——比如你只关心每第 4 次上升沿的时间戳，中间 3 次直接忽略。</p>
+<h3>硬件不能做的：阈值判定</h3>
+<p>ICxF 滤毛刺，ICxPSC 跳脉冲。但没有寄存器可以设&quot;脉宽小于 100 个 tick 就自动丢弃&quot;。<strong>脉冲是否合格，必须在 ISR 里用软件判断。</strong></p>
+<p>好在这不难：中断里读到 CCR 值，跟前一次捕获值做差，大于最小阈值、小于最大阈值就算合格，不满足的直接丢弃。</p>
+<h2>三种捕获触发模式</h2>
+<p>每个捕获通道可以独立选择边沿触发方式：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>HAL 宏</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>上升沿</td>
+<td><code>TIM_ICPOLARITY_RISING</code></td>
+<td>只在上升沿锁存 CNT → CCR，触发中断</td>
+</tr>
+<tr>
+<td>下降沿</td>
+<td><code>TIM_ICPOLARITY_FALLING</code></td>
+<td>只在下降沿锁存 CNT → CCR，触发中断</td>
+</tr>
+<tr>
+<td>双边沿</td>
+<td><code>TIM_ICPOLARITY_BOTHEDGE</code></td>
+<td>两个边沿都锁存 CNT → CCR，都触发中断</td>
+</tr>
+</tbody></table>
+<p>触发条件满足时，硬件自动把当前 CNT 值锁存到对应的 CCR 寄存器里，置中断标志。整个过程不需要软件参与——你在 ISR 里读 CCR 拿到的就是边沿到达那一刻的计数器快照。</p>
+<p>下面三种方法本质上是在这三种触发模式上做组合。</p>
+<h2>方法一：单通道双边沿 + 读引脚判方向</h2>
+<p>一个通道配成双边沿捕获，上升沿和下降沿都会触发中断。中断里读对应 GPIO 的输入电平：高说明刚才是上升沿，低说明刚才是下降沿。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// 配置：CH1 双边沿捕获 + 硬件滤波</span></span>
+<span class="line"><span style="color:#D4D4D4">TIM_IC_InitTypeDef </span><span style="color:#9CDCFE">sIC</span><span style="color:#D4D4D4"> = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC</span><span style="color:#D4D4D4">.ICPolarity  = TIM_ICPOLARITY_BOTHEDGE;</span><span style="color:#6A9955">   // 双边沿都触发</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC</span><span style="color:#D4D4D4">.ICSelection = TIM_ICSELECTION_DIRECTTI;</span><span style="color:#6A9955">   // 直接连 TI1</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC</span><span style="color:#D4D4D4">.ICPrescaler = TIM_ICPSC_DIV1;</span><span style="color:#6A9955">             // 每个边沿都捕获</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC</span><span style="color:#D4D4D4">.ICFilter    = </span><span style="color:#B5CEA8">0x0F</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">                       // 最强硬件滤波</span></span>
+<span class="line"><span style="color:#DCDCAA">HAL_TIM_IC_ConfigChannel</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">htim1</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">sIC</span><span style="color:#D4D4D4">, TIM_CHANNEL_1);</span></span>
+<span class="line"><span style="color:#DCDCAA">HAL_TIM_IC_Start_IT</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">htim1</span><span style="color:#D4D4D4">, TIM_CHANNEL_1);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// ISR</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> HAL_TIM_IC_CaptureCallback</span><span style="color:#D4D4D4">(TIM_HandleTypeDef *</span><span style="color:#9CDCFE">htim</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    static</span><span style="color:#569CD6"> uint32_t</span><span style="color:#D4D4D4"> last = </span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">htim</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">Channel</span><span style="color:#D4D4D4"> == HAL_TIM_ACTIVE_CHANNEL_1) {</span></span>
+<span class="line"><span style="color:#569CD6">        uint32_t</span><span style="color:#D4D4D4"> now = </span><span style="color:#DCDCAA">HAL_TIM_ReadCapturedValue</span><span style="color:#D4D4D4">(htim, TIM_CHANNEL_1);</span></span>
+<span class="line"><span style="color:#569CD6">        uint32_t</span><span style="color:#D4D4D4"> diff = (now >= last) ? (now - last) : (</span><span style="color:#B5CEA8">0xFFFF</span><span style="color:#D4D4D4"> - last + now);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">HAL_GPIO_ReadPin</span><span style="color:#D4D4D4">(GPIOA, GPIO_PIN_8) == GPIO_PIN_SET) {</span></span>
+<span class="line"><span style="color:#6A9955">            // 引脚高 → 刚才上升沿 → diff = 低电平宽度</span></span>
+<span class="line"><span style="color:#C586C0">            if</span><span style="color:#D4D4D4"> (diff > MIN_TICKS &#x26;&#x26; diff &#x3C; MAX_TICKS) {</span></span>
+<span class="line"><span style="color:#D4D4D4">                g_pulse_ticks = diff;</span><span style="color:#6A9955">   // 合格</span></span>
+<span class="line"><span style="color:#D4D4D4">            }</span></span>
+<span class="line"><span style="color:#6A9955">            // 不合格的静默丢弃</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#6A9955">        // 下降沿只记录时间戳，不计算宽度</span></span>
+<span class="line"><span style="color:#D4D4D4">        last = now;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p>时序：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>信号 ──┐        ┌──────────┐        ┌──────</span></span>
+<span class="line"><span>       └────────┘          └────────┘</span></span>
+<span class="line"><span>        ↓        ↑          ↓        ↑</span></span>
+<span class="line"><span>    下降沿     上升沿      下降沿    上升沿</span></span>
+<span class="line"><span>    CCR=100   CCR=400    CCR=650  CCR=900</span></span>
+<span class="line"><span>    PIN=0     PIN=1      PIN=0    PIN=1</span></span>
+<span class="line"><span>    只记录    低脉宽      只记录    低脉宽</span></span>
+<span class="line"><span>              =400-100             =900-650</span></span>
+<span class="line"><span>              =300                =250</span></span></code></pre><p><strong>优点</strong>：一个通道搞定一路信号。TIM1 有 4 个通道，够测 4 路。</p>
+<p><strong>代价</strong>：ISR 里要读一次 GPIO 来判断方向。对于高频脉冲，GPIO 读操作有 1~2 个 APB 周期的延迟，但绝大多数应用场景完全够用。</p>
+<h2>方法二：PWM 输入模式——两个通道绑一个信号</h2>
+<p>PWM 输入模式用两个捕获通道（CH1+CH2 或 CH3+CH4）绑到同一个输入引脚。CH1 只抓上升沿，CH2 只抓下降沿，两个通道各自独立触发，互不干扰。ISR 里<strong>不需要读 GPIO</strong>——哪个通道触发，就知道是哪个边沿。</p>
+<p>同一个信号物理上只接一根引脚。CH2 通过 CCMR 的 INDIRECT 模式&quot;内部布线&quot;连到同一路 TI1 输入。</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// CH1: 上升沿, 直接连 TI1</span></span>
+<span class="line"><span style="color:#D4D4D4">TIM_IC_InitTypeDef </span><span style="color:#9CDCFE">sIC1</span><span style="color:#D4D4D4"> = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC1</span><span style="color:#D4D4D4">.ICPolarity  = TIM_ICPOLARITY_RISING;</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC1</span><span style="color:#D4D4D4">.ICSelection = TIM_ICSELECTION_DIRECTTI;</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC1</span><span style="color:#D4D4D4">.ICPrescaler = TIM_ICPSC_DIV1;</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC1</span><span style="color:#D4D4D4">.ICFilter    = </span><span style="color:#B5CEA8">0x0F</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">HAL_TIM_IC_ConfigChannel</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">htim1</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">sIC1</span><span style="color:#D4D4D4">, TIM_CHANNEL_1);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// CH2: 下降沿, 间接连到同一个 TI1（不需要额外引脚）</span></span>
+<span class="line"><span style="color:#D4D4D4">TIM_IC_InitTypeDef </span><span style="color:#9CDCFE">sIC2</span><span style="color:#D4D4D4"> = {</span><span style="color:#B5CEA8">0</span><span style="color:#D4D4D4">};</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC2</span><span style="color:#D4D4D4">.ICPolarity  = TIM_ICPOLARITY_FALLING;</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC2</span><span style="color:#D4D4D4">.ICSelection = TIM_ICSELECTION_INDIRECTTI;</span><span style="color:#6A9955">  // 内部连 TI1</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC2</span><span style="color:#D4D4D4">.ICPrescaler = TIM_ICPSC_DIV1;</span></span>
+<span class="line"><span style="color:#9CDCFE">sIC2</span><span style="color:#D4D4D4">.ICFilter    = </span><span style="color:#B5CEA8">0x0F</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"><span style="color:#DCDCAA">HAL_TIM_IC_ConfigChannel</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">htim1</span><span style="color:#D4D4D4">, &#x26;</span><span style="color:#9CDCFE">sIC2</span><span style="color:#D4D4D4">, TIM_CHANNEL_2);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#DCDCAA">HAL_TIM_IC_Start_IT</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">htim1</span><span style="color:#D4D4D4">, TIM_CHANNEL_1);</span></span>
+<span class="line"><span style="color:#DCDCAA">HAL_TIM_IC_Start_IT</span><span style="color:#D4D4D4">(&#x26;</span><span style="color:#9CDCFE">htim1</span><span style="color:#D4D4D4">, TIM_CHANNEL_2);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A9955">// ISR</span></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> HAL_TIM_IC_CaptureCallback</span><span style="color:#D4D4D4">(TIM_HandleTypeDef *</span><span style="color:#9CDCFE">htim</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">htim</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">Channel</span><span style="color:#D4D4D4"> == HAL_TIM_ACTIVE_CHANNEL_1) {</span></span>
+<span class="line"><span style="color:#6A9955">        // CH1 中断 → 一定是上升沿 → 读 CCR1（周期值）</span></span>
+<span class="line"><span style="color:#569CD6">        uint32_t</span><span style="color:#D4D4D4"> period = </span><span style="color:#DCDCAA">HAL_TIM_ReadCapturedValue</span><span style="color:#D4D4D4">(htim, TIM_CHANNEL_1);</span></span>
+<span class="line"><span style="color:#D4D4D4">        g_period_ticks = period;</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#9CDCFE">htim</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">Channel</span><span style="color:#D4D4D4"> == HAL_TIM_ACTIVE_CHANNEL_2) {</span></span>
+<span class="line"><span style="color:#6A9955">        // CH2 中断 → 一定是下降沿 → 读 CCR2（高电平宽度）</span></span>
+<span class="line"><span style="color:#569CD6">        uint32_t</span><span style="color:#D4D4D4"> high = </span><span style="color:#DCDCAA">HAL_TIM_ReadCapturedValue</span><span style="color:#D4D4D4">(htim, TIM_CHANNEL_2);</span></span>
+<span class="line"><span style="color:#D4D4D4">        g_high_ticks = high;</span></span>
+<span class="line"><span style="color:#D4D4D4">        g_low_ticks = g_period_ticks - high;</span><span style="color:#6A9955">   // 低脉宽 = 周期 - 高脉宽</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><p><strong>优点</strong>：ISR 不需要读 GPIO，不需要记上次值，边沿方向由通道号本身保证。代码干净。</p>
+<p><strong>代价</strong>：一路信号吃掉两个捕获通道。TIM1 最多测两路（CH1+CH2 一路，CH3+CH4 一路）。CH3+CH4 在 CCMR2 中<strong>没有 INDIRECT 模式</strong>——CH4 不能间接映射到 TI3，第二路只能退回方法一。</p>
+<h2>方法三：纯 GPIO 双边沿中断</h2>
+<p>前两种方法都需要占用定时器捕获通道。如果引脚不满足 TIM1 通道映射、或者捕获通道已挪作他用，可以用 GPIO 双边沿中断加软件状态机来测脉宽。</p>
+<p>PY32F002A 的 EXTI 原生支持双边沿触发：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#D4D4D4">GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;</span></span></code></pre><p>配置之后，上升沿和下降沿都会进同一个 EXTI 中断，<strong>不需要像 51 单片机那样在 ISR 里来回切换触发边沿</strong>。ISR 里读一次引脚电平即可判断方向，再用一个自由运行的定时器（比如 SysTick 或只做时基的 TIM16）拿时间戳：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// 两路信号各用一个小的状态机</span></span>
+<span class="line"><span style="color:#569CD6">typedef</span><span style="color:#569CD6"> struct</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> last_tick;</span></span>
+<span class="line"><span style="color:#569CD6">    uint8_t</span><span style="color:#D4D4D4">  state;</span><span style="color:#6A9955">       // 0=等下降沿, 1=等上升沿</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> low_width;</span></span>
+<span class="line"><span style="color:#D4D4D4">} </span><span style="color:#4EC9B0">pulse_detect_t</span><span style="color:#D4D4D4">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#4EC9B0">pulse_detect_t</span><span style="color:#D4D4D4"> g_ch1, g_ch2;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#569CD6">void</span><span style="color:#DCDCAA"> EXTI_IRQHandler</span><span style="color:#D4D4D4">(</span><span style="color:#569CD6">void</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">{</span></span>
+<span class="line"><span style="color:#569CD6">    uint32_t</span><span style="color:#D4D4D4"> now = </span><span style="color:#9CDCFE">TIM16</span><span style="color:#D4D4D4">-></span><span style="color:#9CDCFE">CNT</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">  // 自由运行的时间基准</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C586C0">    if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">__HAL_GPIO_EXTI_GET_IT</span><span style="color:#D4D4D4">(GPIO_PIN_2) != RESET) {</span></span>
+<span class="line"><span style="color:#C586C0">        if</span><span style="color:#D4D4D4"> (</span><span style="color:#DCDCAA">HAL_GPIO_ReadPin</span><span style="color:#D4D4D4">(GPIOA, GPIO_PIN_2) == GPIO_PIN_SET) {</span></span>
+<span class="line"><span style="color:#6A9955">            // 上升沿 → 低电平结束</span></span>
+<span class="line"><span style="color:#569CD6">            uint32_t</span><span style="color:#D4D4D4"> diff = (now >= </span><span style="color:#9CDCFE">g_ch1</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">last_tick</span><span style="color:#D4D4D4">) ? (now - </span><span style="color:#9CDCFE">g_ch1</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">last_tick</span><span style="color:#D4D4D4">)</span></span>
+<span class="line"><span style="color:#D4D4D4">                                                     : (</span><span style="color:#B5CEA8">0xFFFF</span><span style="color:#D4D4D4"> - </span><span style="color:#9CDCFE">g_ch1</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">last_tick</span><span style="color:#D4D4D4"> + now);</span></span>
+<span class="line"><span style="color:#C586C0">            if</span><span style="color:#D4D4D4"> (diff > MIN_TICKS &#x26;&#x26; diff &#x3C; MAX_TICKS) {</span></span>
+<span class="line"><span style="color:#9CDCFE">                g_ch1</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">low_width</span><span style="color:#D4D4D4"> = diff;</span><span style="color:#6A9955">  // 合格</span></span>
+<span class="line"><span style="color:#D4D4D4">            }</span></span>
+<span class="line"><span style="color:#D4D4D4">        } </span><span style="color:#C586C0">else</span><span style="color:#D4D4D4"> {</span></span>
+<span class="line"><span style="color:#6A9955">            // 下降沿 → 低电平开始，只记录起点</span></span>
+<span class="line"><span style="color:#9CDCFE">            g_ch1</span><span style="color:#D4D4D4">.</span><span style="color:#9CDCFE">last_tick</span><span style="color:#D4D4D4"> = now;</span></span>
+<span class="line"><span style="color:#D4D4D4">        }</span></span>
+<span class="line"><span style="color:#DCDCAA">        __HAL_GPIO_EXTI_CLEAR_IT</span><span style="color:#D4D4D4">(GPIO_PIN_2);</span></span>
+<span class="line"><span style="color:#D4D4D4">    }</span></span>
+<span class="line"><span style="color:#6A9955">    // 通道2 同理...</span></span>
+<span class="line"><span style="color:#D4D4D4">}</span></span></code></pre><h3>精度能接受吗</h3>
+<p>软件中断的延迟不是随机乱跳——Cortex-M0+ 的中断响应是确定性的 12~16 个周期。跑 48MHz 时约 0.3μs。真正引入抖动的是被其他中断或临界区短暂挡住。</p>
+<p>以 250μs 最小脉宽为例：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>中断延迟：~0.3μs</span></span>
+<span class="line"><span>SysTick 挡住（典型）：~2μs</span></span>
+<span class="line"><span>最坏情况 jitter：~2μs</span></span>
+<span class="line"><span>相对误差：2 / 250 = 0.8%</span></span></code></pre><p>对于电机霍尔、红外遥控、超声波测距这类场景完全够用。但如果脉宽是几十微秒级别，或者系统里有长时间关中断的代码（Flash 擦写、I2C 阻塞等待），误差就会明显增大。</p>
+<p><strong>延伸阅读</strong>：<a href="/posts/software-dual-edge-pulse-filter/" target="_blank" rel="noopener noreferrer">在 51 单片机上用中断捕获 12 路微秒级脉宽，软件双边沿会碰到实时性边界</a> 的情况不同——51 主频低、路数多、脉宽窄，软件方案才会成为瓶颈。</p>
+<h2>三种方法对比</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>方法一<br>双边沿+读引脚</th>
+<th>方法二<br>PWM输入模式</th>
+<th>方法三<br>GPIO中断</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>通道/信号数</td>
+<td>1 个</td>
+<td>2 个</td>
+<td>0（不用定时器）</td>
+</tr>
+<tr>
+<td>TIM1 最大信号数</td>
+<td>4 路</td>
+<td>2 路</td>
+<td>不限</td>
+</tr>
+<tr>
+<td>ISR 读 GPIO</td>
+<td>需要</td>
+<td>不需要</td>
+<td>需要</td>
+</tr>
+<tr>
+<td>ISR 复杂度</td>
+<td>中等</td>
+<td>低</td>
+<td>低</td>
+</tr>
+<tr>
+<td>精度</td>
+<td>硬件时间戳</td>
+<td>硬件时间戳</td>
+<td>软件时间戳，~2μs jitter</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>多路低频脉冲</td>
+<td>1~2 路高频 PWM</td>
+<td>脉宽 ≥100μs，无长时间关中断</td>
+</tr>
+<tr>
+<td>额外要求</td>
+<td>引脚映射到 TIM1 CHx</td>
+<td>引脚映射到 TIM1 CHx</td>
+<td>EXTI 可用即可</td>
+</tr>
+</tbody></table>
+<h2>软件阈值判定的最终形态</h2>
+<p>不论用方法一还是方法二，硬件只能去毛刺，不能判断脉宽是否合法。ISR 里代码形态是相同的：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span style="color:#6A9955">// 拿到 diff（两次捕获的 tick 差值）</span></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (diff &#x3C; MIN_VALID_TICKS)  </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">  // 太窄，丢弃</span></span>
+<span class="line"><span style="color:#C586C0">if</span><span style="color:#D4D4D4"> (diff > MAX_VALID_TICKS)  </span><span style="color:#C586C0">return</span><span style="color:#D4D4D4">;</span><span style="color:#6A9955">  // 太宽，丢弃</span></span>
+<span class="line"><span style="color:#D4D4D4">g_valid_count++;</span><span style="color:#6A9955">                        // 合格</span></span>
+<span class="line"><span style="color:#6A9955">// 然后该干啥干啥</span></span></code></pre><p>MIN 和 MAX 的取值取决于你的信号协议。红外遥控 NEC 协议逻辑 0 是 560μs，逻辑 1 是 1690μs；超声波测距 HC-SR04 高电平约 150μs~25ms。把这些物理时间换算成定时器 tick 数作为阈值，不合规的直接 <code>return</code> 丢弃。</p>
+<p><strong>延伸阅读</strong>：<a href="/posts/hall-pulse-width-validation/" target="_blank" rel="noopener noreferrer">一种基于脉宽判定的电机霍尔反馈抗干扰方法</a> 在电机霍尔信号上实际应用了脉宽阈值校验——用定时器捕获霍尔边沿，通过脉宽范围过滤干扰脉冲。</p>
+<h2>小结</h2>
+<p>定时器捕获通道自带两级硬件预处理：数字滤波器去毛刺，预分频器跳脉冲。这两项是纯硬件行为，不需要软件参与。</p>
+<p>但&quot;判定脉宽范围&quot;必须软件做——没有硬件阈值比较器。</p>
+<p>怎么选：</p>
+<ul>
+<li><strong>引脚能映射到 TIM1 CHx</strong> → 优先用方法一或方法二，硬件时间戳精度最高</li>
+<li><strong>引脚不满足 TIM1 映射、但脉宽 ≥ 100μs</strong> → 方法三的软件中断完全可用，误差在 1~2% 以内。STM32 系 EXTI 原生支持双边沿，不需要像 51 那样来回切换触发模式</li>
+<li><strong>脉宽几十微秒且关中断频繁</strong> → 硬件定时器捕获是底线</li>
+</ul>
+<p>具体到 PY32F002A：只有 TIM1 能做捕获，TSSOP-20 能引出的 TIM1 通道取决于封装。查数据手册的引脚复用表确认 CH1~CH4 对应的 GPIO 即可。TIM1 通道不够用时，TIM16 配成自由运行计数器给方法三当时间基准。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-07-07 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=mcu-timer-pulse-width-capture');
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px;position:relative}
+  body{padding:56px;background:#fff;color:#16202f;display:flex;flex-direction:column;
+       font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:36px;font-weight:600;letter-spacing:-.4px}
+  .sub{margin-top:14px;font-size:21px;color:#66768c}
+  .steps{position:absolute;right:56px;top:54px;display:flex;gap:9px;font-size:17px;
+         color:#bdc6d3;font-weight:400}
+  .steps b{color:#16202f;font-weight:600}
+
+  .wrap{margin-top:44px;display:flex;gap:36px}
+  .left{flex:1;min-width:0}
+  .box{border-radius:16px;padding:26px;min-height:146px;justify-content:center;
+       display:flex;flex-direction:column;gap:10px}
+  .box b{font-size:24px;font-weight:600}
+  .box span{font-size:19px;color:#66768c}
+  .b1{background:#eef4fb;border:1.5px solid #cfdcec}
+  .b1 b{color:#1f5c9e}
+  .b2{background:#f4fbf8;border:1.5px solid #a9d5c8}
+  .b2 b{color:#145044}
+
+  .cards{margin-top:0;display:flex;gap:16px;position:relative}
+  .card{flex:1;min-height:180px;justify-content:center;border-radius:14px;padding:24px 20px;background:#fafbfd;border:1px solid #e9eef6;
+        display:flex;flex-direction:column;gap:6px}
+  .card b{font-size:20px;font-weight:600}
+  .card span{font-size:17px;color:#7b8798;line-height:1.45}
+  .c1 b{color:#2b6cb0}
+  .c2 b{color:#a5621c}
+  .c3 b{color:#1b6b58}
+
+  .mem{flex:0 0 292px;border-radius:18px;background:#fcfcfd;border:1.5px dashed #dfe6f0;
+       padding:24px 24px;display:flex;flex-direction:column}
+  .mem h3{font-size:20px;font-weight:600;color:#3d4d61}
+  .mem .it{margin-top:18px;display:flex;align-items:flex-start;gap:10px;font-size:19px;color:#66768c}
+  .mem .it i{width:10px;height:10px;border-radius:50%;background:#4a7fc1;margin-top:9px;flex:0 0 auto}
+  .mem .foot{margin-top:auto;padding-top:18px;border-top:1px dashed #e6ecf5;font-size:18px;color:#8d99a9}
+
+  .band{margin-top:auto;border-radius:16px;background:#fafbfd;border:1px solid #e9eef6;
+        padding:22px 26px;font-size:20px;color:#3d4d61}
+</style>
+</head>
+<body>
+  <h1>谁要数据，谁去要</h1>
+  <div class="sub">渲染端只报视口范围，数据模块决定读缓存、读分片，还是当场算。</div>
+  <div class="steps"><span>切片</span><span>·</span><span>算桶</span><span>·</span><span>落盘</span><span>·</span><b>渲染</b></div>
+
+  <div class="wrap">
+    <div class="left">
+      <div class="box b1"><b>渲染端</b><span>只提交视口范围，不问数据在哪</span></div>
+
+      <svg width="624" height="72" viewBox="0 0 624 72" style="display:block">
+        <path d="M312 0 V62" stroke="#c9d4e3" stroke-width="2" stroke-dasharray="6 6"/>
+        <path d="M304 56 L312 70 L320 56" fill="none" stroke="#c9d4e3" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+
+      <div class="box b2"><b>数据模块</b><span>选层级、查缓存，决定从哪儿取</span></div>
+
+      <svg width="624" height="96" viewBox="0 0 624 96" style="display:block">
+        <path d="M312 0 V30" stroke="#c9d4e3" stroke-width="2"/>
+        <path d="M98 30 H525" stroke="#c9d4e3" stroke-width="2"/>
+        <path d="M98 30 V82" stroke="#c9d4e3" stroke-width="2"/>
+        <path d="M312 30 V82" stroke="#c9d4e3" stroke-width="2"/>
+        <path d="M525 30 V82" stroke="#c9d4e3" stroke-width="2"/>
+        <path d="M90 76 L98 90 L106 76" fill="none" stroke="#c9d4e3" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M304 76 L312 90 L320 76" fill="none" stroke="#c9d4e3" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M517 76 L525 90 L533 76" fill="none" stroke="#c9d4e3" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+
+      <div class="cards">
+        <div class="card c1"><b>缓存里就有</b><span>直接拿，不碰磁盘</span></div>
+        <div class="card c2"><b>缓存没有</b><span>读对应分片，读进来留着</span></div>
+        <div class="card c3"><b>窄视图</b><span>读原始点，按像素现算</span></div>
+      </div>
+    </div>
+
+    <div class="mem">
+      <h3>内存里只留</h3>
+      <div class="it"><i></i><span>正在填的那几个桶</span></div>
+      <div class="it"><i></i><span>最近用到的分片</span></div>
+      <div class="foot">原始数据按需读，不常驻</div>
+    </div>
+  </div>
+
+  <div class="band">渲染端只发请求，加载、缓存、聚合都在数据模块里。录制十分钟还是十小时，常驻的都是这几个活跃分片。</div>
+</body>
+</html>

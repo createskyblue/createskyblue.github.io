@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLE 连接中重置硬件 RTC 会导致链路断开 - CacheRivulet小记</title>
+  <meta name="description" content="WCH蓝牙芯片设置RTC时间导致蓝牙断连问题排查">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="BLE">
+  <meta property="article:tag" content="RTC">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:published_time" content="2026-06-13">
+  <meta property="og:title" content="BLE 连接中重置硬件 RTC 会导致链路断开">
+  <meta property="og:description" content="WCH蓝牙芯片设置RTC时间导致蓝牙断连问题排查">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ble-rtc-offset-note/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ble-rtc-offset-note/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "BLE 连接中重置硬件 RTC 会导致链路断开",
+  "description": "WCH蓝牙芯片设置RTC时间导致蓝牙断连问题排查",
+  "datePublished": "2026-06-13",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ble-rtc-offset-note/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ble-rtc-offset-note/"
+  },
+  "keywords": "BLE, RTC, 低功耗, 嵌入式"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">BLE 连接中重置硬件 RTC 会导致链路断开</h1>
+  <article class="article-body">
+<h1>BLE 连接中重置硬件 RTC 会导致链路断开</h1>
+<p>背景是一个一次性电池供电的 BLE 健康监测设备。设备平时休眠，定时唤醒采集数据，再通过手机连接上传。调试时增加了两个 BLE 指令：设置 RTC 时间和读取 RTC 时间。</p>
+<p>问题出现在 <code>SET_RTC</code>：手机通过 BLE 写入当前时间，固件解析成功，也返回了状态帧，但浏览器马上显示设备断开。串口日志能看到指令已经进入处理函数，<code>Notify</code> 也返回成功，断开点集中在调用 <code>RTC_InitTime()</code> 之后。</p>
+<p>原因是这类芯片的硬件 RTC 不只表示业务时间。BLE 协议栈、低功耗唤醒、系统定时器也依赖同一套 32k 计数时基。连接过程中直接重置硬件 RTC，会让底层时间基准跳变，BLE 链路可能被打断。</p>
+<p>最后的处理方式是把业务时间和硬件 RTC 分开：</p>
+<pre class="shiki dark-plus" style="background-color:#1E1E1E;color:#D4D4D4" tabindex="0"><code><span class="line"><span>业务时间 = 硬件 RTC 单调计数换算时间 + 业务时间偏移</span></span></code></pre><p><code>SET_RTC</code> 不再调用 <code>RTC_InitTime()</code>，只记录手机时间和当前硬件 RTC 时间之间的偏移。<code>GET_RTC</code> 返回当前硬件 RTC 时间加上这个偏移。这样设备仍然能对外表现为已经同步 RTC，同时不破坏 BLE 和低功耗系统依赖的底层时基。</p>
+<p>真正需要写硬件 RTC 的场景，应放在 BLE 协议栈停止后处理，例如断开连接、停止广播，再设置硬件 RTC，必要时重新初始化 BLE 或重启设备。对于持续运行的低功耗 BLE 设备，业务时间偏移是更稳的设计边界。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-13 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ble-rtc-offset-note');
+  }
+  </script>
+</body>
+</html>

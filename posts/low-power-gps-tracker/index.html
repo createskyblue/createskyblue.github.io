@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一次性电池 GPS 定位设备的按需供电与分频上报 - CacheRivulet小记</title>
+  <meta name="description" content="一次性电池 GPS 定位：按需断电、定位上报分频">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="一次性电池">
+  <meta property="article:tag" content="GPS">
+  <meta property="article:tag" content="数据上报">
+  <meta property="article:published_time" content="2026-06-27">
+  <meta property="og:title" content="一次性电池 GPS 定位设备的按需供电与分频上报">
+  <meta property="og:description" content="一次性电池 GPS 定位：按需断电、定位上报分频">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/low-power-gps-tracker/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/low-power-gps-tracker/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "一次性电池 GPS 定位设备的按需供电与分频上报",
+  "description": "一次性电池 GPS 定位：按需断电、定位上报分频",
+  "datePublished": "2026-06-27",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/low-power-gps-tracker/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/low-power-gps-tracker/"
+  },
+  "keywords": "嵌入式, MCU, 低功耗, 一次性电池, GPS, 数据上报"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">一次性电池 GPS 定位设备的按需供电与分频上报</h1>
+  <article class="article-body">
+<h1>一次性电池 GPS 定位设备的按需供电与分频上报</h1>
+<p>该设备使用一次性电池，按小时级周期获取位置。定位结果先保存在本地；记录数量、位移或设备状态达到条件时，才启动 4G 通过 MQTT 上报。GPS、4G 在空闲期间完全断电，整机休眠电流实测约 6 uA。</p>
+<p>工程重点只有两个：怎样把 GPS 和 4G 的高功耗限制在定位和上报阶段，怎样在小时级定位下兼顾数据上报和位移判断。具体模块配置会随平台变化，本文只保留影响设计取舍的部分。</p>
+<h2>GPS 与 4G 在线时间决定唤醒能耗</h2>
+<p>GPS 冷启动取得有效位置约需半分钟，4G 搜网、连接和上报还需十几秒。小时级定位的平均功耗主要取决于这两类高功耗动作的次数和持续时间。</p>
+<p>定位周期到达后，RTC（实时时钟）唤醒主控，设备启动 GPS 并保存位置。达到上报条件时才启动 4G；定位或上报结束后，相关模块立即断电，主控重新进入休眠。</p>
+<h2>GPS 与 4G 休眠时需要彻底断电</h2>
+<p>主控 MCU 管理 GPS 和 4G 的独立供电开关。休眠期间两类模块完全断电，只保留主控和 RTC 低功耗运行。</p>
+<p>硬件若无法隔离高耗电供电域，软件待机很难消除外设的静态消耗。</p>
+<h2>数百微安 GPS 备电不适合小时级定位</h2>
+<p>GPS 备电模式可以保留辅助状态并缩短下次定位时间，但需要持续消耗数百微安。</p>
+<p>设备采用小时级定位，没有秒级启动要求，因此项目没有启用 GPS 备电模式。</p>
+<p>GPS 完全断电后仍可正常冷启动。需要定位时直接上电，接受约半分钟的冷启动耗时，并用定位超时避免弱信号环境持续耗电。</p>
+<h2>定位与上报同频会增加 4G 唤醒</h2>
+<p>每次定位都启动 4G，会让搜网、连接和 MQTT 交互抵消 GPS 侧的节能收益。</p>
+<p>设备先在本地累计小时级定位结果，记录数量、位移或设备状态达到条件后再集中上报。</p>
+<p>每次联网还会同步定位间隔、距离阈值和上报数量。这些参数写入本地 KV（键值对）数据库，设备断网或重启后仍可沿用；每个配置项独立存储，后续增加参数无需调整既有字段布局。</p>
+<h2>相邻定位比较会漏掉跨周期位移</h2>
+<p>设备每小时依次得到 A、B、C 三个位置，用 <code>d(A,B)</code> 表示 A、B 两点距离，把位移上报阈值记为 <code>D</code>。只比较相邻定位点时，可能出现：</p>
+<ul>
+<li><code>d(A,B) &lt; D</code></li>
+<li><code>d(B,C) &lt; D</code></li>
+<li><code>d(A,C) &gt;= D</code></li>
+</ul>
+<p>程序只检查前两项，因此不会上报；C 相对 A 的位移已经达到阈值。连续移动被采样点分成两段，阈值事件也随之被拆开。</p>
+<p>这个现象和“采样频率不足会漏检”的直觉一致，但不宜直接称为奈奎斯特采样定理。奈奎斯特定理讨论带限信号重建；这里的 <code>D/2</code> 结论来自三角不等式：<code>d(A,B) + d(B,C) &gt;= d(A,C) &gt;= D</code>，所以前两段至少有一段不小于 <code>D/2</code>。</p>
+<p><img src="/posts/low-power-gps-tracker/gps-window-timing.svg" alt="GPS 相邻定位比较漏掉跨周期位移示意图"></p>
+<p>工程上有两种处理方式：</p>
+<ul>
+<li><strong>双周期比较：</strong> 保留阈值 <code>D</code>。得到 C 后，同时比较 C 与 B、C 与 A；当前项目采用双周期比较，不增加 GPS 唤醒次数，也不改变原有距离阈值的含义。</li>
+<li><strong>相邻阈值减半：</strong> 仍只比较相邻点，把触发阈值改为 <code>D/2</code>。它能覆盖被拆成两段的位移，但会提高 GPS 漂移、定位噪声和往返移动造成误触发的概率。</li>
+</ul>
+<p><code>D/2</code> 只对两段拆分成立。移动被拆成 <code>N</code> 段时，相邻比较要降到 <code>D/N</code> 才有同类保证，或直接保留更长的历史记录；继续降低阈值会进一步放大误触发风险。</p>
+<h2>6 uA 休眠结果与适用边界</h2>
+<p>GPS、4G 完全断电后，整机休眠电流实测约 6 uA。这一数值只代表休眠基线，整机续航仍需结合电池有效容量、定位周期、信号环境、冷启动和联网时间计算。</p>
+<p>这套设计适合资产定位、周期巡检和低频移动监测等小时级业务。连续轨迹、秒级定位或长时间在线需要重新评估电池、模块和通信架构。</p>
+<blockquote>
+<p>本文由 AI 辅助生成，可能存在错误或遗漏，请以实际资料和官方文档为准。</p>
+</blockquote>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-27 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=low-power-gps-tracker');
+  }
+  </script>
+</body>
+</html>

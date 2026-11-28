@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>超大规模波形图，缩放不卡顿的预烘焙分层方案 - CacheRivulet小记</title>
+  <meta name="description" content="超大规模波形图，实现缩放不卡顿">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="波形图">
+  <meta property="article:tag" content="降采样">
+  <meta property="article:tag" content="分片存储">
+  <meta property="article:tag" content="预烘焙">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:published_time" content="2026-03-01">
+  <meta property="og:title" content="超大规模波形图，缩放不卡顿的预烘焙分层方案">
+  <meta property="og:description" content="超大规模波形图，实现缩放不卡顿">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/waveform_prebake_downsample/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/waveform_prebake_downsample/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "超大规模波形图，缩放不卡顿的预烘焙分层方案",
+  "description": "超大规模波形图，实现缩放不卡顿",
+  "datePublished": "2026-03-01",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/waveform_prebake_downsample/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/waveform_prebake_downsample/"
+  },
+  "keywords": "波形图, 降采样, 分片存储, 预烘焙, 性能优化"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">超大规模波形图，缩放不卡顿的预烘焙分层方案</h1>
+  <article class="article-body">
+<h1>超大规模波形图，如何实现缩放不卡顿</h1>
+<h2>概要</h2>
+<p>高采样率长时序波形数据量巨大，若每次缩放、拖动都读取全量原始点并实时降采样，计算与IO负载极高，界面易出现长时间卡顿。本方案采用<strong>预烘焙</strong>（即提前对原始波形完成多分辨率降采样计算并持久化存储，渲染时直接复用结果，以空间换取交互流畅度）的分层思路，兼顾大范围浏览流畅度与无级放大、局部框选能力。</p>
+<p><img src="/posts/waveform_prebake_downsample/img/map-tile.webp" alt="地图瓦片：切块与分级"></p>
+<p>借鉴地图瓦片的分层思想，我们将计算与存储加载拆分为两个独立概念，二者职责边界明确：</p>
+<ul>
+<li><strong>桶</strong>：降采样聚合的最小计算单元。每个桶吸收固定数量的连续原始采样点，输出一组聚合结果，包括波形代表点，也可包含积分、累加和等派生统计量；桶以数组元素形式存在于内存，不单独落盘。</li>
+<li><strong>分片</strong>：数据存储与加载的最小管理单元。按固定时长切分数据块，将该时段内所有层级的全部桶打包为一个整体，统一执行落盘、加载、释放操作。</li>
+</ul>
+<p><img src="/posts/waveform_prebake_downsample/img/tile-idea.webp" alt="时间轴瓦片思想"></p>
+<p>波形场景不适合像地图那样让瓦片同时承担计算与存储职责：波形聚合粒度很细，若以单个桶为单位落盘会产生海量小文件，管理与IO开销极高，因此必须将聚合计算与存储加载职责分离。</p>
+<p><img src="/posts/waveform_prebake_downsample/img/bucket-shard.webp" alt="桶与分片的职责分离"></p>
+<p><strong>分层规则</strong>：预烘焙降采样层级从 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">2^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span></span> 起步，原始数据（k=0）仅作为底层数据源，不纳入预烘焙体系，同时跳过 k=1 这个最低倍率层级。低倍率层级数据占比高，但对应窄视图场景下实时聚合的计算成本极低，持久化存储的收益代价比不足，因此直接省略。层级上界由最大可视跨度动态决定，不硬编码固定值。</p>
+<p><img src="/posts/waveform_prebake_downsample/img/layer-pyramid.webp" alt="波形数据的多分辨率层级"></p>
+<h3>流式降采样构建逻辑</h3>
+<p>采样数据持续流入时，同步对所有预烘焙层级执行流式聚合；单个桶填满后立即固化，待整个分片闭合后，该分片全部层级的桶数据统一落盘持久化。
+桶内聚合策略可按需选型，常见为极值法、平均值法等；积分、区间统计量等派生指标可同步计算并随桶存储，供后续查询直接复用。</p>
+<p><img src="/posts/waveform_prebake_downsample/img/streaming.webp" alt="边采样边攒桶"></p>
+<h3>渲染与查询路由</h3>
+<p>定义视口倍率 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span></span> = 可视范围内总采样点数 / 屏幕像素数，按R分两条渲染路径：</p>
+<ol>
+<li><strong>窄视图（R低于阈值）</strong>：直接读取原始数据，按像素实时动态聚合渲染，天然支持无级缩放与局部框选；</li>
+<li><strong>宽视图（R高于阈值）</strong>：加载对应层级的预烘焙桶数据渲染，规避海量原始点的实时计算开销。</li>
+</ol>
+<p><img src="/posts/waveform_prebake_downsample/img/render-routing.webp" alt="缩到多宽，就用哪一层"></p>
+<p>大范围统计查询（如区间积分、总量计算）可直接聚合对应区间的桶级预计算结果，无需逐点遍历原始数据。</p>
+<blockquote>
+<p>切换设计：</p>
+<ul>
+<li>分界处设置滞回缓冲区间，避免轻微缩放触发层级反复切换；</li>
+<li>手感差异：窄视图为无级连续缩放，波形平滑变化；宽视图为离散档位切换，层级跳转时波形细节存在跳变。</li>
+</ul>
+</blockquote>
+<p><img src="/posts/waveform_prebake_downsample/img/hysteresis.webp" alt="边界附近不来回切"></p>
+<h3>数据调度策略</h3>
+<p>查询与计算解耦，渲染端仅提交视口范围请求，由数据模块负责加载缓存或执行实时聚合。
+内存仅保留当前正在填充的未完成桶、近期访问分片的桶数据；原始数据按需读取，不常驻内存，内存占用与总录制时长解耦。</p>
+<p><img src="/posts/waveform_prebake_downsample/img/scheduling.webp" alt="谁要数据，谁去要"></p>
+<h3>核心要点</h3>
+<ol>
+<li>预烘焙跳过低倍率层级，仅保留高倍率聚合层；原始数据仅作数据源，平衡存储开销与渲染性能；</li>
+<li>桶为最小计算单元，分片为最小存储加载单元，二者职责分离，避免海量小文件带来的管理与IO开销；</li>
+<li>流式构建多分辨率层级，桶内可预存波形代表点与派生统计量，分片闭合后批量落盘复用；</li>
+<li>按视口倍率分级渲染：窄视图实时聚合保证无级交互，宽视图复用预烘焙数据保证流畅度；</li>
+<li>大范围统计查询可直接复用桶内预计算结果，避免逐点遍历原始数据；</li>
+<li>查询与计算解耦，内存仅保留活跃分片数据，常驻内存规模与录制总时长无关；</li>
+<li>层级上界、切换阈值、分片粒度、聚合算法均为调优项，由开发者结合场景实测确定。</li>
+</ol>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-03-01 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=waveform_prebake_downsample');
+  }
+  </script>
+</body>
+</html>

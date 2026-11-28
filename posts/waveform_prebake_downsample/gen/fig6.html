@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px;position:relative}
+  body{padding:56px;background:#fff;color:#16202f;display:flex;flex-direction:column;
+       font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:36px;font-weight:600;letter-spacing:-.4px}
+  .sub{margin-top:14px;font-size:21px;color:#66768c}
+  .steps{position:absolute;right:56px;top:54px;display:flex;gap:9px;font-size:17px;
+         color:#bdc6d3;font-weight:400}
+  .steps b{color:#16202f;font-weight:600}
+
+  .stream{margin-top:38px;display:flex;align-items:center;gap:14px;font-size:19px;color:#7b8798}
+  .stream .rail{flex:1;height:14px;border-radius:7px;
+                background:repeating-linear-gradient(90deg,#dbe8f9 0 10px,transparent 10px 22px)}
+
+  .main{margin-top:24px;display:flex}
+  .rows{display:flex;flex-direction:column;gap:26px;flex:0 0 auto}
+  .lrow{display:flex;align-items:center;height:132px}
+  .lv{width:96px;height:132px;border-radius:12px;display:flex;align-items:center;
+      justify-content:center;font-size:23px;font-weight:600;flex:0 0 auto}
+  .cells{margin-left:20px;display:flex;gap:6px;width:666px;flex:0 0 auto}
+  .c{height:120px;border-radius:10px;flex:0 0 auto}
+  .full{background:#d99a54}
+  .partial{border:1.6px solid #d99a54}
+  .todo{border:1.6px dashed #e3d3bb;background:#fffdf9}
+
+  .brk{margin-left:18px;position:relative;flex:1;min-width:0}
+  .brk .line{position:absolute;left:0;top:20px;bottom:20px;width:14px;
+             border:2px solid #a9d5c8;border-left:none;border-radius:0 10px 10px 0}
+  .brk .txt{position:absolute;left:26px;top:50%;transform:translateY(-50%);
+            font-size:18px;color:#3a7a68;line-height:1.5}
+
+  .closing{margin-top:28px;border-radius:16px;background:#f4fbf8;border:1.5px solid #a9d5c8;
+           padding:20px 26px;display:flex;align-items:center;gap:14px;font-size:20px;color:#1b5f4f}
+  .closing b{font-size:21px;font-weight:600;color:#145044}
+
+  .legend{margin-top:auto;display:flex;gap:30px;font-size:18px;color:#66768c}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:4px;flex:0 0 auto}
+</style>
+</head>
+<body>
+  <h1>边采样边攒桶</h1>
+  <div class="sub">同一段时间，越细的层桶越多也越窄；四层同步往前走。</div>
+  <div class="steps"><span>切片</span><span>·</span><b>算桶</b><span>·</span><b>落盘</b><span>·</span><span>渲染</span></div>
+
+  <div class="stream"><span>采样点按序流入</span><span class="rail"></span></div>
+
+  <div class="main">
+    <div class="rows" id="rows"></div>
+    <div class="brk">
+      <div class="line"></div>
+      <div class="txt">同一段时间，<br>四层一起装进<br>一个分片</div>
+    </div>
+  </div>
+
+  <div class="closing"><b>整片闭合</b><span>原始数据与各层桶一起写盘</span></div>
+
+  <div class="legend">
+    <div class="item"><span class="sw" style="background:#d99a54"></span><span>已固化</span></div>
+    <div class="item"><span class="sw" style="background:linear-gradient(90deg,#d99a54 0 40%,#fdf3e3 40% 100%);border:1.6px solid #d99a54"></span><span>正在填</span></div>
+    <div class="item"><span class="sw" style="border:1.6px dashed #e3d3bb;background:#fffdf9"></span><span>还没到</span></div>
+  </div>
+
+<script>
+(function () {
+  // 同一段时间按采样点等分；各层每 2^k 点一桶，桶宽严格按点数比例
+  var SPAN_UNITS = 64, AREA = 666, GAP = 6, CURSOR_UNITS = 26;
+  var levels = [
+    { name: 'K2', pts: 4, bg: '#eff8f5', fg: '#3f9d88' },
+    { name: 'K3', pts: 8, bg: '#e6f4ef', fg: '#1b6b58' },
+    { name: 'K4', pts: 16, bg: '#fbf1e2', fg: '#a5621c' },
+    { name: 'K5', pts: 32, bg: '#f1ecf8', fg: '#6b4f9e' }
+  ];
+  var cursorX = CURSOR_UNITS / SPAN_UNITS * AREA;
+
+  var host = document.getElementById('rows');
+  levels.forEach(function (lv) {
+    var n = SPAN_UNITS / lv.pts;
+    var w = (AREA - (n - 1) * GAP) / n;
+
+    var row = document.createElement('div');
+    row.className = 'lrow';
+
+    var chip = document.createElement('div');
+    chip.className = 'lv';
+    chip.style.background = lv.bg;
+    chip.style.color = lv.fg;
+    chip.textContent = lv.name;
+    row.appendChild(chip);
+
+    var cells = document.createElement('div');
+    cells.className = 'cells';
+    for (var i = 0; i < n; i++) {
+      var x0 = i * (w + GAP);
+      var filled = Math.max(0, Math.min(w, cursorX - x0));
+
+      var d = document.createElement('div');
+      d.className = 'c';
+      d.style.width = w.toFixed(1) + 'px';
+      d.style.overflow = 'hidden';
+
+      if (filled >= w - 0.5) {
+        d.className += ' full';
+      } else if (filled > 0.5) {
+        d.className += ' partial';
+        d.style.background = '#fdf3e3';
+        var inner = document.createElement('span');
+        inner.style.cssText = 'display:block;height:100%;width:' + filled.toFixed(1) +
+          'px;background:#d99a54;border-radius:8px 0 0 8px';
+        d.appendChild(inner);
+      } else {
+        d.className += ' todo';
+      }
+      cells.appendChild(d);
+    }
+    row.appendChild(cells);
+    host.appendChild(row);
+  });
+})();
+</script>
+</body>
+</html>

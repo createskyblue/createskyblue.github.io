@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>利用 IO 中断实现低功耗下使用 ADC 按键 - CacheRivulet小记</title>
+  <meta name="description" content="低功耗 ADC 按键扫描">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="ADC">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="MCU">
+  <meta property="article:tag" content="按键">
+  <meta property="article:published_time" content="2026-06-26">
+  <meta property="og:title" content="利用 IO 中断实现低功耗下使用 ADC 按键">
+  <meta property="og:description" content="低功耗 ADC 按键扫描">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/adc-key-low-power-wakeup/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/adc-key-low-power-wakeup/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "利用 IO 中断实现低功耗下使用 ADC 按键",
+  "description": "低功耗 ADC 按键扫描",
+  "datePublished": "2026-06-26",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/adc-key-low-power-wakeup/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/adc-key-low-power-wakeup/"
+  },
+  "keywords": "嵌入式, ADC, 低功耗, MCU, 按键"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">利用 IO 中断实现低功耗下使用 ADC 按键</h1>
+  <article class="article-body">
+<h1>利用 IO 中断实现低功耗下使用 ADC 按键</h1>
+<h2>1. 概述</h2>
+<p>IO 不够，几个按键挤到一根 ADC 线上。产品还要低功耗。休眠时 ADC 关着，这根线扫不了。</p>
+<p>模拟看门狗能盯电压，ADC 子系统得挂着，电流下不来，这条丢掉。剩下 IO 中断：休眠只留一个 GPIO 看按键节点。键一按，电压掉到能打下降沿的位置，中断把人叫醒。起来再开 ADC，扫一眼是哪颗键。</p>
+<p>一般 MCU 的 ADC 脚同时挂着数字输入。同一根线可以一边开着 ADC，一边配下降沿中断，不用再拆脚。</p>
+<h2>2. 原理图</h2>
+<p><img src="/posts/adc-key-low-power-wakeup/ADC_KEY_IRQ.webp" alt="ADC 按键原理图"></p>
+<p><code>2.4k</code> 上拉到 <code>3.3V</code>，五颗键各自串电阻落地：<code>0Ω</code>、<code>180Ω</code>、<code>390Ω</code>、<code>620Ω</code>、<code>820Ω</code>。按下之后分压大约 <code>0V</code>、<code>0.23V</code>、<code>0.46V</code>、<code>0.68V</code>、<code>0.84V</code>。</p>
+<p>这几档都低到能当低电平。随便按哪颗，ADC 节点都从 <code>3.3V</code> 掉下去，打出下降沿，IO 中断就能从休眠里把人拉起来。</p>
+<p>醒来后 ADC 认的是这几个分压点隔得开。休眠认的是任意一颗键都能打出下降沿。键少、分压又压得够低，一根脚就够了。</p>
+<h2>3. 工作流程</h2>
+<p><img src="/posts/adc-key-low-power-wakeup/adc-key-wakeup-flow.svg" alt="低功耗休眠，IO 中断唤醒，再扫描 ADC 按键"></p>
+<p>休眠阶段 ADC 关掉，GPIO 盯着按键节点。下降沿中断进来之后再开 ADC，采一次电压，按区间认键。消个抖就行。</p>
+<h2>4. 独立中断信号</h2>
+<p>分压档位一多，相邻电压挤太近，ADC 容易认错键。换成双回路轻触开关（DPST）。</p>
+<p><img src="/posts/adc-key-low-power-wakeup/adc-key-dual-pole.webp" alt="双回路轻触开关：一路分压认键，一路并成公共中断"></p>
+<p>一颗键里两路独立常开触点。刀 A 进原来的 ADC 分压网络，电阻按认键来排，档位可以拉开。刀 B 全部并到一根中断线上，按下直接落地。休眠盯这根公共中断线，谁按都打下降沿；醒来再去 ADC 上看是哪颗。</p>
+<p>多占一根 GPIO，分压能铺开整段量程，相邻档不容易糊在一起。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-06-26 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=adc-key-low-power-wakeup');
+  }
+  </script>
+</body>
+</html>

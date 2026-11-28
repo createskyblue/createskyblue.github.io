@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 320" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+  <rect x="0" y="0" width="820" height="320" fill="#ffffff"/>
+
+  <!-- Box 1: init + register -->
+  <rect x="30" y="90" width="190" height="90" rx="8" fill="#eff6ff" stroke="#3b82f6"/>
+  <text x="125" y="116" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">lwevt_init()</text>
+  <text x="125" y="136" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">lwevt_register()</text>
+  <text x="125" y="160" font-size="11" fill="#334155" text-anchor="middle">注册多个回调</text>
+
+  <!-- Box 2: dispatch -->
+  <rect x="280" y="90" width="200" height="90" rx="8" fill="#fff7ed" stroke="#f97316"/>
+  <text x="380" y="116" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">lwevt_dispatch(type)</text>
+  <text x="380" y="136" font-size="11" fill="#334155" text-anchor="middle">句柄写入 type</text>
+  <text x="380" y="152" font-size="11" fill="#334155" text-anchor="middle">遍历监听表逐个调用</text>
+
+  <!-- Box 3a: listener 1 -->
+  <rect x="540" y="60" width="250" height="70" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="665" y="86" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">监听器 1：on_event(evt)</text>
+  <text x="665" y="108" font-size="11" fill="#334155" text-anchor="middle">switch (evt-&gt;type)</text>
+
+  <!-- Box 3b: listener 2 -->
+  <rect x="540" y="140" width="250" height="70" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="665" y="166" font-size="13" font-weight="bold" fill="#0f172a" text-anchor="middle">监听器 2：on_temp_log(evt)</text>
+  <text x="665" y="188" font-size="11" fill="#334155" text-anchor="middle">if (evt-&gt;type == ...)</text>
+
+  <!-- arrows -->
+  <line x1="220" y1="135" x2="280" y2="135" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="480" y1="115" x2="540" y2="100" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="480" y1="155" x2="540" y2="170" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- step labels -->
+  <text x="125" y="210" font-size="11" fill="#475569" text-anchor="middle">1. 初始化 + 注册</text>
+  <text x="380" y="210" font-size="11" fill="#475569" text-anchor="middle">2. 广播事件</text>
+  <text x="665" y="236" font-size="11" fill="#475569" text-anchor="middle">3. 每个监听器都收到</text>
+
+  <!-- note -->
+  <rect x="150" y="260" width="520" height="36" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="410" y="282" font-size="11" fill="#334155" text-anchor="middle">广播语义：每个事件发给全部监听器，最多 LWEVT_CFG_MAX_EVT_LISTENERS 个，过滤由监听器自己判断</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+</svg>

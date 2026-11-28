@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px;position:relative}
+  body{padding:56px;background:#fff;color:#16202f;display:flex;flex-direction:column;
+       font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:36px;font-weight:600;letter-spacing:-.4px}
+  .sub{margin-top:14px;font-size:21px;color:#66768c}
+
+  .cols{margin-top:52px;flex:1;display:flex}
+  .col{flex:1;display:flex;flex-direction:column;min-width:0}
+  .col.right{border-left:1.5px dashed #e6ecf5;margin-left:40px;padding-left:40px}
+
+  .head{display:flex;align-items:center;gap:14px}
+  .bar{width:6px;height:30px;border-radius:3px;background:#d99a54}
+  .bar.teal{background:#a9d5c8}
+  .head h2{font-size:23px;font-weight:600}
+  .pill{font-size:17px;padding:4px 14px;border-radius:14px;
+        border:1px solid #d99a54;background:#fdf3e3;color:#a5621c}
+  .pill.teal{border-color:#a9d5c8;background:#e6f4ef;color:#1b6b58}
+  .hint{margin-top:16px;font-size:19px;color:#7b8798}
+
+  .agg{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;margin-top:8px;min-height:0}
+  .cluster{display:grid;grid-template-columns:repeat(3,22px);gap:20px 22px;flex:0 0 auto}
+  .cluster i{width:22px;height:22px;border-radius:50%;background:#4a7fc1}
+  .arw{font-size:36px;line-height:1;color:#d99a54}
+  .bbox{width:100%;height:212px;border-radius:16px;background:#fdf3e3;
+        border:2px solid #d99a54;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;gap:12px;padding:16px 0}
+  .bbox .extra{margin-top:12px;padding-top:14px;border-top:1.5px dashed #ecd9b8;
+               width:66%;text-align:center;font-size:18px;color:#a5804f}
+  .bbox em{width:26px;height:26px;border-radius:50%;background:#d99a54}
+  .bbox b{font-size:24px;font-weight:600;color:#8a5a1e}
+
+  .meta{margin-top:22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .meta .lb{font-size:19px;color:#7b8798;margin-right:2px}
+  .tag{font-size:18px;padding:7px 16px;border-radius:10px;background:#fdf8ee;
+       border:1px solid #f0dcb8;color:#8a5a1e}
+  .note{margin-top:auto;padding-top:24px;font-size:22px;color:#66768c;line-height:1.5}
+
+  .box{flex:1;margin-top:24px;border-radius:18px;background:#f4fbf8;border:1.8px solid #a9d5c8;
+       padding:22px;display:flex;flex-direction:column}
+  .box-head{display:flex;align-items:baseline;justify-content:space-between}
+  .box-head strong{font-size:24px;font-weight:600;color:#145044}
+  .box-head span{font-size:18px;color:#5f9c8b}
+  .rows{margin-top:16px;flex:1;display:flex;flex-direction:column;gap:14px}
+  .row{flex:1;background:#e3f4ed;border-radius:11px;display:flex;align-items:center;
+       justify-content:space-between;padding:0 26px}
+  .row b{font-size:22px;font-weight:500;color:#1b5f4f}
+  .row i{font-style:normal;font-size:19px;color:#5f9c8b}
+  .cap{margin-top:22px;text-align:center;font-size:19px;color:#3a7a68}
+
+  .band{margin-top:40px;border-radius:18px;background:#fdf8ee;border:1.5px solid #f0dcb8;
+        padding:22px 28px}
+  .band h4{font-size:19px;font-weight:400;color:#8a5a1e}
+  .band p{margin-top:10px;font-size:22px;color:#8a6a3c}
+  .steps{position:absolute;right:56px;top:54px;display:flex;gap:9px;font-size:17px;
+         color:#bdc6d3;font-weight:400}
+  .steps b{color:#16202f;font-weight:600}
+</style>
+</head>
+<body>
+  <h1>桶负责算，分片负责存</h1>
+  <div class="steps"><span>切片</span><span>·</span><b>算桶</b><span>·</span><b>落盘</b><span>·</span><span>渲染</span></div>
+  <div class="sub">一个管计算，一个管存储。</div>
+
+  <div class="cols">
+    <div class="col">
+      <div class="head"><div class="bar"></div><h2>桶 Bucket</h2><div class="pill">内存</div></div>
+      <div class="hint">多个点压成 1 个代表点</div>
+
+      <div class="agg">
+        <div class="cluster">
+          <i></i><i></i><i></i>
+          <i></i><i></i><i></i>
+        </div>
+        <div class="arw">↓</div>
+        <div class="bbox">
+          <em></em><b>代表点</b>
+          <span class="extra">另存：积分、累加和、区间统计</span>
+        </div>
+      </div>
+
+      <div class="note">桶是内存里的一段数组，随分片一起落盘。</div>
+    </div>
+
+    <div class="col right">
+      <div class="head"><div class="bar teal"></div><h2>分片 Shard</h2><div class="pill teal">持久化</div></div>
+      <div class="hint">同一时段整体打包</div>
+      <div class="box">
+        <div class="box-head"><strong>分片 #5</strong><span>整片读写</span></div>
+        <div class="rows">
+          <div class="row"><b>原始数据</b><i>全部采样点</i></div>
+          <div class="row"><b>K3 桶</b><i>每 8 点 1 桶</i></div>
+          <div class="row"><b>K4 桶</b><i>每 16 点 1 桶</i></div>
+          <div class="row"><b>K5 桶 …</b><i>每 32 点 1 桶</i></div>
+        </div>
+      </div>
+      <div class="cap">落盘、加载、释放都以整片为单位</div>
+    </div>
+  </div>
+
+  <div class="band">
+    <h4>为什么不按桶落盘</h4>
+    <p>桶太细，按桶落盘就是海量小文件。</p>
+  </div>
+</body>
+</html>

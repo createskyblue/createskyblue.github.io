@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 440" width="920" height="440" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="440" fill="#f8fafc"/>
+  <text x="20" y="30" font-size="17" fill="#1e293b" font-weight="bold">三态流式状态机（每次只丢弃 1 个字节）</text>
+
+  <!-- state boxes -->
+  <g font-size="14" text-anchor="middle" fill="#1e293b">
+    <rect x="40" y="150" width="210" height="80" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="145" y="188">等帧头 WAIT_MAGIC</text>
+    <text x="145" y="210" font-size="13" fill="#475569">逐字节扫描 0x33</text>
+
+    <rect x="360" y="150" width="210" height="80" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="465" y="188">收头部 HEADER</text>
+    <text x="465" y="210" font-size="13" fill="#475569">cmd / len / seq</text>
+
+    <rect x="680" y="150" width="210" height="80" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="785" y="188">收载荷 PAYLOAD</text>
+    <text x="785" y="210" font-size="13" fill="#475569">收满整帧 64 字节</text>
+  </g>
+
+  <!-- forward arrows -->
+  <line x1="252" y1="190" x2="352" y2="190" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="302" y="172" font-size="14" fill="#1d4ed8" text-anchor="middle">byte == 0x33</text>
+
+  <line x1="572" y1="190" x2="672" y2="190" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="622" y="172" font-size="14" fill="#1d4ed8" text-anchor="middle">len ≤ 60 通过</text>
+
+  <!-- self loop: WAIT_MAGIC, byte != 0x33 -->
+  <path d="M 40 218 C 5 218 5 265 40 265" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <text x="52" y="240" font-size="13" fill="#475569">byte != 0x33：丢弃 1 字节</text>
+
+  <!-- return: HEADER -> WAIT_MAGIC (invalid) -->
+  <path d="M 465 230 L 465 300 L 160 300 L 160 238" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <text x="312" y="316" font-size="13" fill="#475569" text-anchor="middle">HEADER 校验失败：丢弃 1 字节</text>
+
+  <!-- return: PAYLOAD -> WAIT_MAGIC (emit / invalid) -->
+  <path d="M 785 230 L 785 370 L 130 370 L 130 238" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <text x="460" y="392" font-size="13" fill="#475569" text-anchor="middle">收满整帧 64 字节 → 出帧，回到 WAIT_MAGIC 处理下一帧（帧级不设累加和）</text>
+</svg>

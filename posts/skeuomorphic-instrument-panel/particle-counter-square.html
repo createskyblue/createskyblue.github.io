@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Particle Counter — Skeuomorphic Mode Buttons</title>
+<style>
+  :root{
+    /* 浅色主题（恢复） */
+    --panel:        #e9e6df;
+    --panel-dark:   #c9c5bb;
+    --panel-light:  #f6f3ec;
+    --label:        #5a564e;
+    --label-dim:    #8b877e;
+    --led-on:       #e89400;
+    --led-on-glow:  rgba(232,148,0,.5);
+    --led-off:      #5f5340;
+  }
+
+  *{ box-sizing: border-box; margin:0; padding:0; }
+
+  body{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-family:"Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #4a4033 0%, #2c2520 55%, #1c1712 100%);
+    color:#e8e2d5;
+  }
+
+  /* iframe 嵌入时作为测高容器：高度只由内容决定，不受 body 的 min-height:100vh 影响 */
+  .wrap{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:32px;
+    padding:48px 24px;
+  }
+
+  h1{
+    font-size:15px;
+    font-weight:600;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:#cfc7b6;
+    opacity:.85;
+  }
+
+  /* ============ 仪表外壳 ============ */
+  .unit{
+    position:relative;
+    width:min(960px, 100%);
+    min-width:320px;          /* 面板最小宽度：窄屏时不塌、内容不溢出 */
+    border-radius:20px;
+    padding:34px 38px 40px;
+    background:
+      linear-gradient(180deg, var(--panel-light) 0%, var(--panel) 55%, var(--panel-dark) 100%);
+    box-shadow:
+      0 30px 60px rgba(0,0,0,.55),
+      0 4px 12px rgba(0,0,0,.4),
+      inset 0 1px 0 rgba(255,255,255,.8),
+      inset 0 -6px 18px rgba(0,0,0,.10);
+    border:1px solid #b9b5ab;
+  }
+
+  .brand{
+    position:absolute;
+    top:26px;
+    left:38px;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.22em;
+    color:#76726a;
+    text-transform:uppercase;
+  }
+  .brand small{
+    display:block;
+    font-weight:500;
+    letter-spacing:.05em;
+    font-size:10px;
+    color:#a19d93;
+    margin-top:2px;
+  }
+  .model{
+    position:absolute;
+    top:26px;
+    right:40px;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.2em;
+    color:#6d6961;
+    text-transform:uppercase;
+  }
+
+  /* ============ 主数字屏 ============ */
+  .screen{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:132px;
+    margin:34px 0 40px;
+    border-radius:12px;
+    background:
+      radial-gradient(120% 140% at 50% 20%, #0d140c 0%, #050805 60%, #020402 100%);
+    box-shadow:
+      inset 0 4px 18px rgba(0,0,0,.85),
+      inset 0 0 60px rgba(0,0,0,.9);
+    border:1px solid #060a06;
+  }
+  /* LED 点阵数字（小圆点） */
+  .screen{
+    --dot:clamp(3px, 0.8vw, 9px);   /* 点阵点随视口自适应，窄屏不溢出 */
+    --gap:clamp(1px, 0.35vw, 5px);
+  }
+  .screen-digits{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:clamp(4px, 1.2vw, 14px);
+  }
+  .digit{
+    display:grid;
+    grid-template-columns:repeat(5, var(--dot));
+    grid-auto-rows:var(--dot);
+    gap:var(--gap);
+  }
+  .px{
+    width:var(--dot);
+    height:var(--dot);
+    border-radius:50%;
+  }
+  .px.on{
+    background:radial-gradient(circle at 38% 30%, #b8ffa0, #57ff33 55%, #27c400 100%);
+    box-shadow:
+      0 0 6px 1px rgba(87,255,51,.85),
+      0 0 14px 3px rgba(87,255,51,.4);
+  }
+  .px.off{
+    background:rgba(24,58,32,.42);
+    box-shadow:inset 0 1px 1px rgba(0,0,0,.5);
+  }
+
+  /* ============ 按钮分组区：三列等高 ============ */
+  .groups{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:24px;
+    align-items:stretch;   /* 关键1：三列等高 */
+  }
+  @media (max-width:760px){
+    .groups{ grid-template-columns:minmax(0, 1fr); }
+  }
+  @media (max-width:560px){
+    .wrap{ padding:32px 12px; }
+    .unit{ padding:20px 12px 24px; }
+    .groups{ gap:16px; }
+    .group{ padding:12px 10px 14px; }
+    .slots{ padding:10px 4px; gap:6px; }
+    .sq{ max-width:48px; }
+    .cap{ font-size:10px; }
+    .caps .cap{ font-size:10px; }
+    .screen{ height:96px; margin:22px 0 26px; }
+    .brand{ left:20px; top:18px; font-size:11px; }
+    .model{ right:22px; top:18px; font-size:11px; }
+  }
+
+  .group{
+    display:flex;          /* 关键2：内部可撑满 */
+    flex-direction:column;
+    min-width:0;           /* 允许列收缩，不被内容撑宽 */
+    border-radius:12px;
+    padding:16px 16px 18px;
+    background:linear-gradient(180deg, #eeece5, #e2ded4);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.7),
+      inset 0 -8px 18px rgba(0,0,0,.08),
+      0 1px 0 rgba(255,255,255,.5);
+  }
+
+  /* 标题区固定高度，避免 ALARM（无 small）那组更矮 */
+  .group-head{
+    text-align:center;
+    margin-bottom:12px;
+    min-height:36px;       /* 关键3：标题区统一高度 */
+    flex:0 0 auto;
+  }
+  .group-head b{
+    display:inline-block;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.24em;
+    color:var(--label);
+    text-transform:uppercase;
+  }
+  .group-head b::before,
+  .group-head b::after{
+    content:"";
+    display:inline-block;
+    vertical-align:middle;
+    width:34px;
+    height:1px;
+    background:linear-gradient(90deg, transparent, #b3afa5);
+    margin:0 8px;
+  }
+  .group-head b::after{
+    background:linear-gradient(90deg, #b3afa5, transparent);
+  }
+  .group-head small{
+    display:block;
+    font-size:10px;
+    letter-spacing:.05em;
+    color:var(--label-dim);
+    margin-top:3px;
+  }
+
+  /* 凹槽行：撑满剩余高度 */
+  .slots{
+    flex:1;                /* 关键4：占满剩余高度 */
+    min-width:0;           /* 允许收缩 */
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    padding:14px 6px;
+    border-radius:9px;
+    background:linear-gradient(180deg, #cfcbc1, #dfdcd3);
+    box-shadow:
+      inset 0 3px 8px rgba(0,0,0,.22),
+      inset 0 1px 2px rgba(0,0,0,.22);
+  }
+
+  /* 滑槽：里面只放按钮，灯在按钮上 */
+  .slots{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding:6px;            /* 上下左右留白统一（缩小一半） */
+    border-radius:9px;
+    background:linear-gradient(180deg, #cfcbc1, #dfdcd3);
+    box-shadow:
+      inset 0 3px 8px rgba(0,0,0,.22),
+      inset 0 1px 2px rgba(0,0,0,.22);
+  }
+  .sq{
+    flex:1 1 0;
+    min-width:0;
+    max-width:58px;
+    aspect-ratio:1/1;
+    position:relative;
+    border:none;
+    cursor:pointer;
+    border-radius:9px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:linear-gradient(180deg, #f1eee7, #dcd8cf);
+    box-shadow:
+      0 2px 3px rgba(0,0,0,.16),
+      inset 0 1px 0 rgba(255,255,255,.72),
+      inset 0 -2px 4px rgba(0,0,0,.08);
+    -webkit-tap-highlight-color:transparent;
+    transition:background .12s, transform .08s, box-shadow .12s;
+  }
+  .sq:hover{ background:linear-gradient(180deg, #f5f2ec, #e2ded4); }
+  .sq:active{
+    transform:translateY(2px);
+    box-shadow:
+      0 0 0 rgba(0,0,0,.16),
+      inset 0 2px 5px rgba(0,0,0,.22),
+      inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  /* 灯：在按钮上（按钮面板中央的指示圆点） */
+  .lamp{
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    flex:0 0 auto;
+    background:radial-gradient(circle at 38% 32%, #77694f, var(--led-off) 70%);
+    box-shadow:
+      inset 0 1px 2px rgba(255,255,255,.15),
+      0 1px 1px rgba(0,0,0,.3);
+    transition:box-shadow .18s, background .18s, transform .12s;
+  }
+  .sq.on .lamp{
+    background:radial-gradient(circle at 38% 30%, #ffedb0, var(--led-on) 62%);
+    box-shadow:
+      inset 0 1px 1px rgba(255,255,255,.7),
+      0 0 6px 1px var(--led-on-glow),
+      0 0 14px 3px rgba(232,148,0,.22);
+  }
+  /* 文字：在滑槽外面，与按钮列对齐 */
+  .caps{
+    display:flex;
+    gap:10px;
+    padding:0 6px;
+    margin-top:9px;
+  }
+  .caps .cap{
+    flex:1;
+    min-width:0;
+    text-align:center;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:.02em;
+    color:#8a867c;
+    white-space:nowrap;
+    transition:color .12s;
+  }
+  .caps .cap.on{ color:#3a382f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>拟 物 风 格 · 模 式 选 择 按 钮</h1>
+
+  <div class="unit">
+    <div class="brand">RION<small>Particle Counter</small></div>
+    <div class="model">MODEL KC-01</div>
+
+    <div class="screen"><div class="screen-digits" data-value="2339"></div></div>
+
+    <div class="groups">
+
+      <!-- PARTICLE SIZE -->
+      <div class="group" data-group="size">
+        <div class="group-head">
+          <b>Particle Size</b>
+          <small>( μm )</small>
+        </div>
+        <div class="slots"><button class="sq on"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button></div>
+        <div class="caps"><span class="cap on">0.3</span><span class="cap">0.5</span><span class="cap">1</span><span class="cap">2</span><span class="cap">5</span></div>
+      </div>
+
+      <!-- ALARM -->
+      <div class="group" data-group="alarm">
+        <div class="group-head">
+          <b>Alarm</b>
+        </div>
+        <div class="slots"><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq on"><span class="lamp"></span></button></div>
+        <div class="caps"><span class="cap">150</span><span class="cap">1000</span><span class="cap">10000</span><span class="cap">100000</span><span class="cap on">STOP</span></div>
+      </div>
+
+      <!-- SAMPLE VOLUME -->
+      <div class="group" data-group="volume">
+        <div class="group-head">
+          <b>Sample Volume</b>
+        </div>
+        <div class="slots"><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button><button class="sq on"><span class="lamp"></span></button><button class="sq"><span class="lamp"></span></button></div>
+        <div class="caps"><span class="cap">MAN</span><span class="cap">1L</span><span class="cap">10L</span><span class="cap on">283mL</span><span class="cap">2.83L</span></div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  /* ---------- 拨杆开关音效（点击按钮时播放） ---------- */
+  let acx = null;
+  function playClick(){
+    if(!acx) acx = new (window.AudioContext||window.webkitAudioContext)();
+    if(acx.state==='suspended') acx.resume();
+    const t = acx.currentTime;
+    // 高频颗粒噪声（“咯”的质感）
+    const dur=.032, len=Math.max(1, Math.floor(acx.sampleRate*dur));
+    const buf=acx.createBuffer(1,len,acx.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+    const src=acx.createBufferSource(); src.buffer=buf;
+    const filt=acx.createBiquadFilter(); filt.type='highpass'; filt.frequency.value=900;
+    const g=acx.createGain(); g.gain.setValueAtTime(.34,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    src.connect(filt).connect(g).connect(acx.destination); src.start(t);
+    // 三角波咔哒
+    const o=acx.createOscillator(), g2=acx.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(960,t);
+    o.frequency.exponentialRampToValueAtTime(500,t+.04);
+    g2.gain.setValueAtTime(.42,t); g2.gain.exponentialRampToValueAtTime(.0001,t+.04);
+    o.connect(g2).connect(acx.destination); o.start(t); o.stop(t+.05);
+    // 低频“咚”共鸣
+    const o2=acx.createOscillator(), g3=acx.createGain();
+    o2.type='sine'; o2.frequency.setValueAtTime(230,t);
+    o2.frequency.exponentialRampToValueAtTime(230*.45,t+.06);
+    g3.gain.setValueAtTime(.32,t); g3.gain.exponentialRampToValueAtTime(.0001,t+.06);
+    o2.connect(g3).connect(acx.destination); o2.start(t); o2.stop(t+.07);
+  }
+
+  // 5x7 LED 点阵数字（小圆点）
+  const FONT = {
+    "0":["01110","10001","10001","10001","10001","10001","01110"],
+    "1":["00100","01100","00100","00100","00100","00100","01110"],
+    "2":["01110","10001","00001","00010","00100","01000","11111"],
+    "3":["11111","00010","00100","00010","00001","10001","01110"],
+    "4":["00010","00110","01010","10010","11111","00010","00010"],
+    "5":["11111","10000","11110","00001","00001","10001","01110"],
+    "6":["00110","01000","10000","11110","10001","10001","01110"],
+    "7":["11111","00001","00010","00100","01000","01000","01000"],
+    "8":["01110","10001","10001","01110","10001","10001","01110"],
+    "9":["01110","10001","10001","01111","00001","00010","01100"]
+  };
+  const holder = document.querySelector('.screen-digits');
+  const TOTAL = 10;              // 10 位显示区
+  let value = parseInt(holder.dataset.value, 10) || 0;
+  function digitHTML(ch){
+    const rows = FONT[ch];
+    let cells = '';
+    for(let r=0;r<7;r++){
+      const row = rows ? rows[r] : '00000';   // 无字符/空格 -> 全暗点
+      for(let c=0;c<5;c++){
+        cells += '<span class="px '+(row[c]==='1'?'on':'off')+'"></span>';
+      }
+    }
+    return '<span class="digit">'+cells+'</span>';
+  }
+  function render(){
+    const str = String(value);
+    const blanks = Math.max(0, TOTAL - str.length);
+    const out = [];
+    for(let i=0;i<blanks;i++) out.push(digitHTML(' '));   // 左边空位：不点亮
+    [...str].forEach(ch=> out.push(digitHTML(ch)));
+    holder.innerHTML = out.join('');
+  }
+  render();
+  // 每秒随机 ±5000，负数取绝对值；10 位显示区足够容纳
+  setInterval(()=>{
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const step = Math.floor(Math.random()*5000) + 1;   // 1~5000 随机量，个十百位也会变
+    let next = value + dir*step;
+    if(next < 0) next = Math.abs(next);
+    value = next;
+    render();
+  }, 1000);
+
+  // 每个分组内单选切换
+  document.querySelectorAll('.group').forEach(group=>{
+    const sqs = group.querySelectorAll('.slots .sq');
+    const caps = group.querySelectorAll('.caps .cap');
+    group.addEventListener('click', e=>{
+      const sq = e.target.closest('.sq');
+      if(!sq) return;
+      const i = [...sqs].indexOf(sq);
+      if(i<0) return;
+      sqs.forEach(x=>x.classList.remove('on'));
+      caps.forEach(x=>x.classList.remove('on'));
+      sq.classList.add('on');
+      if(caps[i]) caps[i].classList.add('on');
+      playClick();
+    });
+  });
+</script>
+</div>
+
+<script>
+// 嵌入 iframe 时向父页面上报内容高度（.wrap 高度只由内容决定）
+(() => {
+  const reportHeight = () => {
+    const content = document.querySelector('.wrap');
+    const height = content
+      ? content.getBoundingClientRect().height
+      : Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'u8g2-demo-height', height }, '*');
+    }
+  };
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'u8g2-demo-request-height') reportHeight();
+  });
+  window.addEventListener('resize', reportHeight);
+  if (window.ResizeObserver) new ResizeObserver(reportHeight).observe(document.body);
+  requestAnimationFrame(reportHeight);
+})();
+</script>
+</body>
+</html>

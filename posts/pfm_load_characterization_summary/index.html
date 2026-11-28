@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PFM电源芯片 - CacheRivulet小记</title>
+  <meta name="description" content="低功耗电池供电 PFM脉冲频率调制 方案好处">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  
+  <meta property="article:published_time" content="2026-11-22">
+  <meta property="og:title" content="PFM电源芯片">
+  <meta property="og:description" content="低功耗电池供电 PFM脉冲频率调制 方案好处">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/pfm_load_characterization_summary/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/pfm_load_characterization_summary/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "PFM电源芯片",
+  "description": "低功耗电池供电\nPFM脉冲频率调制\n方案好处",
+  "datePublished": "2026-11-22",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/pfm_load_characterization_summary/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/pfm_load_characterization_summary/"
+  }
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">PFM电源芯片</h1>
+  <article class="article-body">
+<p><code>PFM = Pulse Frequency Modulation，脉冲频率调制</code>电源芯片固定每个脉冲的导通时间或峰值电流，仅靠改变脉冲疏密来调节能量：</p>
+<p>负载重则频率高，负载轻则频率低；相比定频PWM，省去轻载时逐周期开关的无效动作。</p>
+<p>本文测量了手头上一个设备上的PFM电源芯片XT1861在不同负载下的工作情况</p>
+<p>实测高负载约528Hz/1.6mA、低负载约5.2Hz/35µA，正是这一机制。</p>
+<p>电池设备（传感器、穿戴、遥控等）多数时间处于休眠或µA级待机，而开关与驱动损耗近似与频率成正比；</p>
+<p><code>PFM把轻载开关次数压到极低，静态电流和轻载损耗骤降，效率明显优于PWM</code>，把电量留给偶发唤醒，显著延长续航。</p>
+<p><code>代价：纹波大，响应慢，频率不固定</code></p>
+<p><img src="/posts/pfm_load_characterization_summary/assets/img-20261122011744-ffef.webp" alt="PixPin_2026-11-22_09-17-28"></p>
+<table>
+<thead>
+<tr>
+<th align="center">A 高负载<br>≈528 Hz ／ ≈1.6 mA</th>
+<th align="center">B 低负载<br>≈5.2 Hz ／ ≈35 μA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="/posts/pfm_load_characterization_summary/assets/img-20261122011240-kd5r.webp" alt="A-图1"></td>
+<td align="center"><img src="/posts/pfm_load_characterization_summary/assets/img-20261122011348-5wbo.webp" alt="B-图1"></td>
+</tr>
+<tr>
+<td align="center"><img src="/posts/pfm_load_characterization_summary/assets/img-20261122011311-1fjd.webp" alt="A-图2"></td>
+<td align="center"><img src="/posts/pfm_load_characterization_summary/assets/img-20261122011408-64eu.webp" alt="B-图2"></td>
+</tr>
+</tbody></table>
+<p><img src="/posts/pfm_load_characterization_summary/assets/img-20261122011153-j7oh.webp" alt="PixPin_2026-11-22_09-11-45"></p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-11-22 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=pfm_load_characterization_summary');
+  }
+  </script>
+</body>
+</html>

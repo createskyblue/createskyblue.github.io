@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>晶振负载电容匹配 - CacheRivulet小记</title>
+  <meta name="description" content="使用GPS模块1PPS信号 简单测量晶振频偏 匹配负载电容 亚微秒级同步波形采集">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="晶振">
+  <meta property="article:tag" content="负载电容匹配">
+  <meta property="article:tag" content="同步采样">
+  <meta property="article:published_time" content="2026-11-25">
+  <meta property="og:title" content="晶振负载电容匹配">
+  <meta property="og:description" content="使用GPS模块1PPS信号 简单测量晶振频偏 匹配负载电容 亚微秒级同步波形采集">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/crystal-load-capacitance-matching/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/crystal-load-capacitance-matching/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "晶振负载电容匹配",
+  "description": "使用GPS模块1PPS信号\n简单测量晶振频偏\n匹配负载电容\n亚微秒级同步波形采集",
+  "datePublished": "2026-11-25",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/crystal-load-capacitance-matching/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/crystal-load-capacitance-matching/"
+  },
+  "keywords": "晶振, 负载电容匹配, 同步采样"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">晶振负载电容匹配</h1>
+  <article class="article-body">
+<h1>晶振负载电容匹配</h1>
+<p>STM32L4，通过定时器捕获使用SKG123NT的1PPS信号，简单计算板载32M晶振 的频率偏差，并对其负载电容进行补偿</p>
+<h3>测试方法</h3>
+<p>以 GPS 模块的 1PPS 信号作为绝对时间参考，反推本地 32 M 晶振经 PLL 倍频到 64 MHz 后的实际频率误差。</p>
+<br>
+具体做法：TIM2 配置为 64 MHz 自由运行、不预分频，对本地时钟连续计数；GPS 的 PPS 上升沿触发输入捕获，由硬件把当前计数值锁存，中断里与上一次捕获值相减，即得相邻两个 PPS 之间的实测 tick 数 `N_meas`，也就是本地时钟视角下的"一秒长度"。
+
+<p><br>频偏按下式计算：</p>
+<p><code>ppm = (N_meas − 64000000) / 64000000 × 10⁶</code></p>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124230603-t4dl.webp" alt="PixPin_2026-11-25_07-05-42"></p>
+<h2>晶振负载电容调试实测数据</h2>
+<table>
+<thead>
+<tr>
+<th align="center">序号</th>
+<th align="center">外接负载电容 C1=C2</th>
+<th>标签</th>
+<th align="center">实测频偏 (ppm)</th>
+<th align="center">每秒时间偏差 (ns/s)</th>
+<th align="center">tick / PPS</th>
+<th align="center">判定（±20ppm）</th>
+<th align="center">判定（±10ppm）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="center">未焊接（nc）</td>
+<td>32M_PLL_64M_nc</td>
+<td align="center"><strong>+113.672</strong></td>
+<td align="center">+113671.9</td>
+<td align="center">64,007,267</td>
+<td align="center">❌ 超差</td>
+<td align="center">❌</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="center">3 pF</td>
+<td>32M_PLL_64M_3p</td>
+<td align="center"><strong>+44.969</strong></td>
+<td align="center">+44968.8</td>
+<td align="center">64,002,875</td>
+<td align="center">❌ 超差</td>
+<td align="center">❌</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="center">8.2 pF</td>
+<td>32M_PLL_64M_8.2p</td>
+<td align="center"><strong>+1.784</strong></td>
+<td align="center">+1784.4</td>
+<td align="center">64,000,118</td>
+<td align="center">✅ 优</td>
+<td align="center">✅ 优</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td align="center">10 pF</td>
+<td>32M_PLL_64M_10p</td>
+<td align="center"><strong>−8.189</strong></td>
+<td align="center">−8189.1</td>
+<td align="center">63,999,474</td>
+<td align="center">✅ 良</td>
+<td align="center">✅ 靠边</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td align="center">12 pF</td>
+<td>32M_PLL_64M_12p</td>
+<td align="center"><strong>−15.536</strong></td>
+<td align="center">−15535.9</td>
+<td align="center">63,999,005</td>
+<td align="center">✅ 合格</td>
+<td align="center">❌</td>
+</tr>
+</tbody></table>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124163437-s975.webp" alt="nc">
+🔺32MHz 晶振 → PLL ×2 → 64MHz，负载电容：不焊（nc），频偏 +113.672 ppm</p>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124164140-gdno.webp" alt="3p">
+🔺32MHz 晶振 → PLL ×2 → 64MHz，负载电容：3 pF ×2，频偏 +44.969 ppm</p>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124163449-qwlf.webp" alt="8.2p">
+🔺32MHz 晶振 → PLL ×2 → 64MHz，负载电容：8.2 pF ×2，频偏 +1.784 ppm（⚠️ 焊接后未等温度稳定即测，仅供参考）</p>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124163422-p4dp.webp" alt="10p">
+🔺32MHz 晶振 → PLL ×2 → 64MHz，负载电容：10 pF ×2，频偏 −8.189 ppm</p>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124163528-q0uh.webp" alt="12p">
+🔺32MHz 晶振 → PLL ×2 → 64MHz，负载电容：12 pF ×2，频偏 −15.536 ppm</p>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124231901-ui59.webp" alt="PixPin_2026-11-25_07-18-35">
+🔺手指温度对晶振频率偏差的影响</p>
+<h2>结果分析</h2>
+<p>频偏随负载电容单调下降，符合&quot;电容越大、振荡频率越低&quot;的晶振规律，说明测量链路工作正常</p>
+<h2>应用</h2>
+<p><img src="/posts/crystal-load-capacitance-matching/assets/img-20261124232802-sth8.webp" alt="PixPin_2026-11-25_07-27-57">
+亚微秒级时间同步波形采集</p>
+<h2>局限</h2>
+<p>本文为单板、室温、单点测量，绝对值受 GPS 1PPS 短期抖动影响</p>
+<p>对精度有要求建议用 GPSDO/OCXO 参考的频率计</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-11-25 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=crystal-load-capacitance-matching');
+  }
+  </script>
+</body>
+</html>

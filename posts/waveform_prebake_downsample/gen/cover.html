@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1080px;overflow:hidden;background:#fff}
+  body{display:flex;flex-direction:column;font-family:"Inter","Segoe UI","Microsoft YaHei",sans-serif;
+       -webkit-font-smoothing:antialiased;color:#16202f}
+  .top{flex:0 0 520px;padding:88px 56px 0}
+  h1{font-size:132px;line-height:1.1;font-weight:600;letter-spacing:-3px}
+  .desc{margin-top:34px;font-size:32px;line-height:1.45;color:#5a6a80}
+  .art{flex:1;min-height:0}
+  svg{display:block;width:1080px;height:560px}
+</style>
+</head>
+<body>
+  <div class="top">
+    <h1>超大规模波形图<br>缩放为什么不卡</h1>
+    <div class="desc">切片加预烘焙，只读视口那几片。</div>
+  </div>
+  <div class="art"><svg id="art" viewBox="0 0 1080 560" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<script>
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  var svg = document.getElementById('art');
+  function el(tag, a) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in a) e.setAttribute(k, a[k]);
+    svg.appendChild(e);
+  }
+  var seed = 20261028;
+  function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+
+  var CW = 240, CH = 240, GP = 16, OX = -10, OY = 20;
+
+  // 视口 = 2×2 瓦片块，坐标由格子尺寸算出，严丝合缝
+  var VX = OX + 1 * (CW + GP), VY = OY;
+  var VW = CW * 2 + GP, VH = CH * 2 + GP;
+
+  for (var r = 0; r < 3; r++) {
+    for (var c = 0; c < 5; c++) {
+      var x = OX + c * (CW + GP), y = OY + r * (CH + GP);
+      var hit = (x >= VX - 1) && (x + CW <= VX + VW + 1) &&
+                (y >= VY - 1) && (y + CH <= VY + VH + 1);
+      el('rect', { x: x, y: y, width: CW, height: CH, rx: 18,
+                   fill: hit ? '#d3e3fa' : '#fbfcfe',
+                   stroke: hit ? '#b7cfee' : '#ecf2f9', 'stroke-width': 1.6 });
+    }
+  }
+
+  // 波形：一条贯穿
+  var STEP = 5, series = [], yy = 268;
+  for (var i = 0; i < 900; i++) {
+    yy += (rnd() - 0.5) * 82;
+    yy = Math.max(110, Math.min(440, yy));
+    series.push(yy);
+  }
+  var WIN = Math.round(1080 / STEP), TAIL = Math.round(90 / STEP), best = 0, bestScore = 1e9;
+  for (var off = 0; off + WIN < series.length; off++) {
+    var sc = 0;
+    for (var k = off + WIN - TAIL; k < off + WIN - 1; k++) {
+      sc = Math.max(sc, Math.abs(series[k + 1] - series[k]));
+    }
+    if (sc < bestScore) { bestScore = sc; best = off; }
+  }
+  var pts = [];
+  for (var j = 0; j < WIN; j++) pts.push([j * STEP, series[best + j]]);
+  var d = 'M' + pts.map(function (p) { return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' L');
+
+  var defs = document.createElementNS(NS, 'defs');
+  defs.innerHTML = '<clipPath id="view"><rect x="' + (VX - 10) + '" y="' + (VY - 10) +
+    '" width="' + (VW + 20) + '" height="' + (VH + 20) + '" rx="32"/></clipPath>';
+  svg.appendChild(defs);
+
+  el('path', { d: d, fill: 'none', stroke: '#d5dfee', 'stroke-width': 4.5,
+               'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+  el('path', { d: d, fill: 'none', stroke: '#2b6cb0', 'stroke-width': 6,
+               'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'clip-path': 'url(#view)' });
+
+  var EX = 10;
+  el('rect', { x: VX - EX, y: VY - EX, width: VW + EX * 2, height: VH + EX * 2, rx: 32, fill: 'none',
+               stroke: '#b23c36', 'stroke-width': 3.6, 'stroke-dasharray': '18 12' });
+})();
+</script>
+</body>
+</html>

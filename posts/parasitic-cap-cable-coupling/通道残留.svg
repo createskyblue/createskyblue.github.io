@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 200" width="680" height="200" role="img" aria-label="四路 ADC 均悬空，通道 1 被线缆耦合，通道 2 至 4 残留电荷">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 8 5 L 0 9" fill="none" stroke="#9ca3af" stroke-width="1.2"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="680" height="200" fill="#f8fafc"/>
+  <text x="24" y="28" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="14" font-weight="500" fill="#111827">四路 ADC 均悬空；单 ADC 按 1→2→3→4 切换</text>
+
+  <rect x="32" y="52" width="170" height="120" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <text x="117" y="88" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" fill="#1e3a8a">ADC 通道 1：悬空</text>
+  <text x="117" y="116" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#1d4ed8">被线缆耦合进 10 kHz</text>
+  <text x="117" y="144" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11" fill="#64748b">红端子接此悬空脚</text>
+
+  <line x1="202" y1="112" x2="238" y2="112" stroke="#9ca3af" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="248" y="52" width="400" height="120" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+  <text x="448" y="88" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" fill="#92400e">ADC 通道 2～4：同样悬空</text>
+  <text x="448" y="118" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#b45309">切换后采样电容残余电荷 → 同相位小波</text>
+  <text x="448" y="144" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11" fill="#9a3412">越靠后幅度越小</text>
+</svg>

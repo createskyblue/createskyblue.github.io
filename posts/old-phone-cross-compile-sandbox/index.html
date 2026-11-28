@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旧手机给 AI 当沙盒：容器里编译单片机固件、跑 Web 后端 - CacheRivulet小记</title>
+  <meta name="description" content="旧安卓手机容器承载 AI 测试，单片机编译与 Web 后端不占主力机">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="构建系统">
+  <meta property="article:tag" content="性能优化">
+  <meta property="article:tag" content="交叉编译">
+  <meta property="article:tag" content="数据库">
+  <meta property="article:published_time" content="2026-08-30">
+  <meta property="og:title" content="旧手机给 AI 当沙盒：容器里编译单片机固件、跑 Web 后端">
+  <meta property="og:description" content="旧安卓手机容器承载 AI 测试，单片机编译与 Web 后端不占主力机">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/old-phone-cross-compile-sandbox/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/old-phone-cross-compile-sandbox/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "旧手机给 AI 当沙盒：容器里编译单片机固件、跑 Web 后端",
+  "description": "旧安卓手机容器承载 AI 测试，单片机编译与 Web 后端不占主力机",
+  "datePublished": "2026-08-30",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/old-phone-cross-compile-sandbox/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/old-phone-cross-compile-sandbox/"
+  },
+  "keywords": "嵌入式, 构建系统, 性能优化, 交叉编译, 数据库"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">旧手机给 AI 当沙盒：容器里编译单片机固件、跑 Web 后端</h1>
+  <article class="article-body">
+<h1>旧手机给 AI 当沙盒：容器里编译单片机固件、跑 Web 后端</h1>
+<p>AI 做交叉编译测试，要在主力电脑上装整套 ARM 工具链，装完处理 PATH 与库冲突，测试完再卸。跑 Web 后端 demo，又要起 Node 或解释器环境。一次测试，主力机多出一堆临时环境。旧安卓手机接住这个活：Termux 里起 Debian 容器，工具链和 Web 服务都装在容器内，测试与主力机完全隔离。</p>
+<h2>沙盒结构</h2>
+<ul>
+<li><strong>Termux</strong>：Android 上的 Linux 环境，自带 clang 与包管理器，普通应用权限即可运行</li>
+<li><strong>proot-distro</strong>：容器管理工具，无 root 权限，把发行版 rootfs 挂在用户目录下运行</li>
+<li><strong>Debian 容器</strong>：proot 内装 Debian（glibc），承载裸机交叉工具链与 Web 后端</li>
+<li><strong>工具链</strong>：xpack arm-none-eabi-gcc 15.2.1，解压即用，无需安装</li>
+</ul>
+<p>容器选型有一个硬约束：Termux 官方仓库没有 arm-none-eabi-gcc；xpack 的 aarch64 Linux 版是 glibc 动态链接，Alpine（musl）容器运行时报缺动态链接器，Debian（glibc）容器可以正常执行。容器必须与工具链的 libc 匹配。</p>
+<h2>单片机固件交叉编译</h2>
+<p>PY32 系列固件模板（Cortex-M0+，32 KB Flash / 4 KB RAM），70 个 C 文件（HAL 库全套）加启动汇编。<code>arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb</code> 交叉编译，全量构建通过：</p>
+<ul>
+<li>RAM 占用 2432 B / 4 KB（59.38%）</li>
+<li>FLASH 占用 6720 B / 32 KB（20.51%）</li>
+<li>Project.elf / Project.hex / Project.bin 三个产物完整生成</li>
+</ul>
+<h2>本机与手机耗时对比</h2>
+<table>
+<thead>
+<tr>
+<th>环境</th>
+<th>工具链</th>
+<th>并行</th>
+<th>全量耗时</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本机 Windows</td>
+<td>GCC 14.3.1</td>
+<td>Ninja 自动并行</td>
+<td>6 s（热状态）</td>
+</tr>
+<tr>
+<td>手机（proot 容器）</td>
+<td>GCC 15.2.1</td>
+<td>-j4</td>
+<td>44 s</td>
+</tr>
+<tr>
+<td>手机（proot 容器）</td>
+<td>GCC 15.2.1</td>
+<td>-j8</td>
+<td>40 s</td>
+</tr>
+</tbody></table>
+<p><img src="/posts/old-phone-cross-compile-sandbox/compare.svg" alt="全量编译耗时对比"></p>
+<p>本机首次全量编译 21 秒，之后稳定在 5-6 秒，差距来自磁盘冷缓存与杀毒软件首次扫描。手机稳定在 40-44 秒，约为本机的 7-8 倍。</p>
+<h2>Web 后端：mongoose + SQLite</h2>
+<p>同一个沙盒里跑另一个 demo：C 语言 mongoose 库起 HTTP 服务器，SQLite 存数据，前端 HTML 页面对接增删查接口。浏览器直接访问手机 IP 即可操作，增删查和搜索全部在手机本地完成。这一套环境同样没有进入主力机，验证完即弃。</p>
+<h2>八核并行收益与瓶颈</h2>
+<p>手机是 8 核，<code>-j8</code> 只比 <code>-j4</code> 快 4 秒。瓶颈不在 CPU 并行度，在 proot 虚拟化层的 IO 开销：每次文件读写都要经过 proot 路径翻译，编译过程大量临时文件的读写放大了这部分开销。手机单核性能本身也弱于主力机，并行无法补偿。</p>
+<h2>适用边界</h2>
+<p>值得用手机沙盒的场景：AI 驱动的工具链安装实验、交叉编译环境反复装包卸包的测试、Web 后端 demo 验证、需要隔离环境跑脚本。日常高频编译仍用主力机，6 秒与 40 秒的差距不值得为隔离付出。</p>
+<p>边界两条：proot 容器无 root，涉及设备映射或特权操作受限；交叉工具链必须是 Linux aarch64 版本，与容器 libc 匹配。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-08-30 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=old-phone-cross-compile-sandbox');
+  }
+  </script>
+</body>
+</html>

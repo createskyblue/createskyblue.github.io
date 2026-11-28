@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="420" viewBox="0 0 920 420" font-family="'Microsoft YaHei','PingFang SC','Segoe UI',sans-serif">
+  <rect width="920" height="420" fill="#ffffff"/>
+  <text x="460" y="34" text-anchor="middle" font-size="17" fill="#222222" font-weight="600">网页截图链路：请求与回传</text>
+
+  <!-- 阶段标注 -->
+  <text x="40" y="72" font-size="13" fill="#666666">① 请求</text>
+  <text x="40" y="232" font-size="13" fill="#666666">② 渲染与回传</text>
+
+  <!-- 线程边界说明 -->
+  <rect x="300" y="180" width="320" height="46" rx="8" fill="#fffbea" stroke="#e0c98a" stroke-width="1"/>
+  <text x="460" y="198" text-anchor="middle" font-size="13" fill="#333333">请求结构 + 二进制信号量握手</text>
+  <text x="460" y="216" text-anchor="middle" font-size="12" fill="#666666">LVGL 渲染只在显示任务内发生</text>
+
+  <!-- 行1: 浏览器 -> HTTP -> 显示任务 -->
+  <rect x="40" y="90" width="240" height="84" rx="10" fill="#eef4fb" stroke="#9db8e8" stroke-width="1.5"/>
+  <text x="160" y="122" text-anchor="middle" font-size="15" fill="#222222" font-weight="600">浏览器</text>
+  <text x="160" y="148" text-anchor="middle" font-size="12" fill="#555555">截图按钮 fetch('/screenshot')</text>
+
+  <line x1="284" y1="132" x2="334" y2="132" stroke="#9a9a9a" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="340" y="90" width="240" height="84" rx="10" fill="#fdf6e3" stroke="#e0c98a" stroke-width="1.5"/>
+  <text x="460" y="122" text-anchor="middle" font-size="15" fill="#222222" font-weight="600">HTTP 服务器任务</text>
+  <text x="460" y="148" text-anchor="middle" font-size="12" fill="#555555">GET /screenshot</text>
+
+  <line x1="584" y1="132" x2="634" y2="132" stroke="#9a9a9a" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="640" y="90" width="240" height="84" rx="10" fill="#eef7ee" stroke="#a8cfaa" stroke-width="1.5"/>
+  <text x="760" y="122" text-anchor="middle" font-size="15" fill="#222222" font-weight="600">显示任务 · LVGL 快照</text>
+  <text x="760" y="148" text-anchor="middle" font-size="12" fill="#555555">lv_snapshot_take_to_draw_buf</text>
+
+  <!-- 垂直: 显示任务 -> PSRAM -->
+  <line x1="760" y1="178" x2="760" y2="246" stroke="#9a9a9a" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- 行2: PSRAM -> BMP -> 浏览器(方向向左) -->
+  <rect x="640" y="250" width="240" height="84" rx="10" fill="#eef7ee" stroke="#a8cfaa" stroke-width="1.5"/>
+  <text x="760" y="282" text-anchor="middle" font-size="15" fill="#222222" font-weight="600">PSRAM 缓冲</text>
+  <text x="760" y="308" text-anchor="middle" font-size="12" fill="#555555">RGB888 · B,G,R 字节序</text>
+
+  <line x1="640" y1="292" x2="590" y2="292" stroke="#9a9a9a" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="340" y="250" width="240" height="84" rx="10" fill="#f6f2fb" stroke="#c3b3e0" stroke-width="1.5"/>
+  <text x="460" y="282" text-anchor="middle" font-size="15" fill="#222222" font-weight="600">BMP 流式编码</text>
+  <text x="460" y="308" text-anchor="middle" font-size="12" fill="#555555">54B 头 + 逐行 send_chunk</text>
+
+  <line x1="340" y1="292" x2="290" y2="292" stroke="#9a9a9a" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="40" y="250" width="240" height="84" rx="10" fill="#eef4fb" stroke="#9db8e8" stroke-width="1.5"/>
+  <text x="160" y="282" text-anchor="middle" font-size="15" fill="#222222" font-weight="600">浏览器 blob</text>
+  <text x="160" y="308" text-anchor="middle" font-size="12" fill="#555555">预览 + 下载 BMP</text>
+
+  <text x="460" y="372" text-anchor="middle" font-size="12" fill="#888888">设备侧 4 个环节都在同一台 ESP32-S3 上，浏览器只做发起与展示</text>
+
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9a9a9a"/>
+    </marker>
+  </defs>
+</svg>

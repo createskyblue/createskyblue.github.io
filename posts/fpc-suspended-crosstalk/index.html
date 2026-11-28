@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>接悬空 FPC 后相邻走线串扰抬到 3 倍以上 - CacheRivulet小记</title>
+  <meta name="description" content="悬空FPC抬高相邻走线串扰，中间隔GND线有隔离收益">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="嵌入式">
+  <meta property="article:tag" content="干扰">
+  <meta property="article:tag" content="信号处理">
+  <meta property="article:tag" content="工程调试">
+  <meta property="article:tag" content="测试">
+  <meta property="article:published_time" content="2026-09-11">
+  <meta property="og:title" content="接悬空 FPC 后相邻走线串扰抬到 3 倍以上">
+  <meta property="og:description" content="悬空FPC抬高相邻走线串扰，中间隔GND线有隔离收益">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/fpc-suspended-crosstalk/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/fpc-suspended-crosstalk/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "接悬空 FPC 后相邻走线串扰抬到 3 倍以上",
+  "description": "悬空FPC抬高相邻走线串扰，中间隔GND线有隔离收益",
+  "datePublished": "2026-09-11",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/fpc-suspended-crosstalk/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/fpc-suspended-crosstalk/"
+  },
+  "keywords": "嵌入式, 干扰, 信号处理, 工程调试, 测试"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">接悬空 FPC 后相邻走线串扰抬到 3 倍以上</h1>
+  <article class="article-body">
+<h1>接悬空 FPC 后相邻走线串扰抬到 3 倍以上</h1>
+<p>同一块测试板，几根信号线本体都是悬空的——这只为了把耦合量测干净，不是产品真实接法。只在连接器上多插一根远端不接的 FPC，把悬空导体拉长后，相邻测点上的 20 kHz 方波串扰就抬到原来的 3 倍以上。中间隔接地线的测点幅度仍低一截，隔 NC 占位线的测点最脏。</p>
+<h2>测试条件</h2>
+<ul>
+<li>干扰注入：5 Vpp、20 kHz 方波（唯一有源激励）</li>
+<li>观测：示波器看各测点串扰 Vpp；A / NC / B 均为悬空高阻节点</li>
+<li>对比：裸板 vs 再接一根远端悬空的 FPC</li>
+<li>线序上→下：测试点 A / NC 占位 / 干扰注入 / GND（接地隔离） / 测试点 B</li>
+</ul>
+<p><img src="/posts/fpc-suspended-crosstalk/PixPin_2026-09-11_12-18-42.webp" alt="裸板测试点标注"></p>
+<p><img src="/posts/fpc-suspended-crosstalk/PixPin_2026-09-11_12-18-18.webp" alt="接上悬空 FPC 后"></p>
+<h2>串扰对比</h2>
+<table>
+<thead>
+<tr>
+<th>测点</th>
+<th>裸板</th>
+<th>接悬空 FPC</th>
+<th>变化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A（隔 NC）</td>
+<td><img src="/posts/fpc-suspended-crosstalk/S013.BMP" alt="A 裸板"></td>
+<td><img src="/posts/fpc-suspended-crosstalk/S010.BMP" alt="A 接 FPC"></td>
+<td>50.5 mV → <strong>167 mV</strong>（3.3×，+10.4 dB）</td>
+</tr>
+<tr>
+<td>NC 占位</td>
+<td><img src="/posts/fpc-suspended-crosstalk/S020.BMP" alt="NC 裸板"></td>
+<td><img src="/posts/fpc-suspended-crosstalk/S018.BMP" alt="NC 接 FPC"></td>
+<td>63.3 mV → <strong>275 mV</strong>（表观 4.3×，读数含振铃）</td>
+</tr>
+<tr>
+<td>干扰注入</td>
+<td><img src="/posts/fpc-suspended-crosstalk/S012.BMP" alt="注入点"></td>
+<td><img src="/posts/fpc-suspended-crosstalk/S012.BMP" alt="注入点"></td>
+<td>激励源无变化</td>
+</tr>
+<tr>
+<td>GND</td>
+<td><img src="/posts/fpc-suspended-crosstalk/S008.BMP" alt="GND 裸板"></td>
+<td><img src="/posts/fpc-suspended-crosstalk/S008.BMP" alt="GND 接 FPC"></td>
+<td>-</td>
+</tr>
+<tr>
+<td>B（隔 GND）</td>
+<td><img src="/posts/fpc-suspended-crosstalk/S014.BMP" alt="B 裸板"></td>
+<td><img src="/posts/fpc-suspended-crosstalk/S011.BMP" alt="B 接 FPC"></td>
+<td>21.1 mV → <strong>67.7 mV</strong>（3.2×，+10.1 dB）</td>
+</tr>
+</tbody></table>
+<p>接上 FPC 后，几个敏感测点串扰都抬到 3 倍以上，注入源本身没变。相邻引脚寄生电容粗测：裸板约 5 pF，接 FPC 后约 10 pF。</p>
+<p>各测点本来都悬空；NC 占位点接上 FPC 后振铃更明显，示波器 Vpp 把过冲一并计入，所以 275 mV 偏高；即便按折算，涨幅仍然明显。</p>
+<h2>简要判断</h2>
+<p>20 kHz 下波长约 15 km，FPC 远小于波长，耦合走的是近场容性路径，天线辐射可忽略。悬空 FPC 等于把并行导体拉长，互容变大，受害线分到的干扰跟着变大。</p>
+<p>A 与源之间隔的是 NC 线，B 与源之间隔的是 GND 线，间距一样。A/B 在裸板和接 FPC 后都在 2.4 倍上下：中间导体接地，大约带来 7.7 dB 隔离收益。浮置 NC 既挡不住耦合，还会被方波边沿激出振铃。</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-09-11 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=fpc-suspended-crosstalk');
+  }
+  </script>
+</body>
+</html>

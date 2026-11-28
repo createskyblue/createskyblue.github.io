@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="920" viewBox="0 0 1000 920" role="img" aria-labelledby="t d">
+  <title id="t">FIFO 批量取出后：写回队列 vs 消费者暂存区</title>
+  <desc id="d">上半：取出 A B 后写回 FIFO，顺序变成 C D E F A B。下半：A B 放入消费者暂存区，FIFO 继续收 E F，下一次消费才清空暂存区。</desc>
+  <defs>
+    <marker id="ar-r" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#dc2626"/>
+    </marker>
+    <marker id="ar-g" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#15803d"/>
+    </marker>
+    <marker id="ar-n" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="920" fill="#ffffff"/>
+  <rect x="20" y="20" width="960" height="880" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <text x="48" y="56" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="20" font-weight="700" fill="#0f172a">取出后数据还不能丢：写回 FIFO 会乱序</text>
+  <text x="48" y="84" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#475569">队头在左（先出）。字母表示一帧/一条待发送数据。</text>
+
+  <!-- ========== 错误 ========== -->
+  <rect x="40" y="110" width="920" height="300" rx="12" fill="#fef2f2" stroke="#fca5a5"/>
+  <text x="64" y="146" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="700" fill="#991b1b">错误：取出 A、B 后写回 FIFO</text>
+
+  <text x="64" y="186" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#334155">1  取出 A、B（发送中，确认未回来）</text>
+  <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    <rect x="64" y="200" width="64" height="64" rx="10" fill="#e2e8f0" stroke="#94a3b8"/><text x="96" y="240" fill="#334155">C</text>
+    <rect x="140" y="200" width="64" height="64" rx="10" fill="#e2e8f0" stroke="#94a3b8"/><text x="172" y="240" fill="#334155">D</text>
+  </g>
+  <text x="64" y="286" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#64748b">FIFO 剩余</text>
+  <text x="240" y="240" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" fill="#64748b">A、B 在发送路径上</text>
+
+  <text x="64" y="324" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#991b1b">2  协议栈又写入 E、F，再把 A、B 塞回队尾</text>
+  <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    <rect x="64" y="338" width="64" height="64" rx="10" fill="#e2e8f0" stroke="#94a3b8"/><text x="96" y="378" fill="#334155">C</text>
+    <rect x="140" y="338" width="64" height="64" rx="10" fill="#e2e8f0" stroke="#94a3b8"/><text x="172" y="378" fill="#334155">D</text>
+    <rect x="216" y="338" width="64" height="64" rx="10" fill="#dcfce7" stroke="#4ade80"/><text x="248" y="378" fill="#166534">E</text>
+    <rect x="292" y="338" width="64" height="64" rx="10" fill="#dcfce7" stroke="#4ade80"/><text x="324" y="378" fill="#166534">F</text>
+    <rect x="368" y="338" width="64" height="64" rx="10" fill="#fee2e2" stroke="#f87171"/><text x="400" y="378" fill="#991b1b">A</text>
+    <rect x="444" y="338" width="64" height="64" rx="10" fill="#fee2e2" stroke="#f87171"/><text x="476" y="378" fill="#991b1b">B</text>
+  </g>
+  <text x="540" y="378" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="700" fill="#991b1b">顺序变成 C D E F A B</text>
+  <text x="540" y="400" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#991b1b">更早的数据排到了新数据后面</text>
+
+  <!-- ========== 正确 ========== -->
+  <rect x="40" y="440" width="920" height="400" rx="12" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="64" y="476" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="700" fill="#166534">正确：消费者暂存区，确认后才丢</text>
+
+  <text x="64" y="516" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#334155">1  取出 A、B → 放进消费者暂存区（发送路径在用）</text>
+
+  <rect x="64" y="534" width="360" height="120" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="80" y="560" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#475569">FIFO（队列）</text>
+  <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    <rect x="80" y="572" width="56" height="56" rx="8" fill="#e2e8f0" stroke="#94a3b8"/><text x="108" y="608" fill="#334155">C</text>
+    <rect x="148" y="572" width="56" height="56" rx="8" fill="#e2e8f0" stroke="#94a3b8"/><text x="176" y="608" fill="#334155">D</text>
+  </g>
+  <text x="220" y="608" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#64748b">继续收新数据</text>
+
+  <rect x="480" y="534" width="320" height="120" rx="12" fill="#ffffff" stroke="#4ade80" stroke-width="2"/>
+  <text x="496" y="560" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#166534">消费者暂存区</text>
+  <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    <rect x="496" y="572" width="56" height="56" rx="8" fill="#dbeafe" stroke="#60a5fa"/><text x="524" y="608" fill="#1e3a8a">A</text>
+    <rect x="564" y="572" width="56" height="56" rx="8" fill="#dbeafe" stroke="#60a5fa"/><text x="592" y="608" fill="#1e3a8a">B</text>
+  </g>
+  <text x="640" y="608" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#166534">等确认</text>
+
+  <line x1="430" y1="594" x2="468" y2="594" stroke="#15803d" stroke-width="2" marker-end="url(#ar-g)"/>
+  <text x="449" y="580" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="11" fill="#166534">取出</text>
+
+  <text x="64" y="694" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#334155">2  发送确认 / 下一次消费后，才清空暂存区</text>
+
+  <rect x="64" y="712" width="360" height="96" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="80" y="738" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#475569">FIFO（队列）</text>
+  <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    <rect x="80" y="748" width="56" height="56" rx="8" fill="#e2e8f0" stroke="#94a3b8"/><text x="108" y="784" fill="#334155">C</text>
+    <rect x="148" y="748" width="56" height="56" rx="8" fill="#e2e8f0" stroke="#94a3b8"/><text x="176" y="784" fill="#334155">D</text>
+    <rect x="216" y="748" width="56" height="56" rx="8" fill="#dcfce7" stroke="#4ade80"/><text x="244" y="784" fill="#166534">E</text>
+    <rect x="284" y="748" width="56" height="56" rx="8" fill="#dcfce7" stroke="#4ade80"/><text x="312" y="784" fill="#166534">F</text>
+  </g>
+
+  <rect x="480" y="712" width="320" height="96" rx="12" fill="#ecfdf5" stroke="#86efac" stroke-dasharray="6 4"/>
+  <text x="640" y="768" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" fill="#166534">暂存区已清空</text>
+</svg>

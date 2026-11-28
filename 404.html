@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script>
+    // GitHub Pages SPA redirect: preserve the original path and redirect to index.html
+    // The Vue app will read the 'redirect' query parameter and handle the route
+    var redirectUrl = '/index.html?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.replace(redirectUrl);
+  </script>
+</head>
+<body></body>
+</html>

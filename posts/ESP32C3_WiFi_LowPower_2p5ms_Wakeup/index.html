@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-C3 Wifi上报 低功耗优化 - CacheRivulet小记</title>
+  <meta name="description" content="ESP32-C3 Wifi上报 低功耗优化 唤醒仅需2.5ms 3nAHw 唤醒上报单次消耗 54 µAh">
+  <meta name="author" content="createskyblue">
+  <meta name="robots" content="index, follow">
+  <meta property="article:tag" content="低功耗">
+  <meta property="article:tag" content="esp32">
+  <meta property="article:tag" content="物联网">
+  <meta property="article:published_time" content="2026-11-28">
+  <meta property="og:title" content="ESP32-C3 Wifi上报 低功耗优化">
+  <meta property="og:description" content="ESP32-C3 Wifi上报 低功耗优化 唤醒仅需2.5ms 3nAHw 唤醒上报单次消耗 54 µAh">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://createskyblue.github.io/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/">
+  <meta property="og:site_name" content="CacheRivulet小记">
+  <link rel="canonical" href="https://createskyblue.github.io/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/">
+  <link rel="alternate" type="application/atom+xml" href="../feed.xml" title="CacheRivulet小记 Atom Feed">
+  <link rel="stylesheet" href="../post-styles.css">
+  <link rel="stylesheet" href="../katex.min.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ESP32-C3 Wifi上报 低功耗优化",
+  "description": "ESP32-C3 Wifi上报\n低功耗优化\n唤醒仅需2.5ms 3nAHw\n唤醒上报单次消耗 54 µAh",
+  "datePublished": "2026-11-28",
+  "author": {
+    "@type": "Person",
+    "@id": "https://github.com/createskyblue#person",
+    "name": "createskyblue",
+    "email": "createskyblue@outlook.com",
+    "url": "https://github.com/createskyblue",
+    "sameAs": [
+      "https://github.com/createskyblue"
+    ]
+  },
+  "url": "https://createskyblue.github.io/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://createskyblue.github.io/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/"
+  },
+  "keywords": "低功耗, esp32, 物联网"
+}</script>
+  <meta name="author-email" content="createskyblue@outlook.com">
+  <meta name="author-github" content="https://github.com/createskyblue">
+  <meta property="article:author" content="https://github.com/createskyblue">
+  <link rel="author" href="https://github.com/createskyblue">
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">ESP32-C3 Wifi上报 低功耗优化</h1>
+  <article class="article-body">
+<h1>ESP32 低功耗优化实践笔记</h1>
+<blockquote>
+<p>以 ESP32-S3 / ESP32-C3 + ESP-IDF 为例，记录从选型、启动配置到 Wake Stub 的几项关键优化，以及一组 MQTT 内网上报的实测功耗数据。</p>
+</blockquote>
+<h2>一、优化清单</h2>
+<ol>
+<li><strong>选型避开带内部 8 线 PSRAM 的 S3 版本</strong>：该版本在深度睡眠时 PSRAM 无法完全掉电，会带来约 200 µA 的额外静态电流。</li>
+<li><strong>缓存 Wi-Fi 连接信息</strong>：避免每次唤醒都重新扫描与连接，缩短联网耗时。</li>
+<li><strong>关闭 Bootloader 日志打印</strong>：减少启动阶段串口输出带来的时间与能量开销。</li>
+<li><strong>关闭启动阶段的固件校验</strong>：省去镜像校验耗时；会牺牲一部分固件完整性检查，需按场景权衡，大约可以节省50ms。</li>
+<li><strong>缓存服务器 IP</strong>：跳过 DNS 查询，少一次网络往返。</li>
+<li><strong>把「完整重启」当作固定成本来评估</strong>：ESP32-C3 从深度睡眠唤醒并重启到用户 App 约需 250 ms，单次约 1.6 µAh。</li>
+<li><strong>进一步考虑 Wake Stub</strong>：唤醒后先执行驻留在 RAM（RTC 保留内存）中的轻量函数，再决定是完整启动进入用户 App，还是直接继续睡眠。</li>
+</ol>
+<h2>二、ESP32-C3 实测：MQTT 内网上报</h2>
+<p>用 AI 辅助生成了一份基于 ESP-IDF 的测试程序，在 ESP32-C3 上测量低功耗优化后的 MQTT 内网上报开销。</p>
+<p><img src="/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/assets/img-20261127184202-k37z.webp" alt="ESP32-C3 低功耗整体概览">
+<em>图 1：整体电流概览，深度休眠时约 20 µA</em></p>
+<p><img src="/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/assets/img-20261127184219-1vc9.webp" alt="ESP32-C3 第一次上电联网">
+<em>图 2：第一次上电联网并上报，单次消耗 54 µAh</em></p>
+<p><img src="/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/assets/img-20261127184248-p763.webp" alt="ESP32-C3 低功耗唤醒后快速联网">
+<em>图 3：唤醒重启后快速联网并上报，单次消耗 22 µAh</em></p>
+<p><img src="/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/assets/img-20261127184319-256k.webp" alt="ESP32-C3 低功耗唤醒不联网">
+<em>图 4：唤醒重启但不联网，单次消耗 1.6 µAh</em></p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>电流 / 单次电荷</th>
+<th>耗时</th>
+<th>对应图</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>深度休眠静态底电流</td>
+<td>≈ 20 µA</td>
+<td>—</td>
+<td>图 1</td>
+</tr>
+<tr>
+<td>首次上电联网 + 上报</td>
+<td>54 µAh</td>
+<td>—</td>
+<td>图 2</td>
+</tr>
+<tr>
+<td>唤醒后快速联网 + 上报</td>
+<td>22 µAh</td>
+<td>—</td>
+<td>图 3</td>
+</tr>
+<tr>
+<td>唤醒重启，仅进入用户 App</td>
+<td>1.6 µAh</td>
+<td>≈ 250 ms</td>
+<td>图 4</td>
+</tr>
+<tr>
+<td>Wake Stub 执行轻量业务后继续睡</td>
+<td>3 nAh</td>
+<td>≈ 2.5 ms</td>
+<td>图 5 / 图 6</td>
+</tr>
+</tbody></table>
+<p>缓存 Wi-Fi 信息与服务器 IP 后，单次上报从 54 µAh 降到 22 µAh；而只要走「唤醒 → 重启 → 用户 App」这条路，即便不联网，也仍有约 250 ms 与 1.6 µAh 的固定开销。</p>
+<hr>
+<h2>三、再压一档：Wake Stub</h2>
+<p>要绕开上面那段固定启动成本，可以用 ESP-IDF 的 Wake Stub：唤醒后先跑一段轻量用户函数，再决定是完整启动到用户 App，还是原地继续睡觉。</p>
+<p>写了一个 Demo 验证该特性：前 4 次唤醒只在 Wake Stub 里做简单业务后继续睡眠，第 5 次才进入用户 App。</p>
+<p><img src="/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/assets/img-20261127184354-lqss.webp" alt="ESP32-C3 Wake Stub 波形">
+<em>图 5：Wake Stub 整体波形</em></p>
+<p><img src="/posts/ESP32C3_WiFi_LowPower_2p5ms_Wakeup/assets/img-20261127184402-6qpl.webp" alt="ESP32-C3 Wake Stub 波形放大">
+<em>图 6：Wake Stub 放大细节</em></p>
+<p>实测从低功耗唤醒到执行完业务仅约 <strong>2.5 ms、3 nAh</strong>，相比完整重启低了三个数量级。</p>
+<h2>四、现实建议</h2>
+<p>Wake Stub 看着很美，实际约束不少：可驻留的代码体积受限，也无法像正常 App 那样使用通用外设（如 I2C），调试与维护成本都偏高</p>
+<p>如果业务只是「周期性采集 + 偶尔联网上报」，更稳妥的做法是外挂一颗低功耗协作 MCU 负责采集与计时，让 ESP32 只在真正需要联网时被唤醒——不必把自己逼进 Wake Stub 的限制里</p>
+
+  </article>
+  <footer class="post-footer">
+    <a href="/" class="back-link">← 返回首页</a>
+    <span class="post-meta">发布于 2026-11-28 · createskyblue</span>
+    <address class="post-author-contact">作者：createskyblue · <a href="mailto:createskyblue@outlook.com">邮箱</a> · <a href="https://github.com/createskyblue" rel="me author">GitHub</a></address>
+  </footer>
+  <script>
+  // 直接访问此页面时，跳转到首页并自动打开文章
+  if (window.top === window) {
+    window.location.replace('/?article=ESP32C3_WiFi_LowPower_2p5ms_Wakeup');
+  }
+  </script>
+</body>
+</html>

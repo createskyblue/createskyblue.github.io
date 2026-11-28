@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 400" width="940" height="400" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif">
+  <rect width="940" height="400" fill="#f8fafc"/>
+  <text x="20" y="26" font-size="17" fill="#1e293b" font-weight="bold">密钥存放边界决定安全上限</text>
+
+  <!-- column headers -->
+  <text x="45" y="62" font-size="13" fill="#64748b">方案</text>
+  <text x="260" y="62" font-size="13" fill="#64748b">密钥存放位置</text>
+  <text x="640" y="62" font-size="13" fill="#64748b">能否被提取</text>
+
+  <!-- row 1: broken (key in PC) -->
+  <rect x="30" y="72" width="880" height="86" rx="8" fill="#fef2f2" stroke="#f87171" stroke-width="1.5"/>
+  <text x="45" y="112" font-size="15" fill="#b91c1c" font-weight="bold">对称加密（上位机侧）</text>
+  <text x="260" y="112" font-size="14" fill="#1e293b">密钥硬编码在用户可控的 PC 程序里</text>
+  <text x="640" y="112" font-size="15" fill="#dc2626" font-weight="bold">反编译即提取 ✗</text>
+
+  <!-- row 2: hardware AES / HSM -->
+  <rect x="30" y="168" width="880" height="86" rx="8" fill="#f0fdf4" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="45" y="208" font-size="15" fill="#15803d" font-weight="bold">硬件 AES / HSM</text>
+  <text x="260" y="208" font-size="14" fill="#1e293b">密钥在芯片安全区或 OTP，解密由硬件完成</text>
+  <text x="640" y="208" font-size="15" fill="#16a34a" font-weight="bold">外部不可读 ✓</text>
+
+  <!-- row 3: software ChaCha20 + read protection -->
+  <rect x="30" y="264" width="880" height="86" rx="8" fill="#f0fdf4" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="45" y="304" font-size="15" fill="#15803d" font-weight="bold">软件 ChaCha20</text>
+  <text x="260" y="304" font-size="14" fill="#1e293b">密钥固化在 Flash，开读保护与代码访问限制</text>
+  <text x="640" y="304" font-size="15" fill="#16a34a" font-weight="bold">调试口读不出 ✓</text>
+
+  <text x="30" y="378" font-size="14" fill="#1e293b">数字签名：私钥只在服务端，公钥烧进设备，伪造与篡改都过不了验签</text>
+</svg>
